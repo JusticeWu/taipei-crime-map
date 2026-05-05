@@ -1,0 +1,6 @@
+@TaipeiCrimeMap.API_HostAddress = http://localhost:5074
+
+GET {{TaipeiCrimeMap.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

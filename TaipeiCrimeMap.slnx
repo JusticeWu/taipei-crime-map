@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TaipeiCrimeMap.API/TaipeiCrimeMap.API.csproj" />
+    <Project Path="src/TaipeiCrimeMap.Application/TaipeiCrimeMap.Application.csproj" />
+    <Project Path="src/TaipeiCrimeMap.Domain/TaipeiCrimeMap.Domain.csproj" />
+    <Project Path="src/TaipeiCrimeMap.Infrastructure/TaipeiCrimeMap.Infrastructure.csproj" />
+    <Project Path="tests/TaipeiCrimeMap.Application.Tests/TaipeiCrimeMap.Application.Tests.csproj" />
+    <Project Path="tests/TaipeiCrimeMap.Domain.Tests/TaipeiCrimeMap.Domain.Tests.csproj" />
+    <Project Path="tests/TaipeiCrimeMap.Integration.Tests/TaipeiCrimeMap.Integration.Tests.csproj" />
+  </Folder>
+</Solution>
