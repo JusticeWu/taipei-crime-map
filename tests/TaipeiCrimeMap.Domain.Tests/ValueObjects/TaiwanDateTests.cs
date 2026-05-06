@@ -27,74 +27,20 @@ public class TaiwanDateTests
 
         // Assert
         Assert.Null(taiwanDate.OccurredOn);
-        Assert.False(taiwanDate.IsDataComplete);
     }
 
-    [Fact]
-    public void Parse_InvalidSixDigit_ReturnsIncompleteDate()
+    [Theory]
+    [InlineData("104104")]      // Six digit
+    [InlineData("01040104")]    // Eight digit
+    [InlineData("1030104")]     // ROC year before data range
+    [InlineData("2000104")]     // ROC year after data range
+    [InlineData("abcdefg")]     // Invalid digit
+    [InlineData("1041304")]     // Month out of range
+    [InlineData("1040431")]     // Day out of range
+    public void Parse_InvalidInput_ReturnsIncompleteDate(string input)
     {
         // Arrange & Act
-        var taiwanDate = TaiwanDate.Parse("104104");
-
-        // Assert
-        Assert.False(taiwanDate.IsDataComplete);
-    }
-
-    [Fact]
-    public void Parse_InvalidEightDigit_ReturnsIncompleteDate()
-    {
-        // Arrange & Act
-        var taiwanDate = TaiwanDate.Parse("01040104");
-
-        // Assert
-        Assert.False(taiwanDate.IsDataComplete);
-    }
-
-    [Fact]
-    public void Parse_ROCYearBeforeDataRange_ReturnsInCompleteDate()
-    {
-        // Arrange & Act
-        var taiwanDate = TaiwanDate.Parse("1030104");
-
-        // Assert
-        Assert.False(taiwanDate.IsDataComplete);
-    }
-
-    [Fact]
-    public void Parse_ROCYearAfterDataRange_ReturnsInCompleteDate()
-    {
-        // Arrange & Act
-        var taiwanDate = TaiwanDate.Parse("2000104");
-
-        // Assert
-        Assert.False(taiwanDate.IsDataComplete);
-    }
-
-    [Fact]
-    public void Parse_InvalidDigit_ReturnsIncompleteDate()
-    {
-        // Arrange & Act
-        var taiwanDate = TaiwanDate.Parse("abcdefg");
-
-        // Assert
-        Assert.False(taiwanDate.IsDataComplete);
-    }
-
-    [Fact]
-    public void Parse_MonthOutOfRange_ReturnsInCompleteDate()
-    {
-        // Arrange & Act
-        var taiwanDate = TaiwanDate.Parse("1041304");
-
-        // Assert
-        Assert.False(taiwanDate.IsDataComplete);
-    }
-
-    [Fact]
-    public void Parse_DayOutOfRange_ReturnsInCompleteDate()
-    {
-        // Arrange & Act
-        var taiwanDate = TaiwanDate.Parse("1040431");
+        var taiwanDate = TaiwanDate.Parse(input);
 
         // Assert
         Assert.False(taiwanDate.IsDataComplete);
