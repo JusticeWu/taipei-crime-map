@@ -14,6 +14,7 @@ public sealed class TaiwanDate : ValueObject
     private const int MaxYear = 200; // ROC year 200 ≈ Gregorian 2111
 
     public string RawValue { get; }
+    public bool IsDataComplete { get; }
     public DateOnly? OccurredOn { get; }
     public int? Year { get; }
 
@@ -22,6 +23,7 @@ public sealed class TaiwanDate : ValueObject
         RawValue = rawValue;
         OccurredOn = occurredOn;
         Year = year;
+        IsDataComplete = occurredOn.HasValue;
     }
 
     public static TaiwanDate Parse(string raw)
