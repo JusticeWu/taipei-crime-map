@@ -70,4 +70,33 @@ public class TaiwanDateTests
         Assert.False(taiwanDate.IsDataComplete);
     }
 
+    [Fact]
+    public void Parse_InvalidDigit_ReturnsIncompleteDate()
+    {
+        // Arrange & Act
+        var taiwanDate = TaiwanDate.Parse("abcdefg");
+
+        // Assert
+        Assert.False(taiwanDate.IsDataComplete);
+    }
+
+    [Fact]
+    public void Parse_MonthOutOfRange_ReturnsInCompleteDate()
+    {
+        // Arrange & Act
+        var taiwanDate = TaiwanDate.Parse("1041304");
+
+        // Assert
+        Assert.False(taiwanDate.IsDataComplete);
+    }
+
+    [Fact]
+    public void Parse_DayOutOfRange_ReturnsInCompleteDate()
+    {
+        // Arrange & Act
+        var taiwanDate = TaiwanDate.Parse("1040431");
+
+        // Assert
+        Assert.False(taiwanDate.IsDataComplete);
+    }
 }
