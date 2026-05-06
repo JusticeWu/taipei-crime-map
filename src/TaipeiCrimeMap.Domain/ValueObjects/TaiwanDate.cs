@@ -10,8 +10,8 @@ namespace TaipeiCrimeMap.Domain.ValueObjects;
 public sealed class TaiwanDate : ValueObject
 {
     private const int RocEpoch = 1911;
-    private const int MinYear = 100; // ROC year 100 ≈ Gregorian 2011
-    private const int MaxYear = 200; // ROC year 200 ≈ Gregorian 2111
+    private const int MinYear = 104;                                    // 2015 資料起始年
+    private static readonly int MaxYear = DateTime.Now.Year - RocEpoch; // 資料結束年
 
     public string RawValue { get; }
     public bool IsDataComplete { get; }
