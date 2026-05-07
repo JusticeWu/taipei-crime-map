@@ -1,4 +1,5 @@
 using TaipeiCrimeMap.Domain.Aggregates.TheftCase;
+using TaipeiCrimeMap.Domain.Exceptions;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Domain.Tests.ValueObjects;
@@ -42,5 +43,13 @@ public class CrimeFilterTests
         // Assert
         Assert.Equal(yearFrom, filter.YearFrom);
         Assert.Equal(yearTo, filter.YearTo);
+    }
+
+    [Theory]
+    [InlineData(2025, 2023)]    // 倒置
+    public void Constructor_WithInvalidYearRange_ThrowsDomainException(
+        int? yearFrom, int? yearTo)
+    {
+        Assert.Throws<DomainException>(() => new CrimeFilter(yearFrom: yearFrom, yearTo: yearTo));
     }
 }

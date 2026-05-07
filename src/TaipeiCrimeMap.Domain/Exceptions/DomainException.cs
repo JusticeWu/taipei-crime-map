@@ -1,4 +1,4 @@
-namespace TaipeiCrimeMap.Domain.Events;
+namespace TaipeiCrimeMap.Domain.Exceptions;
 
 public class DomainException : Exception
 {

@@ -1,5 +1,5 @@
 using TaipeiCrimeMap.Domain.Aggregates.TheftCase;
-using TaipeiCrimeMap.Domain.Events;
+using TaipeiCrimeMap.Domain.Exceptions;
 
 namespace TaipeiCrimeMap.Domain.ValueObjects;
 
