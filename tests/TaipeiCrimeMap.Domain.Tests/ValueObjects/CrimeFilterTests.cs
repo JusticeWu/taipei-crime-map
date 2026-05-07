@@ -24,4 +24,23 @@ public class CrimeFilterTests
         // Assert
         Assert.Equal(CaseType.Residential, filter.CaseType);
     }
+
+    [Theory]
+    [InlineData(2023, 2025)]    // 正常範圍
+    [InlineData(2023, 2023)]    // 同年
+    [InlineData(2023, null)]    // 只有 YearFrom
+    [InlineData(null, 2025)]    // 只有 YearTo
+    [InlineData(null, null)]    // 皆為 null
+    [InlineData(2010, null)]    // YearFrom 早於資料範圍, 但合法
+    [InlineData(null, 2099)]    // YearTo 晚於資料範圍, 但合法
+    public void Constructor_WithValidYearRange_CreatesSuccessfully(
+        int? yearFrom, int? yearTo)
+    {
+        // Arrange & Act
+        var filter = new CrimeFilter(yearFrom: yearFrom, yearTo: yearTo);
+
+        // Assert
+        Assert.Equal(yearFrom, filter.YearFrom);
+        Assert.Equal(yearTo, filter.YearTo);
+    }
 }
