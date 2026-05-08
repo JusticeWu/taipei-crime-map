@@ -48,7 +48,7 @@ public class DistrictTests
     }
 
     [Fact]
-    public void ParseFrom_InValidDistrict_ReturnsNull()
+    public void ParseFrom_InvalidDistrict_ReturnsNull()
     {
         // Arrange & Act
         var district = District.ParseFrom("臺北市金山區萬壽里海興路180之3號");
