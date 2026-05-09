@@ -7,7 +7,7 @@ namespace TaipeiCrimeMap.Domain.Aggregates.TheftCase;
 public sealed class TheftCase : AggregateRoot
 {
     public string CaseNumber { get; private set; }
-    public CaseType CaseType { get; private set; }
+    public CaseType? CaseType { get; private set; }
     public District District { get; private set; }
     public TaiwanDate OccurredDate { get; private set; }
     public TimeSlot TimeSlot { get; private set; }
