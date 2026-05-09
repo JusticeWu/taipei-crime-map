@@ -2,7 +2,7 @@ using TaipeiCrimeMap.Domain.Common;
 using TaipeiCrimeMap.Domain.Events;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
-namespace TaipeiCrimeMap.Domain.Aggregates.TheftCase;
+namespace TaipeiCrimeMap.Domain.Aggregates;
 
 public sealed class TheftCase : AggregateRoot
 {
@@ -13,7 +13,6 @@ public sealed class TheftCase : AggregateRoot
     public TimeSlot TimeSlot { get; private set; }
     public GeoCoordinate? Coordinate { get; private set; }
 
-    /// <summary>True when the case has been geocoded (Coordinate is populated).</summary>
     public bool IsDataComplete => Coordinate is not null;
 
     public DateTimeOffset ImportedAt { get; private set; }

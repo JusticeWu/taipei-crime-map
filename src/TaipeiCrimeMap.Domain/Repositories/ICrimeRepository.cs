@@ -1,4 +1,4 @@
-using TaipeiCrimeMap.Domain.Aggregates.TheftCase;
+using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Domain.Repositories;

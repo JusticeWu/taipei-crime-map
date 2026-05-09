@@ -1,4 +1,4 @@
-namespace TaipeiCrimeMap.Domain.Aggregates.TheftCase;
+namespace TaipeiCrimeMap.Domain.Aggregates;
 
 public enum CaseType
 {
