@@ -1,4 +1,5 @@
 using TaipeiCrimeMap.Domain.Aggregates;
+using TaipeiCrimeMap.Domain.Exceptions;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Domain.Tests.Aggregates;
@@ -84,9 +85,9 @@ public class TheftCaseTests
     }
 
     [Fact]
-    public void Create_WithNullOccurredDate_ThrowsArgumentNullException()
+    public void Create_WithNullOccurredDate_ThrowsDomainException()
     {
-        Assert.Throws<ArgumentNullException>(() =>
+        Assert.Throws<DomainException>(() =>
             TheftCase.Create(
                 caseNumber: "A123",
                 caseType: CaseType.Residential,
@@ -98,9 +99,9 @@ public class TheftCaseTests
     }
 
     [Fact]
-    public void Create_WithNullRawLocation_ThrowsArgumentException()
+    public void Create_WithNullRawLocation_ThrowsDomainException()
     {
-        Assert.Throws<ArgumentException>(() =>
+        Assert.Throws<DomainException>(() =>
             TheftCase.Create(
                 caseNumber: "A123",
                 caseType: CaseType.Residential,
