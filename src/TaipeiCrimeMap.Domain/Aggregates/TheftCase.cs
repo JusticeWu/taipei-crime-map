@@ -11,6 +11,7 @@ public sealed class TheftCase : AggregateRoot
     public District? District { get; private set; }
     public TaiwanDate OccurredDate { get; private set; }
     public TimeSlot? TimeSlot { get; private set; }
+    public string RawLocation { get; private set; }
     public GeoCoordinate? Coordinate { get; private set; }
 
     public bool IsDataComplete =>
@@ -18,7 +19,7 @@ public sealed class TheftCase : AggregateRoot
         OccurredDate is not null && OccurredDate.IsDataComplete &&
         TimeSlot is not null && TimeSlot.StartHour.HasValue && TimeSlot.EndHour.HasValue &&
         District is not null && District.IsValid() &&
-        Coordinate is not null;
+        RawLocation is not null && Coordinate is not null;
 
     public DateTimeOffset ImportedAt { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -27,6 +28,7 @@ public sealed class TheftCase : AggregateRoot
     private TheftCase()
     {
         CaseNumber = string.Empty;
+        RawLocation = string.Empty;
         District = null!;
         OccurredDate = null!;
         TimeSlot = null!;
@@ -39,6 +41,7 @@ public sealed class TheftCase : AggregateRoot
         District? district,
         TaiwanDate occurredDate,
         TimeSlot? timeSlot,
+        string rawLocation,
         GeoCoordinate? coordinate,
         DateTimeOffset importedAt) : base(id)
     {
@@ -47,6 +50,7 @@ public sealed class TheftCase : AggregateRoot
         District = district;
         OccurredDate = occurredDate;
         TimeSlot = timeSlot;
+        RawLocation = rawLocation;
         Coordinate = coordinate;
         ImportedAt = importedAt;
         CreatedAt = DateTimeOffset.UtcNow;
@@ -58,11 +62,12 @@ public sealed class TheftCase : AggregateRoot
         District? district,
         TaiwanDate occurredDate,
         TimeSlot? timeSlot,
+        string rawLocation,
         GeoCoordinate? coordinate = null,
         DateTimeOffset? importedAt = null)
     {
-        if (string.IsNullOrWhiteSpace(caseNumber))
-            throw new ArgumentException("Case number cannot be empty.", nameof(caseNumber));
+        if (string.IsNullOrWhiteSpace(rawLocation))
+            throw new ArgumentException("RawLocation cannot be empty.", nameof(rawLocation));
 
         ArgumentNullException.ThrowIfNull(occurredDate);
 
@@ -73,6 +78,7 @@ public sealed class TheftCase : AggregateRoot
             district,
             occurredDate,
             timeSlot,
+            rawLocation,
             coordinate,
             importedAt ?? DateTimeOffset.UtcNow);
 
