@@ -52,4 +52,15 @@ public class CrimeFilterTests
     {
         Assert.Throws<DomainException>(() => new CrimeFilter(yearFrom: yearFrom, yearTo: yearTo));
     }
+
+    [Theory]
+    [InlineData("18~08")]    // 倒置
+    public void Constructor_WithUnparsableTimeSlot_ThrowsDomainException(string rawTimeSlot)
+    {
+        // Arrange & Act
+        var timeSlot = TimeSlot.Parse(rawTimeSlot);
+
+        // Assert
+        Assert.Throws<DomainException>(() => new CrimeFilter(timeSlot: timeSlot));
+    }
 }
