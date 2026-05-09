@@ -8,12 +8,17 @@ public sealed class TheftCase : AggregateRoot
 {
     public string CaseNumber { get; private set; }
     public CaseType? CaseType { get; private set; }
-    public District District { get; private set; }
+    public District? District { get; private set; }
     public TaiwanDate OccurredDate { get; private set; }
-    public TimeSlot TimeSlot { get; private set; }
+    public TimeSlot? TimeSlot { get; private set; }
     public GeoCoordinate? Coordinate { get; private set; }
 
-    public bool IsDataComplete => Coordinate is not null;
+    public bool IsDataComplete =>
+        CaseType is not null &&
+        OccurredDate is not null && OccurredDate.IsDataComplete &&
+        TimeSlot is not null && TimeSlot.StartHour.HasValue && TimeSlot.EndHour.HasValue &&
+        District is not null && District.IsValid() &&
+        Coordinate is not null;
 
     public DateTimeOffset ImportedAt { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -30,10 +35,10 @@ public sealed class TheftCase : AggregateRoot
     private TheftCase(
         Guid id,
         string caseNumber,
-        CaseType caseType,
-        District district,
+        CaseType? caseType,
+        District? district,
         TaiwanDate occurredDate,
-        TimeSlot timeSlot,
+        TimeSlot? timeSlot,
         GeoCoordinate? coordinate,
         DateTimeOffset importedAt) : base(id)
     {
@@ -49,19 +54,17 @@ public sealed class TheftCase : AggregateRoot
 
     public static TheftCase Create(
         string caseNumber,
-        CaseType caseType,
-        District district,
+        CaseType? caseType,
+        District? district,
         TaiwanDate occurredDate,
-        TimeSlot timeSlot,
+        TimeSlot? timeSlot,
         GeoCoordinate? coordinate = null,
         DateTimeOffset? importedAt = null)
     {
         if (string.IsNullOrWhiteSpace(caseNumber))
             throw new ArgumentException("Case number cannot be empty.", nameof(caseNumber));
 
-        ArgumentNullException.ThrowIfNull(district);
         ArgumentNullException.ThrowIfNull(occurredDate);
-        ArgumentNullException.ThrowIfNull(timeSlot);
 
         var theftCase = new TheftCase(
             Guid.NewGuid(),
