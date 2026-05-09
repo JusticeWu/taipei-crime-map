@@ -25,6 +25,10 @@ public sealed class CrimeFilter
         if (yearFrom.HasValue && yearTo.HasValue && yearFrom > yearTo)
             throw new DomainException("YearFrom 不能大於 YearTo");
 
+        if (timeSlot is not null 
+            && !string.IsNullOrEmpty(timeSlot.RawValue) && timeSlot.StartHour is null && timeSlot.EndHour is null)
+            throw new DomainException("TimeSlot 資料不正確");
+
         CaseType = caseType;
         District = district;
         YearFrom = yearFrom;

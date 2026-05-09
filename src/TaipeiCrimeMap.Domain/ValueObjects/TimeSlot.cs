@@ -22,7 +22,7 @@ public sealed class TimeSlot : ValueObject
     public static TimeSlot Parse(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
-            return new TimeSlot(raw ?? string.Empty, null, null);
+            return new TimeSlot(raw ?? string.Empty, null, null);   // 合法輸入 
 
         var trimmed = raw.Trim();
         var separator = trimmed.Contains('~') ? '~' : '-';
