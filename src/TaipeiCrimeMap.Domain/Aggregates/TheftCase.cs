@@ -1,5 +1,6 @@
 using TaipeiCrimeMap.Domain.Common;
 using TaipeiCrimeMap.Domain.Events;
+using TaipeiCrimeMap.Domain.Exceptions;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Domain.Aggregates;
@@ -67,9 +68,10 @@ public sealed class TheftCase : AggregateRoot
         DateTimeOffset? importedAt = null)
     {
         if (string.IsNullOrWhiteSpace(rawLocation))
-            throw new ArgumentException("RawLocation cannot be empty.", nameof(rawLocation));
+            throw new DomainException("RawLocation cannot be empty.");
 
-        ArgumentNullException.ThrowIfNull(occurredDate);
+        if (occurredDate is null)
+            throw new DomainException("OccurredDate cannot be null.");
 
         var theftCase = new TheftCase(
             Guid.NewGuid(),
