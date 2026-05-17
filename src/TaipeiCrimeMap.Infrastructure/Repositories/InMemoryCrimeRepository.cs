@@ -13,4 +13,9 @@ public class InMemoryCrimeRepository : ICrimeRepository
 
         return Task.CompletedTask;
     }
+
+    public Task<int> CountAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_cases.Count);
+    }
 }
