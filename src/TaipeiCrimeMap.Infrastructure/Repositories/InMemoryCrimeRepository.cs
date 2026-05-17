@@ -18,4 +18,11 @@ public class InMemoryCrimeRepository : ICrimeRepository
     {
         return Task.FromResult(_cases.Count);
     }
+
+    public Task AddRangeAsync(IEnumerable<TheftCase> theftCases, CancellationToken cancellationToken = default)
+    {
+        _cases.AddRange(theftCases);
+
+        return Task.CompletedTask;
+    }
 }
