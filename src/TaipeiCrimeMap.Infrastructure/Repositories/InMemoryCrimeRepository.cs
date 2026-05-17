@@ -66,4 +66,10 @@ public class InMemoryCrimeRepository : ICrimeRepository
         var result = _cases.FirstOrDefault(c => c.Id == id);
         return Task.FromResult<TheftCase?>(result);
     }
+
+    public Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default)
+    {
+        var result = _cases.FirstOrDefault(c => c.CaseNumber == caseNumber);
+        return Task.FromResult<TheftCase?>(result);
+    }
 }
