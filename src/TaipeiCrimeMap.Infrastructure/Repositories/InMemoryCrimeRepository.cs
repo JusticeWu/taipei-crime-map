@@ -60,4 +60,10 @@ public class InMemoryCrimeRepository : ICrimeRepository
 
         return Task.FromResult<IReadOnlyList<TheftCase>>(query.ToList());
     }
+
+    public Task<TheftCase?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var result = _cases.FirstOrDefault(c => c.Id == id);
+        return Task.FromResult<TheftCase?>(result);
+    }
 }
