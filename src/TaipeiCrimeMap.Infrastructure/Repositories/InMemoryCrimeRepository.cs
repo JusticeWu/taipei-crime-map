@@ -53,8 +53,8 @@ public class InMemoryCrimeRepository : ICrimeRepository
 
         if (filter.TimeSlot != null && filter.TimeSlot.StartHour.HasValue && filter.TimeSlot.EndHour.HasValue)
         {
-            query = query.Where(c => c.TimeSlot != null 
-                && c.TimeSlot.StartHour == filter.TimeSlot.StartHour.Value 
+            query = query.Where(c => c.TimeSlot != null
+                && c.TimeSlot.StartHour == filter.TimeSlot.StartHour.Value
                 && c.TimeSlot.EndHour == filter.TimeSlot.EndHour.Value);
         }
 
@@ -64,12 +64,64 @@ public class InMemoryCrimeRepository : ICrimeRepository
     public Task<TheftCase?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var result = _cases.FirstOrDefault(c => c.Id == id);
+
         return Task.FromResult<TheftCase?>(result);
     }
 
     public Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default)
     {
         var result = _cases.FirstOrDefault(c => c.CaseNumber == caseNumber);
+
         return Task.FromResult<TheftCase?>(result);
     }
+
+    public Task<IReadOnlyList<TheftCase>> GetByRadiusAsync(GeoCoordinate center, double radiusKm,
+        CancellationToken cancellationToken = default)
+    {
+        var result = _cases.Where(c => c.Coordinate != null 
+            && HaversineDistance(c.Coordinate, center) <= radiusKm).ToList();
+
+        return Task.FromResult<IReadOnlyList<TheftCase>>(result);
+    }
+
+    /// <summary>
+    ////// Haversine 公式計算大圓距離，能處理經緯度跨越 180 度換算線。
+    /// </summary>
+    /// <param name="a">起點座標</param>
+    /// <param name="b">終點座標</param>
+    /// <returns>兩點之間的距離（公里），若任一座標缺少經緯度則回傳 double.MaxValue</returns>
+    private static double HaversineDistance(GeoCoordinate a, GeoCoordinate b)
+    {
+        // GeoCoordinate 本身可能是 null，在呼叫端已過濾，這裡加防禦性檢查
+        if (a is null || b is null)
+            return double.MaxValue;
+
+        // 地球平均半徑（公里）
+        const double R = 6371.0;
+
+        // 將起點與終點的緯度轉換為弧度
+        var lat1 = ToRad(a.Latitude);
+        var lat2 = ToRad(b.Latitude);
+
+        // 計算緯度差與經度差（弧度）
+        var dLat = ToRad(b.Latitude - a.Latitude);
+        var dLon = ToRad(b.Longitude - a.Longitude);
+
+        // Haversine 公式核心：
+        // h = sin²(dLat/2) + cos(lat1) × cos(lat2) × sin²(dLon/2)
+        var h = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(lat1) * Math.Cos(lat2) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+
+        // 將半正矢值轉換為球面距離（公里）
+        return R * 2 * Math.Atan2(Math.Sqrt(h), Math.Sqrt(1 - h));
+    }
+
+    /// <summary>
+    /// 將角度（degrees）轉換為弧度（radians）。
+    /// 三角函數（Sin、Cos）需要弧度作為輸入。
+    /// </summary>
+    /// <param name="deg">角度值</param>
+    /// <returns>對應的弧度值</returns>
+    private static double ToRad(double deg) => deg * Math.PI / 180.0;
 }

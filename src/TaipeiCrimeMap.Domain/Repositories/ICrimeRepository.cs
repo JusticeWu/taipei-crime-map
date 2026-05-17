@@ -11,5 +11,5 @@ public interface ICrimeRepository
     Task<IReadOnlyList<TheftCase>> GetByFilterAsync(CrimeFilter filter, CancellationToken cancellationToken = default);
     Task<TheftCase?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default);
-    // Task<IReadOnlyList<TheftCase>> GetByRadiusAsync(GeoCoordinate center, double radiusKm, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<TheftCase>> GetByRadiusAsync(GeoCoordinate center, double radiusKm, CancellationToken cancellationToken = default);
 }
