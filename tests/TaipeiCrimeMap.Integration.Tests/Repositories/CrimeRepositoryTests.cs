@@ -220,4 +220,40 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
             results.Should().Contain(c => c.Id == i.Id);
         }
     }
+
+    [Fact]
+    public async Task GetByRadiusAsync_ShouldReturnCasesWithinRadius()
+    {
+        // Arrange
+        var nearbyCase = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: null,
+            rawLocation: "臺北市內湖區成功路五段31號",
+            coordinate: GeoCoordinate.Create(25.0815, 121.6056));
+
+        var farCase = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("大安區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: null,
+            rawLocation: "臺北市大安區新生南路二段1號",
+            coordinate: GeoCoordinate.Create(25.0302, 121.5354));
+
+        await _repository.AddRangeAsync([nearbyCase, farCase]);
+
+        // 搜尋中心: 捷運葫洲站（25.0728, 121.6074）
+        var center = GeoCoordinate.Create(25.0728, 121.6074);
+
+        // Act
+        // 半徑 2 公里
+        var results = await _repository.GetByRadiusAsync(center, radiusKm: 2.0);
+
+        // Assert
+        results.Should().Contain(c => c.Id == nearbyCase.Id);
+        results.Should().NotContain(c => c.Id == farCase.Id);
+    }
 }
