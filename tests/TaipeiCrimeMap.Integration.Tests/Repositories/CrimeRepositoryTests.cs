@@ -158,4 +158,35 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
         results.Should().Contain(c => c.Id == case113.Id);
         results.Should().NotContain(c => c.Id == case112.Id);
     }
+
+    [Fact]
+    public async Task GetByFilterAsync_WithTimeSlot_ShouldReturnMatchingCases()
+    {
+        // Arrange
+        var morning = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: TimeSlot.Parse("08~10"),
+            rawLocation: "臺北市內湖區成功路五段31號");
+
+        var evening = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: TimeSlot.Parse("18~20"),
+            rawLocation: "臺北市內湖區成功路五段31號");
+
+        await _repository.AddRangeAsync([morning, evening]);
+
+        // Act
+        var filter = new CrimeFilter(timeSlot: TimeSlot.Parse("08~10"));
+        var results = await _repository.GetByFilterAsync(filter);
+
+        // Assert
+        results.Should().Contain(c => c.Id == morning.Id);
+        results.Should().NotContain(c => c.Id == evening.Id);
+    }
 }
