@@ -96,4 +96,35 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
         results.Should().Contain(c => c.Id == residential.Id);
         results.Should().NotContain(c => c.Id == car.Id);
     }
+
+    [Fact]
+    public async Task GetByFilterAsync_WithDistrict_ShouldReturnMatchingCases()
+    {
+        // Arrange
+        var neihu = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: null,
+            rawLocation: "臺北市內湖區成功路五段31號");
+
+        var daan = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("大安區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: null,
+            rawLocation: "臺北市大安區新生南路二段1號");
+
+        await _repository.AddRangeAsync([neihu, daan]);
+
+        // Act
+        var filter = new CrimeFilter(district: District.ParseFrom("內湖區"));
+        var results = await _repository.GetByFilterAsync(filter);
+
+        // Assert
+        results.Should().Contain(c => c.Id == neihu.Id);
+        results.Should().NotContain(c => c.Id == daan.Id);
+    }
 }
