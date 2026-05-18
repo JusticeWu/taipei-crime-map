@@ -39,3 +39,6 @@ record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
 }
+
+// 讓測試專案可以存取 Program 型別
+public partial class Program { }
