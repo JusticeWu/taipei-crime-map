@@ -43,6 +43,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         var cases = new List<TheftCase>();
+
         for (int i = 0; i < 3; i++)
         {
             cases.Add(TheftCase.Create(
@@ -188,5 +189,35 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
         // Assert
         results.Should().Contain(c => c.Id == morning.Id);
         results.Should().NotContain(c => c.Id == evening.Id);
+    }
+
+    [Fact]
+    public async Task GetByFilterAsync_WithNoFilter_ShouldReturnAllCases()
+    {
+        // Arrange
+        var cases = new List<TheftCase>();
+
+        for (int i = 0; i < 3; i++)
+        {
+            cases.Add(TheftCase.Create(
+                caseNumber: Guid.NewGuid().ToString(),
+                caseType: CaseType.Residential,
+                district: District.ParseFrom("內湖區"),
+                occurredDate: TaiwanDate.Parse("1130101"),
+                timeSlot: null,
+                rawLocation: "臺北市內湖區成功路五段31號"));
+        }
+
+        await _repository.AddRangeAsync(cases);
+
+        // Act
+        var filter = new CrimeFilter();
+        var results = await _repository.GetByFilterAsync(filter);
+
+        // Assert
+        foreach (var i in cases)
+        {
+            results.Should().Contain(c => c.Id == i.Id);
+        }
     }
 }
