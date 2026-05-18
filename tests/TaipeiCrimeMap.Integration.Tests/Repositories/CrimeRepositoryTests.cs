@@ -256,4 +256,29 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
         results.Should().Contain(c => c.Id == nearbyCase.Id);
         results.Should().NotContain(c => c.Id == farCase.Id);
     }
+
+    [Fact]
+    public async Task GetByRadiusAsync_WithNoCoordinates_ShouldNotBeIncluded()
+    {
+        // Arrange
+        var noCoordinate = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: null,
+            rawLocation: "臺北市內湖區成功路五段31號",
+            coordinate: null);
+
+        await _repository.AddAsync(noCoordinate);
+
+        // 搜尋中心: 捷運葫洲站（25.0728, 121.6074）
+        var center = GeoCoordinate.Create(25.0728, 121.6074);
+
+        // Act
+        var results = await _repository.GetByRadiusAsync(center, radiusKm: 100.0);
+
+        // Assert
+        results.Should().NotContain(c => c.Id == noCoordinate.Id);
+    }
 }
