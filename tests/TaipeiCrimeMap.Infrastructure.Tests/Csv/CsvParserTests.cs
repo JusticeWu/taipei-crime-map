@@ -74,4 +74,18 @@ public class CsvParserTests
         results.Should().HaveCount(1);
         results[0].CaseType.Should().Be(CaseType.Residential);
     }
+
+    [Fact]
+    public void Parse_WithMissingLocation_ShouldSkipRows()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDataPath, "missing_location.csv");
+
+        // Act
+        var results = _parser.Parse(filePath, CaseType.Residential);
+
+        // Assert
+        results.Should().HaveCount(1);
+        results[0].CaseNumber.Should().Be("2");
+    }
 }
