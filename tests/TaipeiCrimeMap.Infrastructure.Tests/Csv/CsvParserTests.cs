@@ -60,4 +60,18 @@ public class CsvParserTests
         // Assert
         results.Should().HaveCount(2);
     }
+
+    [Fact]
+    public void Parse_WithWrongCaseType_ShouldSkipMismatchedRows()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDataPath, "wrong_casetype.csv");
+
+        // Act
+        var results = _parser.Parse(filePath, CaseType.Residential);
+
+        // Assert
+        results.Should().HaveCount(1);
+        results[0].CaseType.Should().Be(CaseType.Residential);
+    }
 }
