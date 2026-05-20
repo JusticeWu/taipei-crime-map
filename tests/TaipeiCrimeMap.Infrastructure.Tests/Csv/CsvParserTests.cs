@@ -34,4 +34,30 @@ public class CsvParserTests
         results[0].District!.Name.Should().Be("大安區");
         results[0].RawLocation.Should().Be("臺北市大安區測試路1號");
     }
+
+    [Fact]
+    public void Parse_FileNotFound_ShouldThrowFileNotFoundException()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDataPath, "not_exist.csv");
+
+        // Act
+        Action act = () => _parser.Parse(filePath, CaseType.Residential);
+
+        // Assert
+        act.Should().Throw<FileNotFoundException>();
+    }
+
+    [Fact]
+    public void Parse_WithEmptyRows_ShouldSkipRows()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDataPath, "empty_rows.csv");
+
+        // Act
+        var results = _parser.Parse(filePath, CaseType.Residential);
+
+        // Assert
+        results.Should().HaveCount(2);
+    }
 }
