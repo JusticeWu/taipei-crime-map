@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
 using TaipeiCrimeMap.Domain.Aggregates;
+using TaipeiCrimeMap.Domain.Results;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Infrastructure.Csv;
