@@ -1,0 +1,7 @@
+
+namespace TaipeiCrimeMap.Application.Interfaces;
+
+public interface ICsvParser
+{
+    CsvParseResult Parse(string filePath, CaseType caseType);
+}
