@@ -1,7 +1,10 @@
+using System;
+using System.IO;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Infrastructure.Csv;
+using Xunit;
 
 namespace TaipeiCrimeMap.Infrastructure.Tests.Csv;
 
@@ -102,5 +105,24 @@ public class CsvParserTests
         results.Should().HaveCount(2);
         results[0].CaseType.Should().Be(CaseType.Snatching);
         results[0].CaseNumber.Should().Be("1");
+    }
+
+    [Fact]
+    public void Parse_WithInvalidDate_ShouldImportWithIsDataCompleteFalse()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDataPath, "invalid_date_and_no_timeslot.csv");
+
+        // Act
+        var results = _parser.Parse(filePath, CaseType.Residential);
+
+        // Assert
+        results.Should().HaveCount(2);
+
+        results[0].OccurredDate.IsDataComplete.Should().BeFalse();
+        results[0].IsDataComplete.Should().BeFalse();
+
+        results[1].TimeSlot.Should().BeNull();
+        results[1].IsDataComplete.Should().BeFalse();
     }
 }
