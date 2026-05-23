@@ -78,7 +78,7 @@ public class CsvParser
             }
 
             var occurredDate = TaiwanDate.Parse(rawDate);
-            var timeSlot = TimeSlot.Parse(rawTimeSlot);
+            var timeSlot = string.IsNullOrWhiteSpace(rawTimeSlot) ? null : TimeSlot.Parse(rawTimeSlot);
             var district = District.ParseFrom(rawLocation);
 
             var theftCase = TheftCase.Create(
