@@ -88,4 +88,19 @@ public class CsvParserTests
         results.Should().HaveCount(1);
         results[0].CaseNumber.Should().Be("2");
     }
+
+    [Fact]
+    public void Parse_Cp950EncodedCsv_ShouldReturnCorrectCases()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDataPath, "cp950_snatching.csv");
+
+        // Act
+        var results = _parser.Parse(filePath, CaseType.Snatching);
+
+        // Assert
+        results.Should().HaveCount(2);
+        results[0].CaseType.Should().Be(CaseType.Snatching);
+        results[0].CaseNumber.Should().Be("1");
+    }
 }
