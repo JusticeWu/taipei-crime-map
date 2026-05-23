@@ -1,3 +1,5 @@
+using TaipeiCrimeMap.Domain.Aggregates;
+using TaipeiCrimeMap.Domain.Results;
 
 namespace TaipeiCrimeMap.Application.Interfaces;
 
