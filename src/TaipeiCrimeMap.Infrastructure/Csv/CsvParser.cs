@@ -2,11 +2,12 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Results;
+using TaipeiCrimeMap.Domain.Services;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Infrastructure.Csv;
 
-public class CsvParser
+public class CsvParser : ICsvParser
 {
     private readonly ILogger<CsvParser> _logger;
 
