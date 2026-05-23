@@ -19,7 +19,7 @@ public class CsvParser
         _logger = logger;
     }
 
-    public IReadOnlyList<TheftCase> Parse(string filePath, CaseType expectedCaseType)
+    public CsvParseResult Parse(string filePath, CaseType expectedCaseType)
     {
         if (!File.Exists(filePath))
         {
@@ -29,6 +29,7 @@ public class CsvParser
         var encoding = DetectEncoding(filePath);
         var results = new List<TheftCase>();
         var rowNumber = 0;
+        var skppedCount = 0;
 
         foreach (var line in File.ReadLines(filePath, encoding))
         {
@@ -41,12 +42,14 @@ public class CsvParser
 
             if (string.IsNullOrWhiteSpace(line))
             {
+                skppedCount++;
                 continue; // Skip empty lines
             }
 
             var colunms = line.Split(',');
             if (colunms.Length < 5)
             {
+                skppedCount++;
                 _logger.LogWarning("第 {Row} 列欄位數不足，跳過: {Line}", rowNumber, line);
                 continue;
             }
@@ -60,12 +63,14 @@ public class CsvParser
             var parsedCaseType = CaseTypeExtensions.FromChineseName(rawCaseType);
             if (parsedCaseType is null)
             {
+                skppedCount++;
                 _logger.LogWarning("第 {Row} 列案類無法識別: {CaseType}，跳過}", rowNumber, rawCaseType);
                 continue;
             }
 
             if (parsedCaseType.Value != expectedCaseType)
             {
+                skppedCount++;
                 _logger.LogWarning("第 {Row} 列案類不符，預期 {Expected}，實際 {Actual}，跳過",
                     rowNumber, expectedCaseType, parsedCaseType);
                 continue;
@@ -73,6 +78,7 @@ public class CsvParser
 
             if (string.IsNullOrWhiteSpace(rawLocation))
             {
+                skppedCount++;
                 _logger.LogWarning("第 {Row} 列發生地點為空，跳過", rowNumber);
                 continue;
             }
@@ -94,7 +100,7 @@ public class CsvParser
         
         _logger.LogInformation("CSV 解析完成：{FilePath}，共 {Count} 筆", filePath, results.Count);
 
-        return results;
+        return new CsvParseResult(results, skppedCount);
     }
 
     private static Encoding DetectEncoding(string filePath)
