@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
 using TaipeiCrimeMap.Application.Commands;
 using TaipeiCrimeMap.Application.DTOs;
-using TaipeiCrimeMap.Application.Interfaces;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Repositories;
+using TaipeiCrimeMap.Domain.Services;
 
 namespace TaipeiCrimeMap.Application.Handlers;
 

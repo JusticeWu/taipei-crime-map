@@ -1,7 +1,7 @@
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Results;
 
-namespace TaipeiCrimeMap.Application.Interfaces;
+namespace TaipeiCrimeMap.Domain.Services;
 
 public interface ICsvParser
 {
