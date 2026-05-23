@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [ uat, main ]
+  pull_request:
+    branches: [ uat, main ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  IMAGE_NAME: taipeicrimemap.azurecr.io/taipei-crime-map
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4.3.1
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore TaipeiCrimeMap.slnx
+
+      - name: Build
+        run: dotnet build TaipeiCrimeMap.slnx --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test TaipeiCrimeMap.slnx --no-restore --configuration Release --logger "console;verbosity=minimal"
+
+  push-to-acr:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/uat'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Log in to ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:uat
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+  deploy-to-uat:
+    runs-on: ubuntu-latest
+    needs: push-to-acr
+
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update Container App
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          acrName: taipeicrimemap
+          containerAppName: taipei-crime-map-uat
+          resourceGroup: taipei-crime-map-rg
+          imageToDeploy: taipeicrimemap.azurecr.io/taipei-crime-map:${{ github.sha }}

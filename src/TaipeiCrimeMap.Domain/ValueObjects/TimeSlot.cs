@@ -22,25 +22,27 @@ public sealed class TimeSlot : ValueObject
     public static TimeSlot Parse(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
-            return new TimeSlot(raw ?? string.Empty, null, null);
+            return new TimeSlot(raw ?? string.Empty, null, null);   // 合法輸入 
 
         var trimmed = raw.Trim();
-        var parts = trimmed.Split('-');
+        var separator = trimmed.Contains('~') ? '~' : '-';
+        var parts = trimmed.Split(separator);
 
         if (parts.Length != 2 ||
             !int.TryParse(parts[0], out var start) ||
             !int.TryParse(parts[1], out var end) ||
             start is < 0 or > 23 ||
-            end is < 0 or > 24)
+            end is < 0 or > 24 ||
+            start > end)
             return new TimeSlot(trimmed, null, null);
 
         return new TimeSlot(trimmed, start, end);
     }
 
-    /// <summary>Returns a canonical "HH-HH" string, or RawValue when not parseable.</summary>
+    /// <summary>Returns a canonical "HH~HH" string, or RawValue when not parseable.</summary>
     public string Normalize() =>
         StartHour.HasValue && EndHour.HasValue
-            ? $"{StartHour:D2}-{EndHour:D2}"
+            ? $"{StartHour:D2}~{EndHour:D2}"
             : RawValue;
 
     protected override IEnumerable<object?> GetEqualityComponents()

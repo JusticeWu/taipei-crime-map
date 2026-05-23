@@ -1,20 +1,26 @@
 using TaipeiCrimeMap.Domain.Common;
 using TaipeiCrimeMap.Domain.Events;
+using TaipeiCrimeMap.Domain.Exceptions;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
-namespace TaipeiCrimeMap.Domain.Aggregates.TheftCase;
+namespace TaipeiCrimeMap.Domain.Aggregates;
 
 public sealed class TheftCase : AggregateRoot
 {
     public string CaseNumber { get; private set; }
-    public CaseType CaseType { get; private set; }
-    public District District { get; private set; }
+    public CaseType? CaseType { get; private set; }
+    public District? District { get; private set; }
     public TaiwanDate OccurredDate { get; private set; }
-    public TimeSlot TimeSlot { get; private set; }
+    public TimeSlot? TimeSlot { get; private set; }
+    public string RawLocation { get; private set; }
     public GeoCoordinate? Coordinate { get; private set; }
 
-    /// <summary>True when the case has been geocoded (Coordinate is populated).</summary>
-    public bool IsDataComplete => Coordinate is not null;
+    public bool IsDataComplete =>
+        CaseType is not null &&
+        OccurredDate is not null && OccurredDate.IsDataComplete &&
+        TimeSlot is not null && TimeSlot.StartHour.HasValue && TimeSlot.EndHour.HasValue &&
+        District is not null && District.IsValid() &&
+        RawLocation is not null && Coordinate is not null;
 
     public DateTimeOffset ImportedAt { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
@@ -23,6 +29,7 @@ public sealed class TheftCase : AggregateRoot
     private TheftCase()
     {
         CaseNumber = string.Empty;
+        RawLocation = string.Empty;
         District = null!;
         OccurredDate = null!;
         TimeSlot = null!;
@@ -31,10 +38,11 @@ public sealed class TheftCase : AggregateRoot
     private TheftCase(
         Guid id,
         string caseNumber,
-        CaseType caseType,
-        District district,
+        CaseType? caseType,
+        District? district,
         TaiwanDate occurredDate,
-        TimeSlot timeSlot,
+        TimeSlot? timeSlot,
+        string rawLocation,
         GeoCoordinate? coordinate,
         DateTimeOffset importedAt) : base(id)
     {
@@ -43,6 +51,7 @@ public sealed class TheftCase : AggregateRoot
         District = district;
         OccurredDate = occurredDate;
         TimeSlot = timeSlot;
+        RawLocation = rawLocation;
         Coordinate = coordinate;
         ImportedAt = importedAt;
         CreatedAt = DateTimeOffset.UtcNow;
@@ -50,19 +59,19 @@ public sealed class TheftCase : AggregateRoot
 
     public static TheftCase Create(
         string caseNumber,
-        CaseType caseType,
-        District district,
+        CaseType? caseType,
+        District? district,
         TaiwanDate occurredDate,
-        TimeSlot timeSlot,
+        TimeSlot? timeSlot,
+        string rawLocation,
         GeoCoordinate? coordinate = null,
         DateTimeOffset? importedAt = null)
     {
-        if (string.IsNullOrWhiteSpace(caseNumber))
-            throw new ArgumentException("Case number cannot be empty.", nameof(caseNumber));
+        if (string.IsNullOrWhiteSpace(rawLocation))
+            throw new DomainException("RawLocation cannot be empty.");
 
-        ArgumentNullException.ThrowIfNull(district);
-        ArgumentNullException.ThrowIfNull(occurredDate);
-        ArgumentNullException.ThrowIfNull(timeSlot);
+        if (occurredDate is null)
+            throw new DomainException("OccurredDate cannot be null.");
 
         var theftCase = new TheftCase(
             Guid.NewGuid(),
@@ -71,6 +80,7 @@ public sealed class TheftCase : AggregateRoot
             district,
             occurredDate,
             timeSlot,
+            rawLocation,
             coordinate,
             importedAt ?? DateTimeOffset.UtcNow);
 
