@@ -92,5 +92,46 @@ public class ImportCsvCommandHandlerTests
             Times.Once);
     }
 
+    /// <summary>
+    /// 測試 HandleAsync 方法是否正確呼叫 ICrimeRepository 的 AddRangeAsync 方法，並傳入解析後的案件列表
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ShouldCallAddRangeAsync_WithParsedCases()
+    {
+        // Arrange
+        var cases = new List<TheftCase>();
+
+        for (int i = 0; i < 3; i++)
+        {
+            cases.Add(TheftCase.Create(
+                caseNumber: Guid.NewGuid().ToString(),
+                caseType: CaseType.Residential,
+                district: District.ParseFrom("內湖區"),
+                occurredDate: TaiwanDate.Parse("1130101"),
+                timeSlot: null,
+                rawLocation: "臺北市內湖區成功路五段31號"));
+        }
+
+        var parseResult = new CsvParseResult(cases, SkippedCount: 0);
+
+        _csvParserMock.Setup(p => p.Parse(It.IsAny<string>(), It.IsAny<CaseType>()))
+            .Returns(parseResult);
+
+        _respositoryMock.Setup(r => r.AddRangeAsync(It.IsAny<IEnumerable<TheftCase>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var command = new ImportCsvCommand("data/raw/test.csv", CaseType.Residential);
+
+        // Act
+        await _handler.HandleAsync(command);
+
+        // Assert
+        _respositoryMock.Verify(
+            r => r.AddRangeAsync(
+                It.Is<IEnumerable<TheftCase>>(c => c.SequenceEqual(cases)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
 
 }
