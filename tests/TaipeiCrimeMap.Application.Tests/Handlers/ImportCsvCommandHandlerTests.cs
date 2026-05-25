@@ -21,11 +21,14 @@ public class ImportCsvCommandHandlerTests
     {
         _csvParserMock = new Mock<ICsvParser>();
         _respositoryMock = new Mock<ICrimeRepository>();
-        
-        _handler = new ImportCsvCommandHandler(_csvParserMock.Object, _respositoryMock.Object, 
+
+        _handler = new ImportCsvCommandHandler(_csvParserMock.Object, _respositoryMock.Object,
             NullLogger<ImportCsvCommandHandler>.Instance);
     }
 
+    /// <summary>
+    /// 測試 HandleAsync 方法是否正確回傳成功匯入的案件數量、跳過的案件數量、檔案路徑和案類名稱
+    /// </summary>
     [Fact]
     public async Task HandleAsync_ShouldReturnCorrectSuccessCount()
     {
@@ -62,4 +65,32 @@ public class ImportCsvCommandHandlerTests
         result.FilePath.Should().Be("data/raw/test.csv");
         result.CaseType.Should().Be("住宅竊盜");
     }
+
+    /// <summary>
+    /// 測試 HandleAsync 方法是否正確呼叫 CsvParser 的 Parse 方法，並傳入正確的檔案路徑和案類參數
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ShouldCallParseWithCorrectArguments()
+    {
+        // Arrange
+        var parseResult = new CsvParseResult(new List<TheftCase>(), SkippedCount: 0);
+
+        _csvParserMock.Setup(p => p.Parse(It.IsAny<string>(), It.IsAny<CaseType>()))
+            .Returns(parseResult);
+
+        _respositoryMock.Setup(r => r.AddRangeAsync(It.IsAny<IEnumerable<TheftCase>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var command = new ImportCsvCommand("data/raw/test.csv", CaseType.Car);
+
+        // Act
+        await _handler.HandleAsync(command);
+
+        // Assert
+        _csvParserMock.Verify(
+            p => p.Parse("data/raw/test.csv", CaseType.Car), 
+            Times.Once);
+    }
+
+
 }
