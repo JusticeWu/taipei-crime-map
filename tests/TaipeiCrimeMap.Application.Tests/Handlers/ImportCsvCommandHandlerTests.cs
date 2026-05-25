@@ -133,5 +133,28 @@ public class ImportCsvCommandHandlerTests
             Times.Once);
     }
 
+    /// <summary>
+    /// 測試 HandleAsync 方法在解析結果沒有任何案件時，是否正確回傳成功匯入的案件數量為 0，並且跳過的案件數量為 SkippedCount
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WhenNoCases_ShouldReturnZeroSuccessCount()
+    {
+        // Arrange
+        var parseResult = new CsvParseResult(new List<TheftCase>(), SkippedCount: 5);
 
+        _csvParserMock.Setup(p => p.Parse(It.IsAny<string>(), It.IsAny<CaseType>()))
+            .Returns(parseResult);
+
+        _respositoryMock.Setup(r => r.AddRangeAsync(It.IsAny<IEnumerable<TheftCase>>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var command = new ImportCsvCommand("data/raw/test.csv", CaseType.Residential);
+
+        // Act
+        var result = await _handler.HandleAsync(command);
+
+        // Assert
+        result.SuccessCount.Should().Be(0);
+        result.SkippedCount.Should().Be(5);
+    }
 }
