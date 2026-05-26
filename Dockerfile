@@ -19,6 +19,7 @@ COPY src/TaipeiCrimeMap.API/*.csproj                 src/TaipeiCrimeMap.API/
 COPY tests/TaipeiCrimeMap.Domain.Tests/*.csproj      tests/TaipeiCrimeMap.Domain.Tests/
 COPY tests/TaipeiCrimeMap.Application.Tests/*.csproj tests/TaipeiCrimeMap.Application.Tests/
 COPY tests/TaipeiCrimeMap.Integration.Tests/*.csproj tests/TaipeiCrimeMap.Integration.Tests/
+COPY tests/TaipeiCrimeMap.Infrastructure.Tests/*.csproj tests/TaipeiCrimeMap.Infrastructure.Tests/
 
 # dotnet restore 根據 .csproj 下載所有 NuGet 相依套件。
 RUN dotnet restore TaipeiCrimeMap.slnx
