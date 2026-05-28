@@ -38,6 +38,23 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
         result!.SuccessCount.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public async Task ImportCsv_WithNonExistentFile_ShouldReturn404()
+    {
+        // Arrange
+        var request = new
+        {
+            FilePath = "data/raw/not_exist.csv",
+            CaseType = (int)CaseType.Residential
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/crime/import", request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     private static string GetProjectRootPath()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
