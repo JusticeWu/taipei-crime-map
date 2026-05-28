@@ -24,4 +24,10 @@
     <ProjectReference Include="..\..\src\TaipeiCrimeMap.API\TaipeiCrimeMap.API.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="TestData\**\*.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
