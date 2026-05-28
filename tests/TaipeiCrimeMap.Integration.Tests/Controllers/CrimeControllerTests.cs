@@ -19,8 +19,7 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
     public async Task ImportCsv_WithValidRequest_ShouldReturn200()
     {
         // Arrange
-        var projectRoot = GetProjectRootPath();
-        var filePath = Path.Combine(projectRoot, "data", "raw", "臺北市住宅竊盜點位資訊-UTF8-BOM.csv");
+        var filePath = Path.Combine(AppContext.BaseDirectory, "TestData", "residential_sample.csv");
 
         var request = new
         {
@@ -59,8 +58,7 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
     public async Task GetCrimes_WithNoFilter_ShouldReturn200()
     {
         // Arrange：先匯入資料
-        var projectRoot = GetProjectRootPath();
-        var filePath = Path.Combine(projectRoot, "data", "raw", "臺北市住宅竊盜點位資訊-UTF8-BOM.csv");
+        var filePath = Path.Combine(AppContext.BaseDirectory, "TestData", "residential_sample.csv");
         var importRequest = new { FilePath = filePath, CaseType = (int)CaseType.Residential };
         await _client.PostAsJsonAsync("/api/crime/import", importRequest);
 
@@ -79,23 +77,5 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    private static string GetProjectRootPath()
-    {
-        // 先嘗試 GitHub Actions 環境變數
-        var githubWorkspace = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE");
-        if (!string.IsNullOrEmpty(githubWorkspace))
-        {
-            return githubWorkspace;
-        }
-
-        // 本機開發：從執行目錄往上找 .slnx
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && dir.GetFiles("*.slnx").Length == 0)
-        {
-            dir = dir.Parent;
-        }
-        return dir?.FullName ?? AppContext.BaseDirectory;
     }
 }
