@@ -19,7 +19,8 @@ public class GetCrimesByFilterQueryHandler
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<TheftCaseDto>> HandleAsync(GetCrimesByFilterQuery query, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<TheftCaseDto>> HandleAsync(GetCrimesByFilterQuery query,
+        CancellationToken cancellationToken = default)
     {
         var district = string.IsNullOrWhiteSpace(query.DistrictName) ? null : District.ParseFrom(query.DistrictName);
 
@@ -36,7 +37,7 @@ public class GetCrimesByFilterQueryHandler
             yearFrom: query.YearFrom,
             yearTo: query.YearTo,
             timeSlot: timeSlot);
-        
+
         _logger.LogInformation("查詢案件: 條件：{Query}", query);
 
         var cases = await _repository.GetByFilterAsync(filter, cancellationToken);
