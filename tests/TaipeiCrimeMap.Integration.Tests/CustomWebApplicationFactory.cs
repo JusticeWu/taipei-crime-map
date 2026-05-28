@@ -8,6 +8,8 @@ namespace TaipeiCrimeMap.Integration.Tests;
 
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
+    public readonly InMemoryCrimeRepository Reponsitory = new();
+    
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureServices(services =>
@@ -19,8 +21,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 services.Remove(descriptor);
             }
 
-            // 註冊 InMemoryCrimeRepository，每個測試共用同一個 instance
-            services.AddSingleton<ICrimeRepository, InMemoryCrimeRepository>();
+            // 注入固定的 instance，確保所有測試共用同一個 Repository 
+            services.AddSingleton<ICrimeRepository>(Reponsitory);
         });
     }
 }
