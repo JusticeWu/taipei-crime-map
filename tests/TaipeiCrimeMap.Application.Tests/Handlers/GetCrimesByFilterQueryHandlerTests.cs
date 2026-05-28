@@ -4,6 +4,7 @@ using Moq;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Queries;
 using TaipeiCrimeMap.Domain.Aggregates;
+using TaipeiCrimeMap.Domain.Exceptions;
 using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
@@ -57,5 +58,19 @@ public class GetCrimesByFilterQueryHandlerTests
         results[0].OccurredDate.Should().Be("2024-01-01");
         results[0].TimeSlot.Should().Be("18~20");
         results[0].RawLocation.Should().Be("臺北市內湖區成功路五段31號");
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithInvalidTimeSlot_ShouldThrowDomainException()
+    {
+        // Arrange
+        var query = new GetCrimesByFilterQuery(RawTimeSlot: "invalid");
+
+        // Act
+        var act = async () => await _handler.HandleAsync(query);
+
+        // Assert
+        await act.Should().ThrowAsync<DomainException>()
+            .WithMessage("*invalid*");
     }
 }
