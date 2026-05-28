@@ -73,4 +73,27 @@ public class GetCrimesByFilterQueryHandlerTests
         await act.Should().ThrowAsync<DomainException>()
             .WithMessage("*invalid*");
     }
+
+    [Fact]
+    public async Task HandleAsync_WithNoFilter_ShouldCallGetByFilterAsync()
+    {
+        // Arrange
+        _ = _repositoryMock.Setup(
+            r => r.GetByFilterAsync(
+                It.IsAny<CrimeFilter>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TheftCase>());
+
+        var query = new GetCrimesByFilterQuery();
+
+        // Act
+        await _handler.HandleAsync(query);
+
+        // Assert
+        _repositoryMock.Verify(
+            r => r.GetByFilterAsync(
+                It.IsAny<CrimeFilter>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
 }
