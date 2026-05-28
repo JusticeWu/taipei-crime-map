@@ -83,12 +83,19 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
 
     private static string GetProjectRootPath()
     {
+        // 先嘗試 GitHub Actions 環境變數
+        var githubWorkspace = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE");
+        if (!string.IsNullOrEmpty(githubWorkspace))
+        {
+            return githubWorkspace;
+        }
+
+        // 本機開發：從執行目錄往上找 .slnx
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !dir.GetFiles("*.slnx").Any())
+        while (dir != null && dir.GetFiles("*.slnx").Length == 0)
         {
             dir = dir.Parent;
         }
-
         return dir?.FullName ?? AppContext.BaseDirectory;
     }
 }
