@@ -55,6 +55,32 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task GetCrimes_WithNoFilter_ShouldReturn200()
+    {
+        // Arrange：先匯入資料
+        var projectRoot = GetProjectRootPath();
+        var filePath = Path.Combine(projectRoot, "data", "raw", "臺北市住宅竊盜點位資訊-UTF8-BOM.csv");
+        var importRequest = new { FilePath = filePath, CaseType = (int)CaseType.Residential };
+        await _client.PostAsJsonAsync("/api/crime/import", importRequest);
+
+        // Act
+        var response = await _client.GetAsync("/api/crime");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task GetCrimes_WithInvalidTimeSlot_ShouldReturn400()
+    {
+        // Act
+        var response = await _client.GetAsync("/api/crime?rawTimeSlot=invalid");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
     private static string GetProjectRootPath()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
