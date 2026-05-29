@@ -95,6 +95,23 @@ public class GoogleGeocodingServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public async Task GeocodeAsync_HttpRequestThrowsException_ReturnsNull()
+    {
+        // Arrange
+        var exceptionThrowingHandler = new ExceptionThrowingHandler(new HttpRequestException("Network error"));
+        var httpClient = new HttpClient(exceptionThrowingHandler);
+        var options = Options.Create(new GoogleMapsOptions { ApiKey = "test-key" });
+        var logger = NullLogger<GoogleGeocodingService>.Instance;
+        var geoService = new GoogleGeocodingService(httpClient, options, logger);
+
+        // Act
+        var result = await geoService.GeocodeAsync("臺北市內湖區測試路");
+
+        // Assert
+        result.Should().BeNull();
+    }
+
     private static GoogleGeocodingService CreateService(HttpResponseMessage response)
     {
         var httpMessageHandler = new MockHttpMessageHandler(response);
@@ -120,5 +137,22 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
         CancellationToken cancellationToken)
     {
         return Task.FromResult(_response);
+    }
+}
+
+internal sealed class ExceptionThrowingHandler : HttpMessageHandler
+{
+    private readonly Exception _exception;
+
+    public ExceptionThrowingHandler(Exception exception)
+    {
+        _exception = exception;
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
+    {
+        throw _exception;
     }
 }
