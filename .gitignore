@@ -433,3 +433,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Local development settings (contains sensitive data)
+appsettings.Development.json

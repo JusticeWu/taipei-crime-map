@@ -3,6 +3,7 @@ using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.Services;
 using TaipeiCrimeMap.Infrastructure.Csv;
+using TaipeiCrimeMap.Infrastructure.Extensions;
 using TaipeiCrimeMap.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,8 +16,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Domain / Infrastructure services
-builder.Services.AddSingleton<ICrimeRepository, InMemoryCrimeRepository>();
-builder.Services.AddSingleton<ICsvParser, CsvParser>();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // Application handlers
 builder.Services.AddScoped<ImportCsvCommandHandler>();
