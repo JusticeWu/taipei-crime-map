@@ -129,6 +129,19 @@ public class GoogleGeocodingServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public async Task GeocodeAsync_EmptyAddress_ReturnsNull()
+    {
+        // Arrange
+        var geoService = CreateService(new HttpResponseMessage(HttpStatusCode.OK));
+
+        // Act
+        var result = await geoService.GeocodeAsync("");
+
+        // Assert
+        result.Should().BeNull();
+    }
+
     private static GoogleGeocodingService CreateService(HttpResponseMessage response)
     {
         var httpMessageHandler = new MockHttpMessageHandler(response);
