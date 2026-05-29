@@ -70,6 +70,31 @@ public class GoogleGeocodingServiceTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public async Task GeocodeAsync_ApiReturnsNonOkStatus_ReturnsNull()
+    {
+        // Arrange
+        var responseJson = """
+        {
+            "status": "REQUEST_DENIED",
+            "results": []
+        }
+        """;
+
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
+        };
+
+        var geoService = CreateService(response);
+
+        // Act
+        var result = await geoService.GeocodeAsync("臺北市內湖區測試路");
+
+        // Assert
+        result.Should().BeNull();
+    }
+
     private static GoogleGeocodingService CreateService(HttpResponseMessage response)
     {
         var httpMessageHandler = new MockHttpMessageHandler(response);
