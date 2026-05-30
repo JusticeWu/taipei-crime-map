@@ -12,7 +12,12 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.6.0" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="10.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts\*.sql" />
   </ItemGroup>
 
   <PropertyGroup>
