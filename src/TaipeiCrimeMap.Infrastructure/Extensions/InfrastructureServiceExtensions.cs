@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.Services;
 using TaipeiCrimeMap.Infrastructure.Csv;
 using TaipeiCrimeMap.Infrastructure.Geocoding;
+using TaipeiCrimeMap.Infrastructure.Persistence;
 using TaipeiCrimeMap.Infrastructure.Repositories;
 
 namespace TaipeiCrimeMap.Infrastructure.Extensions;
@@ -20,6 +22,11 @@ public static class InfrastructureServiceExtensions
 
         // Repository
         services.AddSingleton<ICrimeRepository, InMemoryCrimeRepository>();
+
+        services.AddScoped<DbUpMigrator>(sp =>
+            new DbUpMigrator(
+                configuration.GetConnectionString("DefaultConnection")!,
+                sp.GetRequiredService<ILogger<DbUpMigrator>>()));
 
         // CSV
         services.AddSingleton<ICsvParser, CsvParser>();

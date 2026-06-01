@@ -4,6 +4,7 @@ using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.Services;
 using TaipeiCrimeMap.Infrastructure.Csv;
 using TaipeiCrimeMap.Infrastructure.Extensions;
+using TaipeiCrimeMap.Infrastructure.Persistence;
 using TaipeiCrimeMap.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,6 +29,12 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var migrator = scope.ServiceProvider.GetRequiredService<DbUpMigrator>();
+    migrator.MigrateUp();
 }
 
 app.UseExceptionHandler();
