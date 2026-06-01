@@ -66,7 +66,7 @@ public class CsvParser : ICsvParser
             if (parsedCaseType is null)
             {
                 skppedCount++;
-                _logger.LogWarning("第 {Row} 列案類無法識別: {CaseType}，跳過}", rowNumber, rawCaseType);
+                _logger.LogWarning("第 {Row} 列案類無法識別: {CaseType}，跳過", rowNumber, rawCaseType);
                 continue;
             }
 
