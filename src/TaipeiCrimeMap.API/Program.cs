@@ -1,11 +1,9 @@
 using TaipeiCrimeMap.API.Middleware;
 using TaipeiCrimeMap.Application.Handlers;
-using TaipeiCrimeMap.Domain.Repositories;
-using TaipeiCrimeMap.Domain.Services;
-using TaipeiCrimeMap.Infrastructure.Csv;
 using TaipeiCrimeMap.Infrastructure.Extensions;
 using TaipeiCrimeMap.Infrastructure.Persistence;
-using TaipeiCrimeMap.Infrastructure.Repositories;
+
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
