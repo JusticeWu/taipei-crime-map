@@ -4,6 +4,7 @@ using TaipeiCrimeMap.Infrastructure.Extensions;
 using TaipeiCrimeMap.Infrastructure.Persistence;
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+Dapper.SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
 
 var builder = WebApplication.CreateBuilder(args);
 
