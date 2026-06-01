@@ -14,19 +14,22 @@ public static class InfrastructureServiceExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("DefaultConnection")!;
+
+        // DbUp Migration
+        services.AddSingleton(sp => new DbUpMigrator(connectionString, sp.GetRequiredService<ILogger<DbUpMigrator>>()));
+
+        // Repository
+        services.AddSingleton<ICrimeRepository>(_ => new NpgsqlCrimeRepository(connectionString));
+
+        // // Repository
+        // services.AddSingleton<ICrimeRepository, InMemoryCrimeRepository>();
+
         // Options pattern for Google Maps API settings 
         services.Configure<GoogleMapsOptions>(configuration.GetSection(GoogleMapsOptions.SectionName));
 
         // 使用 HttpClientFactory 建立 IGeocodingService，並套用 Polly 的重試和熔斷策略
         services.AddHttpClient<IGeocodingService, GoogleGeocodingService>().AddStandardResilienceHandler();
-
-        // Repository
-        services.AddSingleton<ICrimeRepository, InMemoryCrimeRepository>();
-
-        services.AddScoped<DbUpMigrator>(sp =>
-            new DbUpMigrator(
-                configuration.GetConnectionString("DefaultConnection")!,
-                sp.GetRequiredService<ILogger<DbUpMigrator>>()));
 
         // CSV
         services.AddSingleton<ICsvParser, CsvParser>();
