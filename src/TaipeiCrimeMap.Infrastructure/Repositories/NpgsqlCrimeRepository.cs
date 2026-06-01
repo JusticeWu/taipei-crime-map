@@ -122,7 +122,6 @@ public class NpgsqlCrimeRepository : ICrimeRepository
             @TimeSlotRaw, @TimeSlotStart, @TimeSlotEnd,
             @RawLocation, @Latitude, @Longitude,
             @ImportedAt, @CreatedAt)
-        ON CONFLICT (case_number) DO NOTHING
         """;
 
     // ── Row ↔ Domain 轉換 ────────────────────────────────────────────────
