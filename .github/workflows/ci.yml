@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ uat, main ]
+    branches: [uat, main]
   pull_request:
-    branches: [ uat, main ]
+    branches: [uat, main]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -13,6 +13,20 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: taipei_crime_map
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout
@@ -21,7 +35,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4.3.1
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: "9.0.x"
 
       - name: Restore
         run: dotnet restore TaipeiCrimeMap.slnx
@@ -31,6 +45,8 @@ jobs:
 
       - name: Test
         run: dotnet test TaipeiCrimeMap.slnx --no-restore --configuration Release --logger "console;verbosity=minimal"
+        env:
+          ConnectionStrings__DefaultConnection: "Host=localhost;Port=5432;Database=taipei_crime_map;Username=postgres;Password=postgres"
 
   push-to-acr:
     runs-on: ubuntu-latest
