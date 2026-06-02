@@ -30,8 +30,9 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-using (var scope = app.Services.CreateScope())
+if (!app.Environment.IsEnvironment("Testing"))
 {
+    using var scope = app.Services.CreateScope();
     var migrator = scope.ServiceProvider.GetRequiredService<DbUpMigrator>();
     migrator.MigrateUp();
 }
