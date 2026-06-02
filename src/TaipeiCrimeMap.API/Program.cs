@@ -1,10 +1,10 @@
 using TaipeiCrimeMap.API.Middleware;
 using TaipeiCrimeMap.Application.Handlers;
-using TaipeiCrimeMap.Domain.Repositories;
-using TaipeiCrimeMap.Domain.Services;
-using TaipeiCrimeMap.Infrastructure.Csv;
 using TaipeiCrimeMap.Infrastructure.Extensions;
-using TaipeiCrimeMap.Infrastructure.Repositories;
+using TaipeiCrimeMap.Infrastructure.Persistence;
+
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+Dapper.SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +28,13 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
+
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    using var scope = app.Services.CreateScope();
+    var migrator = scope.ServiceProvider.GetRequiredService<DbUpMigrator>();
+    migrator.MigrateUp();
 }
 
 app.UseExceptionHandler();

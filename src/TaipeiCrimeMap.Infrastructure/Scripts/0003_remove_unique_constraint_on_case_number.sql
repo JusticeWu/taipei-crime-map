@@ -1,0 +1,1 @@
+ALTER TABLE theft_cases DROP CONSTRAINT IF EXISTS uq_theft_cases_case_number;
