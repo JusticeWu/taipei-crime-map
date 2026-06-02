@@ -28,10 +28,17 @@ RUN dotnet restore TaipeiCrimeMap.slnx
 COPY src/ src/
 COPY tests/ tests/
 
-# dotnet test：執行所有測試專案。
+# dotnet test：只執行單元測試，Integration Tests 需要 PostgreSQL，由 CI pipeline 負責。
 # --no-restore：不重新下載套件（前面已做過）。
 # --configuration Release：用 Release 模式跑測試，和最終部署環境一致。
-RUN dotnet test --no-restore --configuration Release \
+RUN dotnet test tests/TaipeiCrimeMap.Domain.Tests/TaipeiCrimeMap.Domain.Tests.csproj \
+    --no-restore --configuration Release \
+    --logger "console;verbosity=minimal" && \
+    dotnet test tests/TaipeiCrimeMap.Application.Tests/TaipeiCrimeMap.Application.Tests.csproj \
+    --no-restore --configuration Release \
+    --logger "console;verbosity=minimal" && \
+    dotnet test tests/TaipeiCrimeMap.Infrastructure.Tests/TaipeiCrimeMap.Infrastructure.Tests.csproj \
+    --no-restore --configuration Release \
     --logger "console;verbosity=minimal"
 
 # dotnet publish：編譯並打包應用程式，產生可以部署的檔案。
