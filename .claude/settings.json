@@ -5,7 +5,13 @@
       "Bash(gh *)",
       "Bash(dotnet *)",
       "Bash(Get-ChildItem *)",
-      "Bash(where.exe *)"
+      "Bash(where.exe *)",
+      "Bash(ls *)",
+      "Bash(Invoke-WebRequest *)",
+      "Bash(ConvertFrom-Json *)",
+      "Bash(ForEach-Object *)",
+      "Bash(Select-Object *)",
+      "Bash(Write-Host *)"
     ]
   }
 }
