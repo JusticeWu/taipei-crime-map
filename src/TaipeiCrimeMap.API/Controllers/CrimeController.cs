@@ -58,7 +58,7 @@ public class CrimeController : ControllerBase
             RawTimeSlot: rawTimeSlot);
 
         var results = await _queryHandler.HandleAsync(query, cancellationToken);
-        return Ok();
+        return Ok(results);
     }
 
 
