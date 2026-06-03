@@ -78,6 +78,9 @@ jobs:
     needs: push-to-acr
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -90,3 +93,29 @@ jobs:
           containerAppName: taipei-crime-map-uat
           resourceGroup: taipei-crime-map-rg
           imageToDeploy: taipeicrimemap.azurecr.io/taipei-crime-map:${{ github.sha }}
+
+      - name: Find latest report
+        id: find_report
+        run: |
+          LATEST=$(ls -t docs/reports/*.md 2>/dev/null | head -1)
+          if [ -z "$LATEST" ]; then
+            echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
+          else
+            {
+              echo "content<<EOF"
+              cat "$LATEST"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send email report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: 任務報告：${{ github.event.head_commit.message }}
+          to: chengyi.ks@gmail.com
+          from: ${{ secrets.GMAIL_USERNAME }}
+          body: ${{ steps.find_report.outputs.content }}
