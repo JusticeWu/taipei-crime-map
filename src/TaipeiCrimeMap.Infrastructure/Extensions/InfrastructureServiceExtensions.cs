@@ -34,6 +34,8 @@ public static class InfrastructureServiceExtensions
         // CSV
         services.AddSingleton<ICsvParser, CsvParser>();
 
+        services.AddMemoryCache();
+
         return services;
     }
 }

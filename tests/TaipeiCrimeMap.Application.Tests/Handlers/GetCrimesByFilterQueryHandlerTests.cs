@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using TaipeiCrimeMap.Application.Handlers;
@@ -13,14 +14,17 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 public class GetCrimesByFilterQueryHandlerTests
 {
     private readonly Mock<ICrimeRepository> _repositoryMock;
+    private readonly IMemoryCache _cache;
     private readonly GetCrimesByFilterQueryHandler _handler;
 
     public GetCrimesByFilterQueryHandlerTests()
     {
         _repositoryMock = new Mock<ICrimeRepository>();
+        _cache = new MemoryCache(new MemoryCacheOptions());
 
         _handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object, 
+            _repositoryMock.Object,
+            _cache,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
     }
 
@@ -44,7 +48,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repositoryMock.Setup(
             r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(), 
+                It.IsAny<CrimeFilter>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(cases);
 
@@ -131,4 +135,72 @@ public class GetCrimesByFilterQueryHandlerTests
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }
+
+    /// <summary>
+    /// 相同查詢條件第二次呼叫，Repository 應只被呼叫一次（快取命中）
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SecondCallWithSameQuery_ShouldReturnCachedResult()
+    {
+        // Arrange
+        var cases = new List<TheftCase>
+    {
+        TheftCase.Create(
+            caseNumber: "001",
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: TimeSlot.Parse("18-20"),
+            rawLocation: "臺北市內湖區成功路五段31號")
+    };
+
+        _repositoryMock.Setup(
+            r => r.GetByFilterAsync(
+                It.IsAny<CrimeFilter>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cases);
+
+        var query = new GetCrimesByFilterQuery(CaseType: CaseType.Residential);
+
+        // Act
+        var firstResult = await _handler.HandleAsync(query);
+        var secondResult = await _handler.HandleAsync(query);
+
+        // Assert
+        secondResult.Should().BeEquivalentTo(firstResult);
+        _repositoryMock.Verify(
+            r => r.GetByFilterAsync(
+                It.IsAny<CrimeFilter>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);    // Repository 只被呼叫一次
+    }
+
+    /// <summary>
+    /// 不同查詢條件，Repository 應該被呼叫二次（快取未命中）
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DifferentQueries_ShouldCallRepositoryTwice()
+    {
+        // Arrange
+        _repositoryMock.Setup(
+            r => r.GetByFilterAsync(
+                It.IsAny<CrimeFilter>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<TheftCase>());
+
+        var query1 = new GetCrimesByFilterQuery(DistrictName: "大安區");
+        var query2 = new GetCrimesByFilterQuery(DistrictName: "內湖區");
+
+        // Act
+        await _handler.HandleAsync(query1);
+        await _handler.HandleAsync(query2);
+
+        // Assert
+        _repositoryMock.Verify(
+            r => r.GetByFilterAsync(
+                It.IsAny<CrimeFilter>(),
+                It.IsAny<CancellationToken>()),
+            Times.Exactly(2));  // Repository 被呼叫兩次
+    }
+
 }
