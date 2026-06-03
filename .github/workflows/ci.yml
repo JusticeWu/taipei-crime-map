@@ -94,6 +94,34 @@ jobs:
           resourceGroup: taipei-crime-map-rg
           imageToDeploy: taipeicrimemap.azurecr.io/taipei-crime-map:${{ github.sha }}
 
+      - name: Import CSV data
+        run: |
+          APP_URL=$(az containerapp show \
+            --name taipei-crime-map-uat \
+            --resource-group taipei-crime-map-rg \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          BASE_URL="https://${APP_URL}"
+          echo "UAT URL: $BASE_URL"
+
+          declare -A FILES
+          FILES["residential.csv"]=1
+          FILES["car.csv"]=2
+          FILES["motorcycle.csv"]=3
+          FILES["bicycle.csv"]=4
+          FILES["snatching.csv"]=5
+          FILES["robbery.csv"]=6
+
+          for FILENAME in "${!FILES[@]}"; do
+            CASE_TYPE=${FILES[$FILENAME]}
+            echo "Importing $FILENAME (CaseType=$CASE_TYPE)..."
+            curl --fail --silent --show-error \
+              -X POST "$BASE_URL/api/crime/import" \
+              -H "Content-Type: application/json" \
+              -d "{\"filePath\":\"/app/data/raw/$FILENAME\",\"caseType\":$CASE_TYPE}"
+            echo ""
+          done
+
       - name: Find latest report
         id: find_report
         run: |

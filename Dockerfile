@@ -64,6 +64,7 @@ USER appuser
 # 每寫一個 FROM，就開啟一個全新的、獨立的建置環境。
 # 使執行環境無 SDK 和原始碼。
 COPY --from=build /app/publish ./
+COPY --chown=appuser:appgroup data/raw/*.csv /app/data/raw/
 
 # 1. 讓 Dockerfile 自我說明。
 # 2. 給自動化工具看的 metadata。
