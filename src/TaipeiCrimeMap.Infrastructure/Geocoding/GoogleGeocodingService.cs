@@ -15,12 +15,38 @@ public sealed class GoogleGeocodingService : IGeocodingService
 
     private const string BaseUrl = "https://maps.googleapis.com/maps/api/geocode/json";
 
-    public GoogleGeocodingService(HttpClient httpClient, IOptions<GoogleMapsOptions> options, 
+    private int _dailyRequestCount;
+    private DateOnly _quotaResetDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    private readonly object _quotaLock = new();
+
+    public GoogleGeocodingService(HttpClient httpClient, IOptions<GoogleMapsOptions> options,
         ILogger<GoogleGeocodingService> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+    }
+
+    private bool TryAcquireQuota()
+    {
+        if (_options.DailyQuotaLimit <= 0)
+            return true;
+
+        lock (_quotaLock)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (today > _quotaResetDate)
+            {
+                _dailyRequestCount = 0;
+                _quotaResetDate = today;
+            }
+
+            if (_dailyRequestCount >= _options.DailyQuotaLimit)
+                return false;
+
+            _dailyRequestCount++;
+            return true;
+        }
     }
 
     public async Task<GeoCoordinate?> GeocodeAsync(
@@ -29,6 +55,13 @@ public sealed class GoogleGeocodingService : IGeocodingService
     {
         if (string.IsNullOrWhiteSpace(address))
             return null;
+
+        if (!TryAcquireQuota())
+        {
+            _logger.LogWarning("Geocoding daily quota ({Limit}) exceeded, skipping: {Address}",
+                _options.DailyQuotaLimit, address);
+            return null;
+        }
 
         var url = $"{BaseUrl}?address={Uri.EscapeDataString(address)}&key={_options.ApiKey}&language=zh-TW&region=TW";
 
