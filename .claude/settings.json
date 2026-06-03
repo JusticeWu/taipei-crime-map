@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(dotnet *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(where.exe *)"
+    ]
+  }
+}
