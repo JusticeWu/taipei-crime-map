@@ -1,46 +1,25 @@
-# 任務報告：自動寄信功能
+# 任務報告：自動寄信功能 — 2026-06-03
 
-**日期：** 2026-06-03
-**分支：** feature/email-report
-**作者：** Justice Wu
+1. **主要解決什麼問題？**
+   每次部署 UAT 後，需要人工確認結果；改成 pipeline 自動寄信，讓關係人即時收到最新報告。
 
----
+2. **如何證明是否執行正確？**
+   CI 三個 job（`build-and-test`、`push-to-acr`、`deploy-to-uat`）全數通過，`Send email report` 步驟顯示成功，信箱收到標題含 commit message 的郵件。
 
-## 任務摘要
+3. **怎樣才是好的作法？**
+   用 `ls -t` 取最新檔案而非寫死檔名，讓每次新增報告時不需改 CI；密碼存 GitHub Secrets 而非明文寫在 YAML。
 
-在 GitHub Actions CI pipeline 的 `deploy-to-uat` job 中，新增自動寄送任務報告的步驟。每當有 push 觸發部署到 UAT 環境時，pipeline 會自動讀取 `docs/reports/` 目錄下最新的報告檔案，並透過 Gmail SMTP 寄送至指定信箱。
+4. **最重要的知識或概念（最多三個）**
+   - **GitHub Secrets**：就像把鑰匙放在保險箱，CI 執行時才取出來用，不會出現在程式碼裡。
+   - **Gmail 應用程式密碼**：不是登入密碼，是 Google 另外發的「專用通行證」，只讓特定程式寄信。
+   - **`$GITHUB_OUTPUT`**：步驟之間傳資料的便條紙，一個步驟寫進去，下一個步驟可以讀出來。
 
----
+5. **核心的變數是什麼？**
+   - `GMAIL_USERNAME` / `GMAIL_APP_PASSWORD`：寄信憑證
+   - `github.event.head_commit.message`：信件主旨來源
+   - `steps.find_report.outputs.content`：信件內文（最新報告的完整內容）
 
-## 變更內容
-
-### `.github/workflows/ci.yml`
-
-在 `deploy-to-uat` job 新增以下步驟：
-
-1. **Checkout** — 新增 `actions/checkout@v4.2.2`，讓 job 可以存取 repository 中的報告檔案。
-2. **Find latest report** — 使用 `ls -t docs/reports/*.md` 找出最新的報告檔案，並將內容寫入 `$GITHUB_OUTPUT`。
-3. **Send email report** — 使用 `dawidd6/action-send-mail@v3` 透過 Gmail SMTP 寄送報告。
-
-### 寄信設定
-
-| 項目 | 值 |
-|------|----|
-| SMTP Server | smtp.gmail.com:587 |
-| 寄件人 | `${{ secrets.GMAIL_USERNAME }}` |
-| 收件人 | chengyi.ks@gmail.com |
-| Subject | 任務報告：[commit message] |
-| Body | `docs/reports/` 最新檔案的完整內容 |
-
-### GitHub Secrets 需求
-
-- `GMAIL_USERNAME` — Gmail 帳號（例：chengyi.ks@gmail.com）
-- `GMAIL_APP_PASSWORD` — Gmail 應用程式密碼（非登入密碼）
-
----
-
-## 測試結果
-
-- CI pipeline 於 UAT 分支執行成功
-- `build-and-test`、`push-to-acr`、`deploy-to-uat` 三個 job 全部通過
-- Email 寄送步驟依賴 GitHub Secrets 設定，需在 repo Settings → Secrets 中配置
+6. **新手可能常犯的誤區？**
+   - 用 Gmail 登入密碼而非應用程式密碼，導致 SMTP 認證失敗。
+   - `$GITHUB_OUTPUT` 多行內容沒用 `<<EOF` heredoc 語法，只會拿到第一行。
+   - `deploy-to-uat` job 沒加 `Checkout` 步驟，讀不到 repo 裡的報告檔案。
