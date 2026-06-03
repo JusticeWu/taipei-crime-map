@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using TaipeiCrimeMap.Application.Handlers;
@@ -13,14 +14,17 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 public class GetCrimesByFilterQueryHandlerTests
 {
     private readonly Mock<ICrimeRepository> _repositoryMock;
+    private readonly IMemoryCache _cache;
     private readonly GetCrimesByFilterQueryHandler _handler;
 
     public GetCrimesByFilterQueryHandlerTests()
     {
         _repositoryMock = new Mock<ICrimeRepository>();
+        _cache = new MemoryCache(new MemoryCacheOptions());
 
         _handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object, 
+            _repositoryMock.Object,
+            _cache,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
     }
 
@@ -44,7 +48,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repositoryMock.Setup(
             r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(), 
+                It.IsAny<CrimeFilter>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(cases);
 
