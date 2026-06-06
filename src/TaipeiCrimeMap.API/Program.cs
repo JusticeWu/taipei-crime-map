@@ -39,6 +39,8 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapControllers();
 app.Run();
 
