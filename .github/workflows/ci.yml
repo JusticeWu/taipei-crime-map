@@ -38,9 +38,10 @@ jobs:
 
       - name: Create database
         run: |
-          /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost,1433 -U sa -P Test1234!Strong \
-            -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'taipei_crime_map') CREATE DATABASE taipei_crime_map" \
+          CONTAINER=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2022-latest" -q)
+          docker exec "$CONTAINER" /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "Test1234!Strong" \
+            -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'taipei_crime_map') CREATE DATABASE taipei_crime_map" \
             -C
 
       - name: Restore

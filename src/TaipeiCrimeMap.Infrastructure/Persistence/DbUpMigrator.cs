@@ -19,7 +19,6 @@ public class DbUpMigrator
         var upgrader = DeployChanges.To
             .SqlDatabase(_connectionString)
             .WithScriptsEmbeddedInAssembly(typeof(DbUpMigrator).Assembly)
-            .WithTransactionPerScript()
             .LogToConsole()
             .Build();
 
