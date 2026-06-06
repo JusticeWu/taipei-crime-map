@@ -1,7 +1,8 @@
 using FluentAssertions;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using System.Text.Json;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Queries;
 using TaipeiCrimeMap.Domain.Aggregates;
@@ -14,17 +15,27 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 public class GetCrimesByFilterQueryHandlerTests
 {
     private readonly Mock<ICrimeRepository> _repositoryMock;
-    private readonly IMemoryCache _cache;
+    private readonly Mock<IDistributedCache> _cacheMock;
     private readonly GetCrimesByFilterQueryHandler _handler;
 
     public GetCrimesByFilterQueryHandlerTests()
     {
         _repositoryMock = new Mock<ICrimeRepository>();
-        _cache = new MemoryCache(new MemoryCacheOptions());
+        _cacheMock = new Mock<IDistributedCache>();
+
+        // 預設：快取未命中、寫入不拋錯
+        _cacheMock
+            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((byte[]?)null);
+        _cacheMock
+            .Setup(c => c.SetAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(),
+                It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         _handler = new GetCrimesByFilterQueryHandler(
             _repositoryMock.Object,
-            _cache,
+            _cacheMock.Object,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
     }
 
@@ -91,7 +102,7 @@ public class GetCrimesByFilterQueryHandlerTests
     public async Task HandleAsync_WithNoFilter_ShouldCallGetByFilterAsync()
     {
         // Arrange
-        _ = _repositoryMock.Setup(
+        _repositoryMock.Setup(
             r => r.GetByFilterAsync(
                 It.IsAny<CrimeFilter>(),
                 It.IsAny<CancellationToken>()))
@@ -144,21 +155,35 @@ public class GetCrimesByFilterQueryHandlerTests
     {
         // Arrange
         var cases = new List<TheftCase>
-    {
-        TheftCase.Create(
-            caseNumber: "001",
-            caseType: CaseType.Residential,
-            district: District.ParseFrom("內湖區"),
-            occurredDate: TaiwanDate.Parse("1130101"),
-            timeSlot: TimeSlot.Parse("18-20"),
-            rawLocation: "臺北市內湖區成功路五段31號")
-    };
+        {
+            TheftCase.Create(
+                caseNumber: "001",
+                caseType: CaseType.Residential,
+                district: District.ParseFrom("內湖區"),
+                occurredDate: TaiwanDate.Parse("1130101"),
+                timeSlot: TimeSlot.Parse("18-20"),
+                rawLocation: "臺北市內湖區成功路五段31號")
+        };
 
         _repositoryMock.Setup(
             r => r.GetByFilterAsync(
                 It.IsAny<CrimeFilter>(),
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(cases);
+
+        // 模擬 IDistributedCache 的寫入與讀取行為
+        var stored = new Dictionary<string, byte[]>();
+        _cacheMock
+            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns((string key, CancellationToken _) =>
+                Task.FromResult<byte[]?>(stored.TryGetValue(key, out var v) ? v : null));
+        _cacheMock
+            .Setup(c => c.SetAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(),
+                It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+            .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
+                (key, value, _, _) => stored[key] = value)
+            .Returns(Task.CompletedTask);
 
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Residential);
 
@@ -203,4 +228,34 @@ public class GetCrimesByFilterQueryHandlerTests
             Times.Exactly(2));  // Repository 被呼叫兩次
     }
 
+    /// <summary>
+    /// 快取命中時，回傳資料應與序列化前一致（驗證 JSON 往返正確性）
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WhenCacheHit_ShouldReturnDeserializedData()
+    {
+        // Arrange
+        var query = new GetCrimesByFilterQuery(CaseType: CaseType.Car);
+        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}";
+
+        var preloaded = new List<TaipeiCrimeMap.Application.DTOs.TheftCaseDto>
+        {
+            new() { CaseNumber = "cached-001", CaseType = "汽車竊盜", District = "信義區" }
+        };
+        var preloadedBytes = JsonSerializer.SerializeToUtf8Bytes(preloaded);
+
+        _cacheMock
+            .Setup(c => c.GetAsync(cacheKey, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(preloadedBytes);
+
+        // Act
+        var result = await _handler.HandleAsync(query);
+
+        // Assert
+        result.Should().HaveCount(1);
+        result[0].CaseNumber.Should().Be("cached-001");
+        _repositoryMock.Verify(
+            r => r.GetByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()),
+            Times.Never);   // 快取命中，不查 DB
+    }
 }

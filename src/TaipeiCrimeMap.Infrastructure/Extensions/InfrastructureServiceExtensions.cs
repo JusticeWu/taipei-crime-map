@@ -34,7 +34,11 @@ public static class InfrastructureServiceExtensions
         // CSV
         services.AddSingleton<ICsvParser, CsvParser>();
 
-        services.AddMemoryCache();
+        // 分散式快取（Garnet / Redis）
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = configuration.GetConnectionString("Redis");
+        });
 
         return services;
     }
