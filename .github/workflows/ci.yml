@@ -27,6 +27,16 @@ jobs:
           --health-timeout 5s
           --health-retries 15
 
+      garnet:
+        image: ghcr.io/microsoft/garnet:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
@@ -54,6 +64,7 @@ jobs:
         run: dotnet test TaipeiCrimeMap.slnx --no-restore --configuration Release --logger "console;verbosity=minimal"
         env:
           ConnectionStrings__DefaultConnection: "Server=localhost,1433;Database=taipei_crime_map;User Id=sa;Password=Test1234!Strong;Encrypt=True;TrustServerCertificate=True;"
+          ConnectionStrings__Redis: "localhost:6379"
 
   push-to-acr:
     runs-on: ubuntu-latest
