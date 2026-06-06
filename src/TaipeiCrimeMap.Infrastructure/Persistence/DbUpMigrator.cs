@@ -16,12 +16,10 @@ public class DbUpMigrator
 
     public void MigrateUp()
     {
-        EnsureDatabase.For.SqlDatabase(_connectionString);
-
         var upgrader = DeployChanges.To
             .SqlDatabase(_connectionString)
             .WithScriptsEmbeddedInAssembly(typeof(DbUpMigrator).Assembly)
-            .WithTransaction()
+            .WithTransactionPerScript()
             .LogToConsole()
             .Build();
 
