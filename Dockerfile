@@ -52,7 +52,8 @@ RUN dotnet publish src/TaipeiCrimeMap.API/TaipeiCrimeMap.API.csproj \
 # =============================================
 
 # aspnet:9.0 比 sdk:9.0 小得多（無編譯器），只含執行 .NET 程式所需最小環境。
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS runtime
+# 使用 Debian-based image 而非 alpine，避免 Microsoft.Data.SqlClient 6.x 在 Alpine 上的 Segfault 問題。
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 # 設定工作目錄為 /app，一般 .NET 應用程式慣例。
 WORKDIR /app
 
