@@ -1,21 +1,22 @@
+using System.Data;
 using Dapper;
-using Npgsql;
+using Microsoft.Data.SqlClient;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Infrastructure.Repositories;
 
-public class NpgsqlCrimeRepository : ICrimeRepository
+public class SqlServerCrimeRepository : ICrimeRepository
 {
     private readonly string _connectionString;
 
-    public NpgsqlCrimeRepository(string connectionString)
+    public SqlServerCrimeRepository(string connectionString)
     {
         _connectionString = connectionString;
     }
 
-    private NpgsqlConnection CreateConnection() => new(_connectionString);
+    private SqlConnection CreateConnection() => new(_connectionString);
 
     public async Task<TheftCase?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
@@ -48,16 +49,17 @@ public class NpgsqlCrimeRepository : ICrimeRepository
     {
         await using var conn = CreateConnection();
         var rows = await conn.QueryAsync<TheftCaseRow>(
-            "SELECT * FROM sp_get_theft_cases_by_filter(@CaseType, @District, @YearFrom, @YearTo, @TimeSlotStart, @TimeSlotEnd)",
+            "sp_get_theft_cases_by_filter",
             new
             {
-                CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
-                District = filter.District?.Name,
-                YearFrom = filter.YearFrom,
-                YearTo = filter.YearTo,
-                TimeSlotStart = filter.TimeSlot?.StartHour,
-                TimeSlotEnd = filter.TimeSlot?.EndHour
-            });
+                CaseType       = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
+                District       = filter.District?.Name,
+                YearFrom       = filter.YearFrom,
+                YearTo         = filter.YearTo,
+                TimeSlotStart  = filter.TimeSlot?.StartHour,
+                TimeSlotEnd    = filter.TimeSlot?.EndHour
+            },
+            commandType: CommandType.StoredProcedure);
         return rows.Select(r => r.ToDomain()).ToList();
     }
 

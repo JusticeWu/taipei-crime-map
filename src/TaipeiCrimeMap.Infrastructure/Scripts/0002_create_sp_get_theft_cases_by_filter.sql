@@ -1,33 +1,29 @@
-CREATE OR REPLACE FUNCTION sp_get_theft_cases_by_filter(
-    p_case_type         INTEGER  DEFAULT NULL,
-    p_district          VARCHAR  DEFAULT NULL,
-    p_year_from         INTEGER  DEFAULT NULL,
-    p_year_to           INTEGER  DEFAULT NULL,
-    p_time_slot_start   INTEGER  DEFAULT NULL,
-    p_time_slot_end     INTEGER  DEFAULT NULL
-)
-RETURNS SETOF theft_cases
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_sql TEXT;
+CREATE OR ALTER PROCEDURE sp_get_theft_cases_by_filter
+    @CaseType       INT             = NULL,
+    @District       NVARCHAR(10)    = NULL,
+    @YearFrom       INT             = NULL,
+    @YearTo         INT             = NULL,
+    @TimeSlotStart  INT             = NULL,
+    @TimeSlotEnd    INT             = NULL
+AS
 BEGIN
-    v_sql :=
-        'SELECT * FROM theft_cases WHERE 1=1'
-        || CASE WHEN p_case_type       IS NOT NULL THEN ' AND case_type       = $1' ELSE '' END
-        || CASE WHEN p_district        IS NOT NULL THEN ' AND district        = $2' ELSE '' END
-        || CASE WHEN p_year_from       IS NOT NULL THEN ' AND occurred_year   >= $3' ELSE '' END
-        || CASE WHEN p_year_to         IS NOT NULL THEN ' AND occurred_year   <= $4' ELSE '' END
-        || CASE WHEN p_time_slot_start IS NOT NULL THEN ' AND time_slot_start = $5' ELSE '' END
-        || CASE WHEN p_time_slot_end   IS NOT NULL THEN ' AND time_slot_end   = $6' ELSE '' END;
+    SET NOCOUNT ON;
 
-    RETURN QUERY EXECUTE v_sql
-        USING
-            p_case_type,
-            p_district,
-            p_year_from,
-            p_year_to,
-            p_time_slot_start,
-            p_time_slot_end;
+    DECLARE @sql    NVARCHAR(MAX) = N'SELECT * FROM theft_cases WHERE 1=1';
+    DECLARE @params NVARCHAR(MAX) = N'@CaseType INT, @District NVARCHAR(10), @YearFrom INT, @YearTo INT, @TimeSlotStart INT, @TimeSlotEnd INT';
+
+    IF @CaseType      IS NOT NULL  SET @sql = @sql + N' AND case_type       = @CaseType';
+    IF @District      IS NOT NULL  SET @sql = @sql + N' AND district        = @District';
+    IF @YearFrom      IS NOT NULL  SET @sql = @sql + N' AND occurred_year   >= @YearFrom';
+    IF @YearTo        IS NOT NULL  SET @sql = @sql + N' AND occurred_year   <= @YearTo';
+    IF @TimeSlotStart IS NOT NULL  SET @sql = @sql + N' AND time_slot_start = @TimeSlotStart';
+    IF @TimeSlotEnd   IS NOT NULL  SET @sql = @sql + N' AND time_slot_end   = @TimeSlotEnd';
+
+    EXEC sp_executesql @sql, @params,
+        @CaseType      = @CaseType,
+        @District      = @District,
+        @YearFrom      = @YearFrom,
+        @YearTo        = @YearTo,
+        @TimeSlotStart = @TimeSlotStart,
+        @TimeSlotEnd   = @TimeSlotEnd;
 END;
-$$;

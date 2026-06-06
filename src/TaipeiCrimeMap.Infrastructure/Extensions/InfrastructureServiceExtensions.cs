@@ -20,7 +20,7 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton(sp => new DbUpMigrator(connectionString, sp.GetRequiredService<ILogger<DbUpMigrator>>()));
 
         // Repository
-        services.AddSingleton<ICrimeRepository>(_ => new NpgsqlCrimeRepository(connectionString));
+        services.AddSingleton<ICrimeRepository>(_ => new SqlServerCrimeRepository(connectionString));
 
         // // Repository
         // services.AddSingleton<ICrimeRepository, InMemoryCrimeRepository>();
