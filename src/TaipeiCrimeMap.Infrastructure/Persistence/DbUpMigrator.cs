@@ -16,10 +16,10 @@ public class DbUpMigrator
 
     public void MigrateUp()
     {
-        EnsureDatabase.For.PostgresqlDatabase(_connectionString);
+        EnsureDatabase.For.SqlDatabase(_connectionString);
 
         var upgrader = DeployChanges.To
-            .PostgresqlDatabase(_connectionString)
+            .SqlDatabase(_connectionString)
             .WithScriptsEmbeddedInAssembly(typeof(DbUpMigrator).Assembly)
             .WithTransaction()
             .LogToConsole()
