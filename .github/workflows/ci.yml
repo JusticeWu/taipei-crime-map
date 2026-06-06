@@ -101,7 +101,20 @@ jobs:
           resourceGroup: taipei-crime-map-rg
           imageToDeploy: taipeicrimemap.azurecr.io/taipei-crime-map:${{ github.sha }}
 
+      - name: Check migration logs
+        run: |
+          echo "Waiting 30s for container startup..."
+          sleep 30
+          echo "=== DbUpMigrator logs ==="
+          az containerapp logs show \
+            --name taipei-crime-map-uat \
+            --resource-group taipei-crime-map-rg \
+            --tail 150 \
+            --format text 2>&1 \
+            | grep -iE "migration|migrate|schemaversion|theft_cases|執行|完成|Error" || true
+
       - name: Import CSV data
+        continue-on-error: true
         run: |
           APP_URL=$(az containerapp show \
             --name taipei-crime-map-uat \
