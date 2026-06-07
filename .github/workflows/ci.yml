@@ -231,3 +231,27 @@ jobs:
           to: chengyi.ks@gmail.com
           from: ${{ secrets.GMAIL_USERNAME }}
           body: ${{ steps.find_report.outputs.content }}
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            COLOR="good"
+            EMOJI=":white_check_mark:"
+            MSG="UAT 部署成功"
+          else
+            COLOR="danger"
+            EMOJI=":x:"
+            MSG="UAT 部署失敗"
+          fi
+          REPORT_NAME="${{ steps.find_report.outputs.report_name }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n報告：$REPORT_NAME\n<$RUN_URL|查看 CI 記錄>\"
+              }]
+            }"
