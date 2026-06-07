@@ -93,6 +93,7 @@ UAT 驗證通過後，從 uat 開 PR merge 進 main 觸發 Prod 部署。
 - [ ] 變更已 commit 並 push
 - [ ] PR 已建立並 merge 到 uat
 - [ ] CI pipeline 全部綠燈
+- [ ] 發送任務完成 Slack 通知（規則二）
 - [ ] 如果此次任務遇到任何錯誤、意外行為、或需要修正的問題，
       將教訓寫入 docs/lessons-learned.md，格式：
       ## L[下一個編號]：[問題標題]
@@ -122,9 +123,65 @@ UAT 驗證通過後，從 uat 開 PR merge 進 main 觸發 Prod 部署。
    - CI 結果：✅ 成功 / ❌ 失敗
    - UAT 部署：✅ 成功 / ❌ 失敗
 
-## Slack 通知測試
-本機測試 Slack webhook 時，curl 在 Windows/macOS 可能造成中文亂碼，
-請改用以下 Python 指令（確保 SLACK_WEBHOOK_URL 環境變數已設定）：
+## Slack 通知規則
+
+所有通知一律使用 Python 發送（curl 在 Windows 會中文亂碼）。
+
+### 通知用函式（每次直接複製執行）
+
+```bash
+python3 -c "
+import urllib.request, json, os
+msg = '【在此替換訊息內容】'
+data = json.dumps({'text': msg}).encode('utf-8')
+req = urllib.request.Request(os.environ['SLACK_WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'})
+urllib.request.urlopen(req)
+"
+```
+
+### 規則一：提問之前必須先發通知
+
+在向使用者提出任何需要確認的問題**之前**，先執行以下指令，再提問：
+
+```bash
+python3 -c "
+import urllib.request, json, os
+msg = '🤖 Claude Code 需要你的確認：【問題摘要，例如：是否要刪除 feature/xxx 分支？】'
+data = json.dumps({'text': msg}).encode('utf-8')
+req = urllib.request.Request(os.environ['SLACK_WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'})
+urllib.request.urlopen(req)
+"
+```
+
+### 規則二：任務完成時必須發通知
+
+在完成任務自我檢查清單、所有項目確認後，執行以下指令：
+
+```bash
+python3 -c "
+import urllib.request, json, os
+msg = '✅ 任務完成：【任務名稱，例如：Prod 環境部署 CI/CD】'
+data = json.dumps({'text': msg}).encode('utf-8')
+req = urllib.request.Request(os.environ['SLACK_WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'})
+urllib.request.urlopen(req)
+"
+```
+
+### 規則三：遇到錯誤無法繼續時必須發通知
+
+在停止作業、等待協助**之前**，執行以下指令：
+
+```bash
+python3 -c "
+import urllib.request, json, os
+msg = '❌ 遇到錯誤需要協助：【錯誤摘要，例如：docker build 失敗，缺少 AZURE_CREDENTIALS secret】'
+data = json.dumps({'text': msg}).encode('utf-8')
+req = urllib.request.Request(os.environ['SLACK_WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'})
+urllib.request.urlopen(req)
+"
+```
+
+### 本機測試通知是否正常
 
 ```bash
 python3 -c "
