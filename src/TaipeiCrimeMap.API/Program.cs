@@ -16,6 +16,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Domain / Infrastructure services
+builder.Services.AddMemoryCache();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 // Application handlers
