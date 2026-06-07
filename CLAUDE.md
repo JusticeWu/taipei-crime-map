@@ -116,6 +116,21 @@ feature/xxx → PR → uat → 自動部署 UAT → prod
    - CI 結果：✅ 成功 / ❌ 失敗
    - UAT 部署：✅ 成功 / ❌ 失敗
 
+## Slack 通知測試
+本機測試 Slack webhook 時，curl 在 Windows/macOS 可能造成中文亂碼，
+請改用以下 Python 指令（確保 SLACK_WEBHOOK_URL 環境變數已設定）：
+
+```bash
+python3 -c "
+import urllib.request, json, os
+data = json.dumps({'text': '🤖 Claude Code 通知測試'}).encode('utf-8')
+req = urllib.request.Request(os.environ['SLACK_WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'})
+urllib.request.urlopen(req)
+"
+```
+
+CI 內的 `curl` 指令在 GitHub Actions（Linux）上中文正常，不需修改。
+
 ## 配額耗盡時的處理
 在停止前必須把進度寫入 PROGRESS.md，格式：
 
