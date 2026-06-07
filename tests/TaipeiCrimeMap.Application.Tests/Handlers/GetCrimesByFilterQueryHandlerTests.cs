@@ -327,4 +327,213 @@ public class GetCrimesByFilterQueryHandlerTests
                 It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
+
+    // ──────────────────────────────────────────────
+    // L1/L2 故障情境組合測試
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// 情境一：L1未命中、L2未命中 → 第一次打DB，結果存入L1和L2；第二次L1命中
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WhenL1MissL2Miss_SecondCallShouldHitL1AndCallDbOnce()
+    {
+        // Arrange
+        var memoryCacheMock = new Mock<IMemoryCache>();
+        var cacheEntryMock = new Mock<ICacheEntry>();
+
+        // L1: 第一次 miss；Set 後 callback 重新 setup 為 hit
+        object? l1OutVal = null;
+        memoryCacheMock
+            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
+            .Returns(false);
+        cacheEntryMock
+            .SetupSet(e => e.Value = It.IsAny<object?>())
+            .Callback<object?>(v => {
+                object? captured = v;
+                memoryCacheMock
+                    .Setup(m => m.TryGetValue(It.IsAny<object>(), out captured))
+                    .Returns(true);
+            });
+        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+
+        // L2: 永遠 miss
+        var l2Mock = new Mock<IDistributedCache>();
+        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync((byte[]?)null);
+        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
+                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+              .Returns(Task.CompletedTask);
+
+        _repositoryMock
+            .Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+
+        var handler = new GetCrimesByFilterQueryHandler(
+            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            NullLogger<GetCrimesByFilterQueryHandler>.Instance);
+
+        var query = new GetCrimesByFilterQuery();
+
+        // Act
+        await handler.HandleAsync(query); // L1 miss + L2 miss → DB(1)，結果存入 L1 和 L2
+        await handler.HandleAsync(query); // L1 hit
+
+        // Assert
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// 情境二：L1未命中、L2故障 → 第一次打DB，結果存入L1；第二次L1命中
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WhenL1MissL2Fault_SecondCallShouldHitL1AndCallDbOnce()
+    {
+        // Arrange
+        var memoryCacheMock = new Mock<IMemoryCache>();
+        var cacheEntryMock = new Mock<ICacheEntry>();
+
+        // L1: 第一次 miss；Set 後 callback 重新 setup 為 hit
+        object? l1OutVal = null;
+        memoryCacheMock
+            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
+            .Returns(false);
+        cacheEntryMock
+            .SetupSet(e => e.Value = It.IsAny<object?>())
+            .Callback<object?>(v => {
+                object? captured = v;
+                memoryCacheMock
+                    .Setup(m => m.TryGetValue(It.IsAny<object>(), out captured))
+                    .Returns(true);
+            });
+        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+
+        // L2: 永遠故障（GetAsync 和 SetAsync 都拋出例外）
+        var l2Mock = new Mock<IDistributedCache>();
+        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+              .ThrowsAsync(new Exception("Garnet 故障"));
+        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
+                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+              .ThrowsAsync(new Exception("Garnet 故障"));
+
+        _repositoryMock
+            .Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+
+        var handler = new GetCrimesByFilterQueryHandler(
+            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            NullLogger<GetCrimesByFilterQueryHandler>.Instance);
+
+        var query = new GetCrimesByFilterQuery();
+
+        // Act
+        await handler.HandleAsync(query); // L1 miss + L2 故障 → DB(1)，結果存入 L1
+        await handler.HandleAsync(query); // L1 hit（L2 故障不影響）
+
+        // Assert
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// 情境三：L1故障、L2未命中 → 第一次打DB，結果存入L2；第二次L1仍故障、L2命中
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WhenL1FaultL2Miss_SecondCallL1FaultL2ShouldHit()
+    {
+        // Arrange - L1 永遠拋出例外
+        var memoryCacheMock = new Mock<IMemoryCache>();
+        object? l1OutVal = null;
+        memoryCacheMock
+            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
+            .Throws(new Exception("L1 故障"));
+        var cacheEntryMock = new Mock<ICacheEntry>();
+        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+
+        // L2: 第一次 miss，SetAsync 擷取 bytes，第二次改為回傳 bytes（hit）
+        var l2Mock = new Mock<IDistributedCache>();
+        byte[]? capturedBytes = null;
+        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync((byte[]?)null);
+        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
+                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+              .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
+                  (_, bytes, _, _) => capturedBytes = bytes)
+              .Returns(Task.CompletedTask);
+
+        _repositoryMock
+            .Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+
+        var handler = new GetCrimesByFilterQueryHandler(
+            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            NullLogger<GetCrimesByFilterQueryHandler>.Instance);
+
+        var query = new GetCrimesByFilterQuery();
+
+        // Act - 第一次：L1 故障 + L2 miss → DB(1)，結果存入 L2
+        await handler.HandleAsync(query);
+
+        // 重新 setup L2 GetAsync 回傳已存的 bytes
+        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+              .ReturnsAsync(capturedBytes);
+
+        // Act - 第二次：L1 仍故障，L2 hit
+        await handler.HandleAsync(query);
+
+        // Assert
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// 情境四：L1故障、L2故障 → 兩次都打DB
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WhenBothL1AndL2AlwaysFault_ShouldCallDbTwice()
+    {
+        // Arrange - L1 永遠拋出例外
+        var memoryCacheMock = new Mock<IMemoryCache>();
+        object? l1OutVal = null;
+        memoryCacheMock
+            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
+            .Throws(new Exception("L1 故障"));
+        var cacheEntryMock = new Mock<ICacheEntry>();
+        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+
+        // L2 永遠拋出例外
+        var l2Mock = new Mock<IDistributedCache>();
+        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+              .ThrowsAsync(new Exception("Garnet 故障"));
+        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
+                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+              .ThrowsAsync(new Exception("Garnet 故障"));
+
+        _repositoryMock
+            .Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+
+        var handler = new GetCrimesByFilterQueryHandler(
+            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            NullLogger<GetCrimesByFilterQueryHandler>.Instance);
+
+        var query = new GetCrimesByFilterQuery();
+
+        // Act - 兩次都因快取完全失效而打 DB
+        await handler.HandleAsync(query);
+        await handler.HandleAsync(query);
+
+        // Assert
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(2));
+    }
 }
