@@ -335,30 +335,30 @@
       _map.setView(center, zoom, { animate: false });
     },
 
-    // Called before progressive loading: clear layers and init empty layer
+    // Called before progressive loading: clear layers and init empty layer.
+    // Heat mode defers layer creation to finalizeLoad to avoid incremental redraws.
     startProgressiveLoad(mode) {
       if (!_map) return;
       clearLayers();
       removeDistrictLabels();
 
-      if (mode === 'heat') {
-        _heatLayer = L.heatLayer([], HEAT_OPTIONS).addTo(_map);
-      } else if (mode === 'point') {
+      if (mode === 'point') {
         _markerLayer = L.layerGroup().addTo(_map);
         addLegend();
       }
+      // heat: no layer created here — buildHeatLayer called once in finalizeLoad
     },
 
     // Add one page of data without clearing existing layers.
-    // Deferred via setTimeout(0) so the browser can repaint between pages.
+    // Heat mode: no-op — all points are rendered at once in finalizeLoad.
+    // Point mode: deferred via setTimeout(0) so the browser can repaint between pages.
     appendData(data, mode) {
       if (!_map || !Array.isArray(data)) return;
+      if (mode === 'heat') return; // heat collected by app.js, rendered in finalizeLoad
+
       setTimeout(() => {
         const coordData = data.filter(hasCoords);
-
-        if (mode === 'heat' && _heatLayer) {
-          coordData.forEach(item => _heatLayer.addLatLng([item.latitude, item.longitude, HEAT_INTENSITY]));
-        } else if (mode === 'point' && _markerLayer) {
+        if (mode === 'point' && _markerLayer) {
           coordData.forEach(item => {
             const color  = colorForType(item.caseType);
             const marker = L.circleMarker([item.latitude, item.longitude], {
@@ -371,10 +371,21 @@
       }, 0);
     },
 
-    // Called once after all pages loaded: add district bubble markers
+    // Called once after all pages loaded.
+    // Heat mode: show district bubbles first, then build heatmap on next tick
+    // so the browser renders the bubble state before the (potentially slow) heat calc.
     finalizeLoad(allData, mode) {
       if (!_map) return;
-      buildDistrictFallbackLayer(allData);
+      if (mode === 'heat') {
+        buildDistrictFallbackLayer(allData);          // bubbles appear immediately
+        setTimeout(() => {
+          if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
+          buildHeatLayer(allData);                    // full heatmap in one pass
+          buildDistrictFallbackLayer(allData);        // re-add bubbles alongside heatmap
+        }, 0);
+      } else {
+        buildDistrictFallbackLayer(allData);
+      }
     },
 
     // Show / update progress indicator (top-left)

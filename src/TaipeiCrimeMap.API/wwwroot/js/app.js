@@ -38,6 +38,16 @@
   }
 
   /* -----------------------------------------------------------------------
+     Toggle mode enable / disable
+  ----------------------------------------------------------------------- */
+  function setToggleDisabled(disabled) {
+    if (!elToggleMode) return;
+    elToggleMode.querySelectorAll('input[type="radio"]').forEach(r => { r.disabled = disabled; });
+    elToggleMode.style.opacity       = disabled ? '0.45' : '';
+    elToggleMode.style.pointerEvents = disabled ? 'none'  : '';
+  }
+
+  /* -----------------------------------------------------------------------
      Display mode
   ----------------------------------------------------------------------- */
   function getDisplayMode() {
@@ -102,6 +112,7 @@
 
     setLoading(true);
     if (elBtnQuery) elBtnQuery.disabled = true;
+    setToggleDisabled(true);
 
     _lastData = [];
 
@@ -173,6 +184,7 @@
       if (generation === _queryGeneration) {
         setLoading(false);
         if (elBtnQuery) elBtnQuery.disabled = false;
+        setToggleDisabled(false);
       }
     }
   }
@@ -187,6 +199,15 @@
     if (window.mapModule && typeof window.mapModule.setProgress === 'function') {
       window.mapModule.setProgress(loaded, total);
     }
+  }
+
+  /* -----------------------------------------------------------------------
+     Year select — set max dynamically to current year
+  ----------------------------------------------------------------------- */
+  function populateYearSelects() {
+    const currentYear = new Date().getFullYear();
+    if (elYearFrom) { elYearFrom.max = String(currentYear); }
+    if (elYearTo)   { elYearTo.max   = String(currentYear); }
   }
 
   /* -----------------------------------------------------------------------
@@ -221,6 +242,8 @@
     if (window.chartModule && typeof window.chartModule.init === 'function') {
       window.chartModule.init();
     }
+
+    populateYearSelects();
 
     if (elBtnQuery) elBtnQuery.addEventListener('click', queryProgressive);
     if (elToggleMode) elToggleMode.addEventListener('change', onModeChange);
