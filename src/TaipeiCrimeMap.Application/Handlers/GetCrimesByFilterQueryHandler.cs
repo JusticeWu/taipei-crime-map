@@ -52,11 +52,18 @@ public class GetCrimesByFilterQueryHandler
 
         var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
 
-        var cachedBytes = await _cache.GetAsync(cacheKey, cancellationToken);
-        if (cachedBytes is not null)
+        try
         {
-            _logger.LogInformation("快取命中：{CacheKey}", cacheKey);
-            return JsonSerializer.Deserialize<PagedResult<TheftCaseDto>>(cachedBytes)!;
+            var cachedBytes = await _cache.GetAsync(cacheKey, cancellationToken);
+            if (cachedBytes is not null)
+            {
+                _logger.LogInformation("快取命中：{CacheKey}", cacheKey);
+                return JsonSerializer.Deserialize<PagedResult<TheftCaseDto>>(cachedBytes)!;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "快取讀取失敗，fallthrough 到資料庫");
         }
 
         _logger.LogInformation("查詢案件：{Query}", query);
@@ -67,11 +74,18 @@ public class GetCrimesByFilterQueryHandler
         var totalPages = query.PageSize > 0 ? (int)Math.Ceiling((double)total / query.PageSize) : 0;
         var result = new PagedResult<TheftCaseDto>(items, total, query.Page, query.PageSize, totalPages);
 
-        await _cache.SetAsync(
-            cacheKey,
-            JsonSerializer.SerializeToUtf8Bytes(result),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration },
-            cancellationToken);
+        try
+        {
+            await _cache.SetAsync(
+                cacheKey,
+                JsonSerializer.SerializeToUtf8Bytes(result),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration },
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "快取寫入失敗，結果仍正常回傳");
+        }
 
         return result;
     }
