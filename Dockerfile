@@ -19,6 +19,7 @@ COPY src/TaipeiCrimeMap.API/*.csproj                 src/TaipeiCrimeMap.API/
 COPY tests/TaipeiCrimeMap.Domain.Tests/*.csproj      tests/TaipeiCrimeMap.Domain.Tests/
 COPY tests/TaipeiCrimeMap.Application.Tests/*.csproj tests/TaipeiCrimeMap.Application.Tests/
 COPY tests/TaipeiCrimeMap.Integration.Tests/*.csproj tests/TaipeiCrimeMap.Integration.Tests/
+COPY tests/TaipeiCrimeMap.Infrastructure.Tests/*.csproj tests/TaipeiCrimeMap.Infrastructure.Tests/
 
 # dotnet restore 根據 .csproj 下載所有 NuGet 相依套件。
 RUN dotnet restore TaipeiCrimeMap.slnx
@@ -27,10 +28,17 @@ RUN dotnet restore TaipeiCrimeMap.slnx
 COPY src/ src/
 COPY tests/ tests/
 
-# dotnet test：執行所有測試專案。
+# dotnet test：只執行單元測試，Integration Tests 需要 PostgreSQL，由 CI pipeline 負責。
 # --no-restore：不重新下載套件（前面已做過）。
 # --configuration Release：用 Release 模式跑測試，和最終部署環境一致。
-RUN dotnet test --no-restore --configuration Release \
+RUN dotnet test tests/TaipeiCrimeMap.Domain.Tests/TaipeiCrimeMap.Domain.Tests.csproj \
+    --no-restore --configuration Release \
+    --logger "console;verbosity=minimal" && \
+    dotnet test tests/TaipeiCrimeMap.Application.Tests/TaipeiCrimeMap.Application.Tests.csproj \
+    --no-restore --configuration Release \
+    --logger "console;verbosity=minimal" && \
+    dotnet test tests/TaipeiCrimeMap.Infrastructure.Tests/TaipeiCrimeMap.Infrastructure.Tests.csproj \
+    --no-restore --configuration Release \
     --logger "console;verbosity=minimal"
 
 # dotnet publish：編譯並打包應用程式，產生可以部署的檔案。
@@ -44,7 +52,8 @@ RUN dotnet publish src/TaipeiCrimeMap.API/TaipeiCrimeMap.API.csproj \
 # =============================================
 
 # aspnet:9.0 比 sdk:9.0 小得多（無編譯器），只含執行 .NET 程式所需最小環境。
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS runtime
+# 使用 Debian-based image 而非 alpine，避免 Microsoft.Data.SqlClient 6.x 在 Alpine 上的 Segfault 問題。
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 # 設定工作目錄為 /app，一般 .NET 應用程式慣例。
 WORKDIR /app
 
@@ -56,6 +65,7 @@ USER appuser
 # 每寫一個 FROM，就開啟一個全新的、獨立的建置環境。
 # 使執行環境無 SDK 和原始碼。
 COPY --from=build /app/publish ./
+COPY --chown=appuser:appgroup data/raw/*.csv /app/data/raw/
 
 # 1. 讓 Dockerfile 自我說明。
 # 2. 給自動化工具看的 metadata。

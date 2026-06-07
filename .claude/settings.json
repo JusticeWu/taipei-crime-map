@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(dotnet *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(where.exe *)",
+      "Bash(ls *)",
+      "Bash(Invoke-WebRequest *)",
+      "Bash(ConvertFrom-Json *)",
+      "Bash(ForEach-Object *)",
+      "Bash(Select-Object *)",
+      "Bash(Write-Host *)",
+      "Bash(az *)",
+      "Bash(curl *)",
+      "Bash(npm *)",
+      "Bash(pip *)"
+    ]
+  }
+}

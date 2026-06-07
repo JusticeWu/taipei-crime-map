@@ -88,6 +88,35 @@ public sealed class TheftCase : AggregateRoot
         return theftCase;
     }
 
+    public static TheftCase Reconstitute(
+    Guid id,
+    string caseNumber,
+    CaseType? caseType,
+    District? district,
+    TaiwanDate occurredDate,
+    TimeSlot? timeSlot,
+    string rawLocation,
+    GeoCoordinate? coordinate,
+    DateTimeOffset importedAt)
+    {
+        if (string.IsNullOrWhiteSpace(rawLocation))
+            throw new DomainException("RawLocation cannot be empty.");
+
+        if (occurredDate is null)
+            throw new DomainException("OccurredDate cannot be null.");
+
+        return new TheftCase(
+            id,
+            caseNumber,
+            caseType,
+            district,
+            occurredDate,
+            timeSlot,
+            rawLocation,
+            coordinate,
+            importedAt);
+    }
+
     public void UpdateCoordinate(GeoCoordinate coordinate)
     {
         ArgumentNullException.ThrowIfNull(coordinate);

@@ -1,8 +1,26 @@
+using TaipeiCrimeMap.API.Middleware;
+using TaipeiCrimeMap.Application.Handlers;
+using TaipeiCrimeMap.Infrastructure.Extensions;
+using TaipeiCrimeMap.Infrastructure.Persistence;
+
+Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
+Dapper.SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+// Domain / Infrastructure services
+builder.Services.AddInfrastructure(builder.Configuration);
+
+// Application handlers
+builder.Services.AddScoped<ImportCsvCommandHandler>();
+builder.Services.AddScoped<GetCrimesByFilterQueryHandler>();
 
 var app = builder.Build();
 
@@ -12,33 +30,19 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
+if (!app.Environment.IsEnvironment("Testing"))
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+    using var scope = app.Services.CreateScope();
+    var migrator = scope.ServiceProvider.GetRequiredService<DbUpMigrator>();
+    migrator.MigrateUp();
 }
+
+app.UseExceptionHandler();
+app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapControllers();
+app.Run();
 
 // 讓測試專案可以存取 Program 型別
 public partial class Program { }

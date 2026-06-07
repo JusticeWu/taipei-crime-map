@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ uat, main ]
+    branches: [uat, main]
   pull_request:
-    branches: [ uat, main ]
+    branches: [uat, main]
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -13,6 +13,29 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          SA_PASSWORD: Test1234!Strong
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Test1234!Strong -Q 'SELECT 1' -C"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 15
+
+      garnet:
+        image: ghcr.io/microsoft/garnet:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "bash -c 'echo > /dev/tcp/127.0.0.1/6379'"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -21,7 +44,15 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4.3.1
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: "9.0.x"
+
+      - name: Create database
+        run: |
+          CONTAINER=$(docker ps --filter "ancestor=mcr.microsoft.com/mssql/server:2022-latest" -q)
+          docker exec "$CONTAINER" /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "Test1234!Strong" \
+            -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'taipei_crime_map') CREATE DATABASE taipei_crime_map" \
+            -C
 
       - name: Restore
         run: dotnet restore TaipeiCrimeMap.slnx
@@ -31,11 +62,14 @@ jobs:
 
       - name: Test
         run: dotnet test TaipeiCrimeMap.slnx --no-restore --configuration Release --logger "console;verbosity=minimal"
+        env:
+          ConnectionStrings__DefaultConnection: "Server=localhost,1433;Database=taipei_crime_map;User Id=sa;Password=Test1234!Strong;Encrypt=True;TrustServerCertificate=True;"
+          ConnectionStrings__Redis: "localhost:6379"
 
   push-to-acr:
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/uat'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main')
 
     steps:
       - name: Checkout
@@ -54,14 +88,59 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:uat
+            ${{ env.IMAGE_NAME }}:${{ github.ref == 'refs/heads/main' && 'prod' || 'uat' }}
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Smoke test
+        run: |
+          IMAGE="${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+          # Garnet（host network，讓 app 可透過 localhost:6379 連線）
+          docker run -d --network host --name smoke-garnet \
+            ghcr.io/microsoft/garnet:latest
+
+          # App：Testing env 跳過 DbUpMigrator，dummy DB 字串避免啟動錯誤
+          docker run -d --network host --name smoke-app \
+            -e ASPNETCORE_ENVIRONMENT=Testing \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -e "ConnectionStrings__DefaultConnection=Server=smoke-dummy;Database=smoke;TrustServerCertificate=True;" \
+            -e ConnectionStrings__Redis=localhost:6379 \
+            "$IMAGE"
+
+          echo "Waiting 10s for startup..."
+          sleep 10
+
+          # 容器是否仍在執行（未因啟動錯誤而崩潰）
+          if ! docker ps -q --filter "name=smoke-app" | grep -q .; then
+            echo "ERROR: Container exited during startup"
+            docker logs smoke-app
+            docker stop smoke-garnet 2>/dev/null || true
+            docker rm smoke-app smoke-garnet 2>/dev/null || true
+            exit 1
+          fi
+
+          # HTTP probe：任何回應（包含 5xx）代表 app 存活；000 代表無回應
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 http://localhost:8080/api/crime || echo "000")
+          echo "HTTP status: $HTTP_CODE"
+
+          docker stop smoke-app smoke-garnet 2>/dev/null || true
+          docker rm smoke-app smoke-garnet 2>/dev/null || true
+
+          [ "$HTTP_CODE" != "000" ] || { echo "Smoke test FAILED: no HTTP response"; exit 1; }
+          echo "Smoke test passed (HTTP $HTTP_CODE)"
 
   deploy-to-uat:
     runs-on: ubuntu-latest
     needs: push-to-acr
+    if: github.ref == 'refs/heads/uat'
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 2   # 讓 git diff HEAD~1 可用，以找出本次 push 變更的報告
+
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -74,3 +153,230 @@ jobs:
           containerAppName: taipei-crime-map-uat
           resourceGroup: taipei-crime-map-rg
           imageToDeploy: taipeicrimemap.azurecr.io/taipei-crime-map:${{ github.sha }}
+
+      - name: Check migration logs
+        run: |
+          echo "Waiting 30s for container startup..."
+          sleep 30
+          echo "=== DbUpMigrator logs ==="
+          az containerapp logs show \
+            --name taipei-crime-map-uat \
+            --resource-group taipei-crime-map-rg \
+            --tail 150 \
+            --format text 2>&1 \
+            | grep -iE "migration|migrate|schemaversion|theft_cases|執行|完成|Error" || true
+
+      - name: Import CSV data
+        continue-on-error: true
+        run: |
+          APP_URL=$(az containerapp show \
+            --name taipei-crime-map-uat \
+            --resource-group taipei-crime-map-rg \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          BASE_URL="https://${APP_URL}"
+          echo "UAT URL: $BASE_URL"
+
+          declare -A FILES
+          FILES["residential.csv"]=1
+          FILES["car.csv"]=2
+          FILES["motorcycle.csv"]=3
+          FILES["bicycle.csv"]=4
+          FILES["snatching.csv"]=5
+          FILES["robbery.csv"]=6
+
+          for FILENAME in "${!FILES[@]}"; do
+            CASE_TYPE=${FILES[$FILENAME]}
+            echo "Importing $FILENAME (CaseType=$CASE_TYPE)..."
+            curl --fail --silent --show-error \
+              -X POST "$BASE_URL/api/crime/import" \
+              -H "Content-Type: application/json" \
+              -d "{\"filePath\":\"/app/data/raw/$FILENAME\",\"caseType\":$CASE_TYPE}"
+            echo ""
+          done
+
+      - name: Find latest report
+        id: find_report
+        run: |
+          # 找本次 push 新增或修改的報告（fetch-depth: 2 確保 HEAD~1 可用）
+          # sort -r：日期前綴檔名倒序 → 第一個 = 最新日期的報告
+          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
+            | sort -r | head -1)
+
+          # Fallback：本次沒有報告變動，取整個目錄最新的
+          if [ -z "$REPORT" ]; then
+            REPORT=$(ls docs/reports/*.md 2>/dev/null | sort -r | head -1)
+          fi
+
+          if [ -z "$REPORT" ]; then
+            echo "report_name=（無報告）" >> $GITHUB_OUTPUT
+            echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
+          else
+            REPORT_NAME=$(basename "$REPORT" .md)
+            echo "report_name=$REPORT_NAME" >> $GITHUB_OUTPUT
+            {
+              echo "content<<EOF"
+              cat "$REPORT"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send email report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "[台北市治安地圖] 任務報告：${{ steps.find_report.outputs.report_name }}"
+          to: chengyi.ks@gmail.com
+          from: ${{ secrets.GMAIL_USERNAME }}
+          body: ${{ steps.find_report.outputs.content }}
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            COLOR="good"
+            EMOJI=":white_check_mark:"
+            MSG="UAT 部署成功"
+          else
+            COLOR="danger"
+            EMOJI=":x:"
+            MSG="UAT 部署失敗"
+          fi
+          REPORT_NAME="${{ steps.find_report.outputs.report_name }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n報告：$REPORT_NAME\n<$RUN_URL|查看 CI 記錄>\"
+              }]
+            }"
+
+  deploy-to-prod:
+    runs-on: ubuntu-latest
+    needs: push-to-acr
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 2
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update Container App
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          acrName: taipeicrimemap
+          containerAppName: taipei-crime-map-prod
+          resourceGroup: taipei-crime-map-rg
+          imageToDeploy: taipeicrimemap.azurecr.io/taipei-crime-map:${{ github.sha }}
+
+      - name: Check migration logs
+        run: |
+          echo "Waiting 30s for container startup..."
+          sleep 30
+          echo "=== DbUpMigrator logs ==="
+          az containerapp logs show \
+            --name taipei-crime-map-prod \
+            --resource-group taipei-crime-map-rg \
+            --tail 150 \
+            --format text 2>&1 \
+            | grep -iE "migration|migrate|schemaversion|theft_cases|執行|完成|Error" || true
+
+      - name: Import CSV data
+        continue-on-error: true
+        run: |
+          APP_URL=$(az containerapp show \
+            --name taipei-crime-map-prod \
+            --resource-group taipei-crime-map-rg \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          BASE_URL="https://${APP_URL}"
+          echo "Prod URL: $BASE_URL"
+
+          declare -A FILES
+          FILES["residential.csv"]=1
+          FILES["car.csv"]=2
+          FILES["motorcycle.csv"]=3
+          FILES["bicycle.csv"]=4
+          FILES["snatching.csv"]=5
+          FILES["robbery.csv"]=6
+
+          for FILENAME in "${!FILES[@]}"; do
+            CASE_TYPE=${FILES[$FILENAME]}
+            echo "Importing $FILENAME (CaseType=$CASE_TYPE)..."
+            curl --fail --silent --show-error \
+              -X POST "$BASE_URL/api/crime/import" \
+              -H "Content-Type: application/json" \
+              -d "{\"filePath\":\"/app/data/raw/$FILENAME\",\"caseType\":$CASE_TYPE}"
+            echo ""
+          done
+
+      - name: Find latest report
+        id: find_report
+        run: |
+          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
+            | sort -r | head -1)
+
+          if [ -z "$REPORT" ]; then
+            REPORT=$(ls docs/reports/*.md 2>/dev/null | sort -r | head -1)
+          fi
+
+          if [ -z "$REPORT" ]; then
+            echo "report_name=（無報告）" >> $GITHUB_OUTPUT
+            echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
+          else
+            REPORT_NAME=$(basename "$REPORT" .md)
+            echo "report_name=$REPORT_NAME" >> $GITHUB_OUTPUT
+            {
+              echo "content<<EOF"
+              cat "$REPORT"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send email report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "[台北市治安地圖][Prod] 任務報告：${{ steps.find_report.outputs.report_name }}"
+          to: chengyi.ks@gmail.com
+          from: ${{ secrets.GMAIL_USERNAME }}
+          body: ${{ steps.find_report.outputs.content }}
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            COLOR="good"
+            EMOJI=":rocket:"
+            MSG="Prod 部署成功"
+          else
+            COLOR="danger"
+            EMOJI=":x:"
+            MSG="Prod 部署失敗"
+          fi
+          REPORT_NAME="${{ steps.find_report.outputs.report_name }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n報告：$REPORT_NAME\n<$RUN_URL|查看 CI 記錄>\"
+              }]
+            }"
