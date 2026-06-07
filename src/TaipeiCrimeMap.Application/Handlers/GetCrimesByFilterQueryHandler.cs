@@ -52,7 +52,16 @@ public class GetCrimesByFilterQueryHandler
 
         var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
 
-        var cachedBytes = await _cache.GetAsync(cacheKey, cancellationToken);
+        byte[]? cachedBytes = null;
+        try
+        {
+            cachedBytes = await _cache.GetAsync(cacheKey, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "快取讀取失敗，fallthrough 到 Repository：{CacheKey}", cacheKey);
+        }
+
         if (cachedBytes is not null)
         {
             _logger.LogInformation("快取命中：{CacheKey}", cacheKey);

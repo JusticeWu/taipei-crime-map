@@ -192,6 +192,35 @@ public class GetCrimesByFilterQueryHandlerTests
             Times.Exactly(2));
     }
 
+    /// <summary>
+    /// 快取拋出例外時，應該 fallthrough 到 Repository，不拋出例外
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WhenCacheThrows_ShouldFallbackToRepository()
+    {
+        // Arrange
+        _cacheMock
+            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Redis 連線失敗"));
+
+        _repositoryMock
+            .Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+
+        var query = new GetCrimesByFilterQuery();
+
+        // Act
+        var act = async () => await _handler.HandleAsync(query);
+        var result = await act.Should().NotThrowAsync();
+
+        // Assert
+        result.Subject.Should().NotBeNull();
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
     [Fact]
     public async Task HandleAsync_WhenCacheHit_ShouldReturnDeserializedData()
     {
