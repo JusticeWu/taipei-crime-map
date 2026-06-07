@@ -140,17 +140,21 @@ urllib.request.urlopen(req)
 "
 ```
 
-### 規則一：提問之前必須先發通知
+### 規則一：提問之前必須先發通知（強制，不可跳過）
 
-在向使用者提出任何需要確認的問題**之前**，先執行以下指令，再提問：
+在終端機顯示任何問題或選項給用戶之前，**必須先執行以下 Python 指令**發送 Slack 通知，
+這是強制步驟，不可跳過。
+
+**執行順序：1. 發送 Slack 通知 → 2. 顯示問題給用戶**
 
 ```bash
 python3 -c "
 import urllib.request, json, os
 msg = '🤖 Claude Code 需要你的確認：【問題摘要，例如：是否要刪除 feature/xxx 分支？】'
 data = json.dumps({'text': msg}).encode('utf-8')
-req = urllib.request.Request(os.environ['SLACK_WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'})
-urllib.request.urlopen(req)
+req = urllib.request.Request(os.environ.get('SLACK_WEBHOOK_URL',''), data=data, headers={'Content-Type': 'application/json'})
+try: urllib.request.urlopen(req)
+except: pass
 "
 ```
 
