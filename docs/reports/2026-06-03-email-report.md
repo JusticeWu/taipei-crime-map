@@ -23,3 +23,25 @@
    - 用 Gmail 登入密碼而非應用程式密碼，導致 SMTP 認證失敗。
    - `$GITHUB_OUTPUT` 多行內容沒用 `<<EOF` heredoc 語法，只會拿到第一行。
    - `deploy-to-uat` job 沒加 `Checkout` 步驟，讀不到 repo 裡的報告檔案。
+
+7. **流程圖與結構圖**
+
+```mermaid
+flowchart TD
+    Push[git push to uat] --> CI[GitHub Actions CI]
+    CI --> Build[build-and-test]
+    Build --> ACR[push-to-acr]
+    ACR --> Deploy[deploy-to-uat]
+    Deploy --> FindReport["Find latest report\nls -t docs/reports/*.md"]
+    FindReport --> Output["$GITHUB_OUTPUT\ncontent<<EOF...EOF"]
+    Output --> Email["Send email report\ndawidd6/action-send-mail"]
+    Email --> Inbox[chengyi.ks@gmail.com]
+```
+
+8. **分支與部署記錄**
+   - 開發分支：feature/email-report
+   - PR 編號：#13（寄信功能）、#14（報告格式更新）
+   - Merge 到：uat
+   - Merge 時間：2026-06-03 15:39（#13）、2026-06-03 16:08（#14）
+   - CI 結果：✅ 成功
+   - UAT 部署：✅ 成功

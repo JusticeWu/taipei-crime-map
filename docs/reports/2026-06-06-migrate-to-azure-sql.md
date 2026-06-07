@@ -1,4 +1,4 @@
-### 任務報告：從 PostgreSQL 遷移到 Azure SQL Database — 2026-06-06
+# 任務報告：從 PostgreSQL 遷移到 Azure SQL Database — 2026-06-06
 
 1. **主要解決什麼問題？**
    將資料庫從 PostgreSQL 換成 Azure SQL Database（SQL Server），以使用 Azure 免費層，降低雲端成本。
@@ -57,3 +57,11 @@ graph LR
     NR -.->|替換| SR
     DBU_PG -.->|替換| DBU_SQL
 ```
+
+8. **分支與部署記錄**
+   - 開發分支：feature/migrate-to-azure-sql
+   - PR 編號：#18（主要遷移）、#19（Dockerfile debian image）、#20（CI migration log check）
+   - Merge 到：uat
+   - Merge 時間：2026-06-06 16:34（#18）、2026-06-06 17:10（#19）、2026-06-06 17:26（#20）
+   - CI 結果：✅ 成功
+   - UAT 部署：✅ 成功

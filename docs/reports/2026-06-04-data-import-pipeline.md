@@ -23,3 +23,27 @@
    - `.gitignore` 例外規則 `!data/raw/*.csv` 必須在 `data/raw/*` **之後**，寫在前面無效。
    - Dockerfile COPY CSV 放在 `USER appuser` 之後需加 `--chown`，否則 appuser 可能沒有讀取權限（Alpine 預設 umask）。
    - `az containerapp show` 需要 Azure login 步驟先完成，若順序錯誤會報未認證錯誤。
+
+7. **流程圖與結構圖**
+
+```mermaid
+flowchart TD
+    Deploy[deploy-to-uat 完成] --> GetURL["az containerapp show\n取得 UAT FQDN"]
+    GetURL --> Loop{逐一匯入 6 個 CSV}
+    Loop --> |residential.csv CaseType=1| API1["POST /api/crime/import"]
+    Loop --> |car.csv CaseType=2| API2["..."]
+    Loop --> |motorcycle.csv ~6| API3["..."]
+    API1 --> Resp{curl --fail\nHTTP 200?}
+    Resp -->|成功| Next[下一個檔案]
+    Resp -->|失敗| Abort[中止 CI ❌]
+    Next --> Loop
+    Loop -->|全部完成| Done[Import CSV data ✅]
+```
+
+8. **分支與部署記錄**
+   - 開發分支：feature/data-import-pipeline
+   - PR 編號：#15
+   - Merge 到：uat
+   - Merge 時間：2026-06-03 17:25
+   - CI 結果：✅ 成功
+   - UAT 部署：✅ 成功

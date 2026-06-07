@@ -24,3 +24,34 @@
    - `UseStaticFiles` 要在 `MapControllers` 之前加，否則靜態檔案請求會被 API routing 攔截。
    - Chart.js 的 canvas reuse：若不先 `destroy()` 再重建，第二次 `update` 會報錯或圖表疊加。
    - Leaflet 地圖容器高度若沒有 CSS 明確設定，地圖會顯示高度為 0 的空白區塊。
+
+7. **流程圖與結構圖**
+
+```mermaid
+graph TD
+    subgraph wwwroot
+        HTML[index.html]
+        AppJS[js/app.js]
+        MapJS[js/map.js]
+        ChartJS[js/chart.js]
+    end
+    subgraph 後端
+        Static[UseStaticFiles]
+        API[GET /api/crime]
+    end
+    HTML -->|載入| AppJS
+    AppJS --> MapJS
+    AppJS --> ChartJS
+    AppJS -->|fetch| API
+    API -->|JSON| AppJS
+    MapJS -->|init/update| Leaflet[Leaflet 地圖]
+    ChartJS -->|init/update| Chart[Chart.js 圖表]
+```
+
+8. **分支與部署記錄**
+   - 開發分支：feature/frontend-map
+   - PR 編號：#17
+   - Merge 到：uat
+   - Merge 時間：2026-06-06 17:52
+   - CI 結果：✅ 成功
+   - UAT 部署：✅ 成功
