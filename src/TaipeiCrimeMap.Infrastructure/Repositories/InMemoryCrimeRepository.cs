@@ -61,6 +61,35 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult<IReadOnlyList<TheftCase>>(query.ToList());
     }
 
+    public Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
+        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = _cases.AsEnumerable();
+
+        if (filter.CaseType.HasValue)
+            query = query.Where(c => c.CaseType == filter.CaseType.Value);
+
+        if (filter.District != null)
+            query = query.Where(c => c.District != null && c.District.Name == filter.District.Name);
+
+        if (filter.YearFrom.HasValue)
+            query = query.Where(c => c.OccurredDate.Year.HasValue && c.OccurredDate.Year >= filter.YearFrom.Value);
+
+        if (filter.YearTo.HasValue)
+            query = query.Where(c => c.OccurredDate.Year.HasValue && c.OccurredDate.Year <= filter.YearTo.Value);
+
+        if (filter.TimeSlot != null && filter.TimeSlot.StartHour.HasValue && filter.TimeSlot.EndHour.HasValue)
+            query = query.Where(c => c.TimeSlot != null
+                && c.TimeSlot.StartHour == filter.TimeSlot.StartHour.Value
+                && c.TimeSlot.EndHour == filter.TimeSlot.EndHour.Value);
+
+        var all = query.ToList();
+        var total = all.Count;
+        var paged = all.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return Task.FromResult<(IReadOnlyList<TheftCase>, int)>((paged, total));
+    }
+
     public Task<TheftCase?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var result = _cases.FirstOrDefault(c => c.Id == id);

@@ -3,67 +3,54 @@
  *
  * Responsibilities:
  *  1. Read filter values from the UI
- *  2. Call GET /api/crime with query-string parameters
- *  3. Update stats panel
- *  4. Delegate map rendering to window.mapModule
- *  5. Delegate chart rendering to window.chartModule
- *  6. Auto-query on page load
- *  7. Re-query on button click
+ *  2. Progressive GET /api/crime?page=N&pageSize=200
+ *  3. Append each page to the map immediately
+ *  4. Show loading progress (top-left of map)
+ *  5. Update stats panel and charts after all pages load
+ *  6. Re-render on display-mode toggle using cached data
  */
 
 (function () {
   'use strict';
 
-  /* -----------------------------------------------------------------------
-     Constants
-  ----------------------------------------------------------------------- */
-  const API_BASE = '/api/crime';
+  const API_BASE  = '/api/crime';
+  const PAGE_SIZE = 200;
 
   /* -----------------------------------------------------------------------
-     DOM references (resolved after DOMContentLoaded)
+     DOM references
   ----------------------------------------------------------------------- */
-  let elCaseType;
-  let elDistrict;
-  let elYearFrom;
-  let elYearTo;
-  let elBtnQuery;
-  let elToggleMode;
-  let elStatTotal;
-  let elStatWithCoords;
-  let elStatTopDistrict;
+  let elCaseType, elDistrict, elYearFrom, elYearTo;
+  let elBtnQuery, elToggleMode;
+  let elStatTotal, elStatWithCoords, elStatTopDistrict;
   let elLoadingOverlay;
 
   /* -----------------------------------------------------------------------
-     Helpers
+     State
   ----------------------------------------------------------------------- */
+  let _lastData      = [];   // all accumulated records for current query
+  let _queryGeneration = 0;  // incremented on each new query to abort stale loads
 
-  /**
-   * Show or hide the full-screen loading overlay.
-   * @param {boolean} visible
-   */
+  /* -----------------------------------------------------------------------
+     Loading overlay
+  ----------------------------------------------------------------------- */
   function setLoading(visible) {
-    if (!elLoadingOverlay) return;
-    elLoadingOverlay.classList.toggle('hidden', !visible);
+    if (elLoadingOverlay) elLoadingOverlay.classList.toggle('hidden', !visible);
   }
 
-  /**
-   * Read the currently selected display mode from the toggle radio buttons.
-   * @returns {'heat'|'point'}
-   */
+  /* -----------------------------------------------------------------------
+     Display mode
+  ----------------------------------------------------------------------- */
   function getDisplayMode() {
     if (!elToggleMode) return 'heat';
     const checked = elToggleMode.querySelector('input[type="radio"]:checked');
     return checked ? checked.value : 'heat';
   }
 
-  /**
-   * Build query-string params from the current filter values.
-   * Empty / blank values are omitted.
-   * @returns {URLSearchParams}
-   */
+  /* -----------------------------------------------------------------------
+     Query params
+  ----------------------------------------------------------------------- */
   function buildQueryParams() {
     const params = new URLSearchParams();
-
     const caseType = elCaseType ? elCaseType.value.trim() : '';
     const district = elDistrict ? elDistrict.value.trim() : '';
     const yearFrom = elYearFrom ? elYearFrom.value.trim() : '';
@@ -77,54 +64,30 @@
     return params;
   }
 
-  /**
-   * Compute aggregate statistics from the raw crime data array.
-   *
-   * Each element is expected to be an object that may contain:
-   *   - latitude  / longitude  (numbers, nullable)
-   *   - districtName           (string)
-   *
-   * @param {Array<Object>} data
-   * @returns {{ total: number, withCoords: number, topDistrict: string }}
-   */
+  /* -----------------------------------------------------------------------
+     Stats
+  ----------------------------------------------------------------------- */
   function computeStats(data) {
-    if (!Array.isArray(data) || data.length === 0) {
+    if (!Array.isArray(data) || data.length === 0)
       return { total: 0, withCoords: 0, topDistrict: '—' };
-    }
 
     let withCoords = 0;
     const districtCount = {};
 
     for (const item of data) {
-      // Count records that have valid lat/lng
-      const hasLat = item.latitude  != null && item.latitude  !== '';
-      const hasLng = item.longitude != null && item.longitude !== '';
-      if (hasLat && hasLng) withCoords++;
-
-      // Tally district occurrences
-      const district = item.districtName || item.district || '';
-      if (district) {
-        districtCount[district] = (districtCount[district] || 0) + 1;
-      }
+      if (item.latitude != null && item.longitude != null) withCoords++;
+      const d = item.districtName || item.district || '';
+      if (d) districtCount[d] = (districtCount[d] || 0) + 1;
     }
 
-    // Find the district with the highest count
-    let topDistrict = '—';
-    let maxCount = 0;
+    let topDistrict = '—', maxCount = 0;
     for (const [name, count] of Object.entries(districtCount)) {
-      if (count > maxCount) {
-        maxCount = count;
-        topDistrict = name;
-      }
+      if (count > maxCount) { maxCount = count; topDistrict = name; }
     }
 
     return { total: data.length, withCoords, topDistrict };
   }
 
-  /**
-   * Write computed stats into the stats panel DOM elements.
-   * @param {{ total: number, withCoords: number, topDistrict: string }} stats
-   */
   function renderStats(stats) {
     if (elStatTotal)       elStatTotal.textContent       = stats.total.toLocaleString();
     if (elStatWithCoords)  elStatWithCoords.textContent  = stats.withCoords.toLocaleString();
@@ -132,101 +95,65 @@
   }
 
   /* -----------------------------------------------------------------------
-     Core: fetch data and propagate to modules
+     Progressive query
   ----------------------------------------------------------------------- */
+  async function queryProgressive() {
+    const generation = ++_queryGeneration;
 
-  /**
-   * Fetch crime data from the API with the current filter settings,
-   * then update stats, map and charts.
-   */
-  async function query() {
     setLoading(true);
     if (elBtnQuery) elBtnQuery.disabled = true;
 
-    try {
-      const params = buildQueryParams();
-      const url = params.toString() ? `${API_BASE}?${params}` : API_BASE;
+    _lastData = [];
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      });
+    const mode = getDisplayMode();
 
-      if (!response.ok) {
-        throw new Error(`API responded with status ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // 1. Update stats panel
-      const stats = computeStats(data);
-      renderStats(stats);
-
-      // 2. Update map
-      const mode = getDisplayMode();
-      if (window.mapModule && typeof window.mapModule.update === 'function') {
-        window.mapModule.update(data, mode);
-      } else {
-        console.warn('window.mapModule.update is not available.');
-      }
-
-      // 3. Update charts
-      if (window.chartModule && typeof window.chartModule.update === 'function') {
-        window.chartModule.update(data);
-      } else {
-        console.warn('window.chartModule.update is not available.');
-      }
-
-    } catch (err) {
-      console.error('Query failed:', err);
-      // Reset stats to error state without crashing
-      renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
-    } finally {
-      setLoading(false);
-      if (elBtnQuery) elBtnQuery.disabled = false;
+    if (window.mapModule && typeof window.mapModule.startProgressiveLoad === 'function') {
+      window.mapModule.startProgressiveLoad(mode);
     }
-  }
-
-  /* -----------------------------------------------------------------------
-     Display-mode change handler
-  ----------------------------------------------------------------------- */
-
-  /**
-   * When the user switches heat/point mode, re-render the map
-   * without hitting the network again (use last known data).
-   * We keep a reference to the last fetched dataset for this purpose.
-   */
-  let _lastData = [];
-
-  /**
-   * Augmented query that caches the result for mode-toggle re-renders.
-   */
-  async function queryAndCache() {
-    setLoading(true);
-    if (elBtnQuery) elBtnQuery.disabled = true;
 
     try {
-      const params = buildQueryParams();
-      const url = params.toString() ? `${API_BASE}?${params}` : API_BASE;
+      const baseParams = buildQueryParams();
+      baseParams.set('pageSize', String(PAGE_SIZE));
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-      });
+      // ── Page 1 ────────────────────────────────────────────────────────────
+      baseParams.set('page', '1');
+      const resp1 = await fetch(`${API_BASE}?${baseParams}`, { headers: { Accept: 'application/json' } });
+      if (!resp1.ok) throw new Error(`API ${resp1.status}`);
 
-      if (!response.ok) {
-        throw new Error(`API responded with status ${response.status}`);
+      const first = await resp1.json();
+      if (generation !== _queryGeneration) return;
+
+      const { data: firstData, total, totalPages } = first;
+
+      _lastData = _lastData.concat(firstData);
+      appendToMap(firstData, mode);
+      updateProgress(_lastData.length, total);
+
+      // ── Pages 2..totalPages ───────────────────────────────────────────────
+      for (let page = 2; page <= totalPages; page++) {
+        if (generation !== _queryGeneration) return; // aborted by new query
+
+        baseParams.set('page', String(page));
+        const resp = await fetch(`${API_BASE}?${baseParams}`, { headers: { Accept: 'application/json' } });
+        if (!resp.ok) continue;
+
+        const pageResult = await resp.json();
+        if (generation !== _queryGeneration) return;
+
+        _lastData = _lastData.concat(pageResult.data);
+        appendToMap(pageResult.data, mode);
+        updateProgress(_lastData.length, total);
       }
 
-      _lastData = await response.json();
-
-      const stats = computeStats(_lastData);
-      renderStats(stats);
-
-      const mode = getDisplayMode();
-      if (window.mapModule && typeof window.mapModule.update === 'function') {
-        window.mapModule.update(_lastData, mode);
+      // ── Finalize ──────────────────────────────────────────────────────────
+      if (window.mapModule && typeof window.mapModule.finalizeLoad === 'function') {
+        window.mapModule.finalizeLoad(_lastData, mode);
       }
+      if (window.mapModule && typeof window.mapModule.clearProgress === 'function') {
+        window.mapModule.clearProgress();
+      }
+
+      renderStats(computeStats(_lastData));
 
       if (window.chartModule && typeof window.chartModule.update === 'function') {
         window.chartModule.update(_lastData);
@@ -236,14 +163,28 @@
       console.error('Query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
-      setLoading(false);
-      if (elBtnQuery) elBtnQuery.disabled = false;
+      if (generation === _queryGeneration) {
+        setLoading(false);
+        if (elBtnQuery) elBtnQuery.disabled = false;
+      }
     }
   }
 
-  /**
-   * Re-render map with cached data when display mode changes (no new fetch).
-   */
+  function appendToMap(data, mode) {
+    if (window.mapModule && typeof window.mapModule.appendData === 'function') {
+      window.mapModule.appendData(data, mode);
+    }
+  }
+
+  function updateProgress(loaded, total) {
+    if (window.mapModule && typeof window.mapModule.setProgress === 'function') {
+      window.mapModule.setProgress(loaded, total);
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Mode toggle — re-render without re-fetch
+  ----------------------------------------------------------------------- */
   function onModeChange() {
     if (!_lastData.length) return;
     const mode = getDisplayMode();
@@ -253,11 +194,9 @@
   }
 
   /* -----------------------------------------------------------------------
-     Initialisation
+     Init
   ----------------------------------------------------------------------- */
-
   function init() {
-    // Resolve DOM references
     elCaseType        = document.getElementById('select-case-type');
     elDistrict        = document.getElementById('select-district');
     elYearFrom        = document.getElementById('input-year-from');
@@ -269,35 +208,19 @@
     elStatTopDistrict = document.getElementById('stat-top-district');
     elLoadingOverlay  = document.getElementById('loading-overlay');
 
-    // Initialise map module
     if (window.mapModule && typeof window.mapModule.init === 'function') {
       window.mapModule.init('map');
-    } else {
-      console.warn('window.mapModule.init is not available.');
     }
-
-    // Initialise chart module
     if (window.chartModule && typeof window.chartModule.init === 'function') {
       window.chartModule.init();
-    } else {
-      console.warn('window.chartModule.init is not available.');
     }
 
-    // Bind query button
-    if (elBtnQuery) {
-      elBtnQuery.addEventListener('click', queryAndCache);
-    }
+    if (elBtnQuery) elBtnQuery.addEventListener('click', queryProgressive);
+    if (elToggleMode) elToggleMode.addEventListener('change', onModeChange);
 
-    // Bind display-mode toggle (re-render without re-fetch)
-    if (elToggleMode) {
-      elToggleMode.addEventListener('change', onModeChange);
-    }
-
-    // Auto-query on load (no filter params)
-    queryAndCache();
+    queryProgressive();
   }
 
-  // Bootstrap after DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

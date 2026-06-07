@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System.Text.Json;
+using TaipeiCrimeMap.Application.DTOs;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Queries;
 using TaipeiCrimeMap.Domain.Aggregates;
@@ -23,7 +24,6 @@ public class GetCrimesByFilterQueryHandlerTests
         _repositoryMock = new Mock<ICrimeRepository>();
         _cacheMock = new Mock<IDistributedCache>();
 
-        // 預設：快取未命中、寫入不拋錯
         _cacheMock
             .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((byte[]?)null);
@@ -39,9 +39,6 @@ public class GetCrimesByFilterQueryHandlerTests
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
     }
 
-    /// <summary>
-    /// 測試當提供的過濾條件正確時，是否正確回傳對應的案件 DTOs
-    /// </summary>
     [Fact]
     public async Task HandleAsync_ShouldReturnMappingDtos()
     {
@@ -57,30 +54,26 @@ public class GetCrimesByFilterQueryHandlerTests
                 rawLocation: "臺北市內湖區成功路五段31號")
         };
 
-        _repositoryMock.Setup(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(cases);
+        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)cases, cases.Count));
 
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Residential);
 
         // Act
-        var results = await _handler.HandleAsync(query);
+        var result = await _handler.HandleAsync(query);
 
         // Assert
-        results.Should().HaveCount(1);
-        results[0].CaseNumber.Should().Be("001");
-        results[0].CaseType.Should().Be("住宅竊盜");
-        results[0].District.Should().Be("內湖區");
-        results[0].OccurredDate.Should().Be("2024-01-01");
-        results[0].TimeSlot.Should().Be("18~20");
-        results[0].RawLocation.Should().Be("臺北市內湖區成功路五段31號");
+        result.Data.Should().HaveCount(1);
+        result.Total.Should().Be(1);
+        result.Data[0].CaseNumber.Should().Be("001");
+        result.Data[0].CaseType.Should().Be("住宅竊盜");
+        result.Data[0].District.Should().Be("內湖區");
+        result.Data[0].OccurredDate.Should().Be("2024-01-01");
+        result.Data[0].TimeSlot.Should().Be("18~20");
+        result.Data[0].RawLocation.Should().Be("臺北市內湖區成功路五段31號");
     }
 
-    /// <summary>
-    /// 測試當提供的時段格式不正確時，是否拋出 DomainException 並包含錯誤的時段字串
-    /// </summary>
     [Fact]
     public async Task HandleAsync_WithInvalidTimeSlot_ShouldThrowDomainException()
     {
@@ -91,22 +84,16 @@ public class GetCrimesByFilterQueryHandlerTests
         var act = async () => await _handler.HandleAsync(query);
 
         // Assert
-        await act.Should().ThrowAsync<DomainException>()
-            .WithMessage("*test*");
+        await act.Should().ThrowAsync<DomainException>().WithMessage("*test*");
     }
 
-    /// <summary>
-    /// 測試當沒有提供任何過濾條件時，是否正確呼叫 Repository 的 GetByFilterAsync 方法
-    /// </summary>
     [Fact]
-    public async Task HandleAsync_WithNoFilter_ShouldCallGetByFilterAsync()
+    public async Task HandleAsync_WithNoFilter_ShouldCallGetPagedByFilterAsync()
     {
         // Arrange
-        _repositoryMock.Setup(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<TheftCase>());
+        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery();
 
@@ -114,25 +101,18 @@ public class GetCrimesByFilterQueryHandlerTests
         await _handler.HandleAsync(query);
 
         // Assert
-        _repositoryMock.Verify(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()),
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
-    /// <summary>
-    /// 測試當提供行政區名過濾條件時，是否正確將行政區名轉換為 District 物件並傳遞給 Repository
-    /// </summary>
     [Fact]
     public async Task HandleAsync_WithDistrictFilter_ShouldPassCorrectFilterToRepository()
     {
         // Arrange
-        _repositoryMock.Setup(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<TheftCase>());
+        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery(DistrictName: "大安區");
 
@@ -140,16 +120,12 @@ public class GetCrimesByFilterQueryHandlerTests
         await _handler.HandleAsync(query);
 
         // Assert
-        _repositoryMock.Verify(
-            r => r.GetByFilterAsync(
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
                 It.Is<CrimeFilter>(f => f.District != null && f.District.Name == "大安區"),
-                It.IsAny<CancellationToken>()),
+                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
-    /// <summary>
-    /// 相同查詢條件第二次呼叫，Repository 應只被呼叫一次（快取命中）
-    /// </summary>
     [Fact]
     public async Task HandleAsync_SecondCallWithSameQuery_ShouldReturnCachedResult()
     {
@@ -165,13 +141,10 @@ public class GetCrimesByFilterQueryHandlerTests
                 rawLocation: "臺北市內湖區成功路五段31號")
         };
 
-        _repositoryMock.Setup(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(cases);
+        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)cases, cases.Count));
 
-        // 模擬 IDistributedCache 的寫入與讀取行為
         var stored = new Dictionary<string, byte[]>();
         _cacheMock
             .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -193,25 +166,18 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         secondResult.Should().BeEquivalentTo(firstResult);
-        _repositoryMock.Verify(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()),
-            Times.Once);    // Repository 只被呼叫一次
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
-    /// <summary>
-    /// 不同查詢條件，Repository 應該被呼叫二次（快取未命中）
-    /// </summary>
     [Fact]
     public async Task HandleAsync_DifferentQueries_ShouldCallRepositoryTwice()
     {
         // Arrange
-        _repositoryMock.Setup(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<TheftCase>());
+        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query1 = new GetCrimesByFilterQuery(DistrictName: "大安區");
         var query2 = new GetCrimesByFilterQuery(DistrictName: "內湖區");
@@ -221,27 +187,21 @@ public class GetCrimesByFilterQueryHandlerTests
         await _handler.HandleAsync(query2);
 
         // Assert
-        _repositoryMock.Verify(
-            r => r.GetByFilterAsync(
-                It.IsAny<CrimeFilter>(),
-                It.IsAny<CancellationToken>()),
-            Times.Exactly(2));  // Repository 被呼叫兩次
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(2));
     }
 
-    /// <summary>
-    /// 快取命中時，回傳資料應與序列化前一致（驗證 JSON 往返正確性）
-    /// </summary>
     [Fact]
     public async Task HandleAsync_WhenCacheHit_ShouldReturnDeserializedData()
     {
         // Arrange
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Car);
-        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}";
+        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
 
-        var preloaded = new List<TaipeiCrimeMap.Application.DTOs.TheftCaseDto>
-        {
-            new() { CaseNumber = "cached-001", CaseType = "汽車竊盜", District = "信義區" }
-        };
+        var preloaded = new PagedResult<TheftCaseDto>(
+            new List<TheftCaseDto> { new() { CaseNumber = "cached-001", CaseType = "汽車竊盜", District = "信義區" } },
+            Total: 1, Page: 1, PageSize: 200, TotalPages: 1);
         var preloadedBytes = JsonSerializer.SerializeToUtf8Bytes(preloaded);
 
         _cacheMock
@@ -252,10 +212,10 @@ public class GetCrimesByFilterQueryHandlerTests
         var result = await _handler.HandleAsync(query);
 
         // Assert
-        result.Should().HaveCount(1);
-        result[0].CaseNumber.Should().Be("cached-001");
-        _repositoryMock.Verify(
-            r => r.GetByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()),
-            Times.Never);   // 快取命中，不查 DB
+        result.Data.Should().HaveCount(1);
+        result.Data[0].CaseNumber.Should().Be("cached-001");
+        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
+                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

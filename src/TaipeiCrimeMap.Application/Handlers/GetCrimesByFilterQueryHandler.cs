@@ -28,7 +28,7 @@ public class GetCrimesByFilterQueryHandler
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<TheftCaseDto>> HandleAsync(
+    public async Task<PagedResult<TheftCaseDto>> HandleAsync(
         GetCrimesByFilterQuery query,
         CancellationToken cancellationToken = default)
     {
@@ -50,20 +50,22 @@ public class GetCrimesByFilterQueryHandler
             yearTo: query.YearTo,
             timeSlot: timeSlot);
 
-        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}";
+        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
 
         var cachedBytes = await _cache.GetAsync(cacheKey, cancellationToken);
         if (cachedBytes is not null)
         {
             _logger.LogInformation("快取命中：{CacheKey}", cacheKey);
-            return JsonSerializer.Deserialize<List<TheftCaseDto>>(cachedBytes)!;
+            return JsonSerializer.Deserialize<PagedResult<TheftCaseDto>>(cachedBytes)!;
         }
 
-        _logger.LogInformation("查詢案件: 條件：{Query}", query);
-        var cases = await _repository.GetByFilterAsync(filter, cancellationToken);
-        _logger.LogInformation("查詢完成，共 {Count} 筆", cases.Count);
+        _logger.LogInformation("查詢案件：{Query}", query);
+        var (cases, total) = await _repository.GetPagedByFilterAsync(filter, query.Page, query.PageSize, cancellationToken);
+        _logger.LogInformation("查詢完成，共 {Total} 筆，本頁 {Count} 筆", total, cases.Count);
 
-        var result = cases.Select(MapToDto).ToList();
+        var items = cases.Select(MapToDto).ToList();
+        var totalPages = query.PageSize > 0 ? (int)Math.Ceiling((double)total / query.PageSize) : 0;
+        var result = new PagedResult<TheftCaseDto>(items, total, query.Page, query.PageSize, totalPages);
 
         await _cache.SetAsync(
             cacheKey,
