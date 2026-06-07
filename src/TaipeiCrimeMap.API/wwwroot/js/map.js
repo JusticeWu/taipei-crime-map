@@ -349,23 +349,26 @@
       }
     },
 
-    // Add one page of data without clearing existing layers
+    // Add one page of data without clearing existing layers.
+    // Deferred via setTimeout(0) so the browser can repaint between pages.
     appendData(data, mode) {
       if (!_map || !Array.isArray(data)) return;
-      const coordData = data.filter(hasCoords);
+      setTimeout(() => {
+        const coordData = data.filter(hasCoords);
 
-      if (mode === 'heat' && _heatLayer) {
-        coordData.forEach(item => _heatLayer.addLatLng([item.latitude, item.longitude, HEAT_INTENSITY]));
-      } else if (mode === 'point' && _markerLayer) {
-        coordData.forEach(item => {
-          const color  = colorForType(item.caseType);
-          const marker = L.circleMarker([item.latitude, item.longitude], {
-            radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+        if (mode === 'heat' && _heatLayer) {
+          coordData.forEach(item => _heatLayer.addLatLng([item.latitude, item.longitude, HEAT_INTENSITY]));
+        } else if (mode === 'point' && _markerLayer) {
+          coordData.forEach(item => {
+            const color  = colorForType(item.caseType);
+            const marker = L.circleMarker([item.latitude, item.longitude], {
+              radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+            });
+            marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
+            _markerLayer.addLayer(marker);
           });
-          marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
-          _markerLayer.addLayer(marker);
-        });
-      }
+        }
+      }, 0);
     },
 
     // Called once after all pages loaded: add district bubble markers
