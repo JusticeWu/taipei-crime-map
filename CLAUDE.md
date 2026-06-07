@@ -8,6 +8,20 @@
 
 每次開始新任務前，請先讀取這兩個檔案，確保決策一致。
 
+## 遇到架構決策時
+遇到以下情況，請呼叫 scripts/ask_claude.py 詢問建議後再繼續：
+- 選擇技術方案（資料庫、快取、框架）
+- 設計 API 或資料結構
+- 效能優化策略
+- 安全性相關決策
+
+呼叫方式：
+```
+python scripts/ask_claude.py "你的問題"
+```
+
+決策依據將自動帶入 CLAUDE.md 和 docs/decisions.md 的內容。
+
 ## 專案背景
 - .NET 9 / ASP.NET Core，DDD 架構
 - PostgreSQL + Dapper + Stored Procedure

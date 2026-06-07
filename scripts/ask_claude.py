@@ -1,51 +1,49 @@
-"""
-ask_claude.py — 快速詢問 Claude 的命令列工具
-
-用法：
-    python scripts/ask_claude.py "你的問題"
-    python scripts/ask_claude.py "請幫我 review 這段程式" < myfile.cs
-
-環境變數：
-    ANTHROPIC_API_KEY — Anthropic API 金鑰（必填）
-"""
-
+import anthropic
 import sys
 import os
-import anthropic
 
 
-def main():
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print("ERROR: ANTHROPIC_API_KEY 環境變數未設定", file=sys.stderr)
-        print("請執行：set ANTHROPIC_API_KEY=sk-ant-...", file=sys.stderr)
-        sys.exit(1)
+def ask_claude(question: str) -> str:
+    claude_md = ""
+    decisions_md = ""
 
-    # 從命令列引數取得問題
-    if len(sys.argv) < 2:
-        print("用法：python scripts/ask_claude.py \"你的問題\"", file=sys.stderr)
-        sys.exit(1)
+    # CLAUDE.md 已移至專案根目錄
+    claude_md_path = os.path.join(os.path.dirname(__file__), "..", "CLAUDE.md")
+    decisions_path = os.path.join(os.path.dirname(__file__), "..", "docs", "decisions.md")
 
-    user_message = " ".join(sys.argv[1:])
+    if os.path.exists(claude_md_path):
+        with open(claude_md_path, "r", encoding="utf-8") as f:
+            claude_md = f.read()
 
-    # 若有 stdin 輸入（pipe），附加到訊息後面
-    if not sys.stdin.isatty():
-        stdin_content = sys.stdin.read().strip()
-        if stdin_content:
-            user_message = f"{user_message}\n\n```\n{stdin_content}\n```"
+    if os.path.exists(decisions_path):
+        with open(decisions_path, "r", encoding="utf-8") as f:
+            decisions_md = f.read()
 
-    client = anthropic.Anthropic(api_key=api_key)
+    system_prompt = f"""你是台北市治安地圖專案的架構顧問，請用繁體中文回答。
 
-    print(f"[Claude claude-sonnet-4-6] 思考中...\n", file=sys.stderr)
+以下是專案說明：
+{claude_md}
 
+以下是架構決策記錄：
+{decisions_md}
+
+請根據專案背景給出具體建議，回答要簡潔，最多200字。"""
+
+    client = anthropic.Anthropic()
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1024,
-        messages=[{"role": "user", "content": user_message}],
+        system=system_prompt,
+        messages=[{"role": "user", "content": question}],
     )
-
-    print(message.content[0].text)
+    return message.content[0].text
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) < 2:
+        print("用法：python scripts/ask_claude.py '你的問題'")
+        sys.exit(1)
+
+    question = " ".join(sys.argv[1:])
+    answer = ask_claude(question)
+    print(answer)
