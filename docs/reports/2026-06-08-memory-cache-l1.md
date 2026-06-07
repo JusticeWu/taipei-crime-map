@@ -62,8 +62,8 @@ classDiagram
 ## 8. 分支與部署記錄
 
 - 開發分支：feature/memory-cache-l1
-- PR 編號：待建立
+- PR 編號：#24
 - Merge 到：uat
-- Merge 時間：待完成
-- CI 結果：待確認
-- UAT 部署：待確認
+- Merge 時間：2026-06-07 19:56
+- CI 結果：✅ 成功
+- UAT 部署：✅ 成功
