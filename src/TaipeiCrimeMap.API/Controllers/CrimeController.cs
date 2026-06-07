@@ -37,10 +37,10 @@ public class CrimeController : ControllerBase
     }
 
     /// <summary>
-    /// 依條件查詢案件
+    /// 依條件查詢案件（支援分頁）
     /// </summary>
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyList<TheftCaseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PagedResult<TheftCaseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetCrimes(
         [FromQuery] CaseType? caseType,
@@ -48,14 +48,18 @@ public class CrimeController : ControllerBase
         [FromQuery] int? yearFrom,
         [FromQuery] int? yearTo,
         [FromQuery] string? rawTimeSlot,
-        CancellationToken cancellationToken)
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 200,
+        CancellationToken cancellationToken = default)
     {
         var query = new GetCrimesByFilterQuery(
             CaseType: caseType,
             DistrictName: districtName,
             YearFrom: yearFrom,
             YearTo: yearTo,
-            RawTimeSlot: rawTimeSlot);
+            RawTimeSlot: rawTimeSlot,
+            Page: page,
+            PageSize: pageSize);
 
         var results = await _queryHandler.HandleAsync(query, cancellationToken);
         return Ok(results);

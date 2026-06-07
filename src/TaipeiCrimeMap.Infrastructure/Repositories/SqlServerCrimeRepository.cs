@@ -47,8 +47,15 @@ public class SqlServerCrimeRepository : ICrimeRepository
 
     public async Task<IReadOnlyList<TheftCase>> GetByFilterAsync(CrimeFilter filter, CancellationToken cancellationToken = default)
     {
+        var (cases, _) = await GetPagedByFilterAsync(filter, page: 1, pageSize: int.MaxValue, cancellationToken);
+        return cases;
+    }
+
+    public async Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
+        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
         await using var conn = CreateConnection();
-        var rows = await conn.QueryAsync<TheftCaseRow>(
+        var rows = (await conn.QueryAsync<TheftCaseRow>(
             "sp_get_theft_cases_by_filter",
             new
             {
@@ -57,10 +64,14 @@ public class SqlServerCrimeRepository : ICrimeRepository
                 YearFrom       = filter.YearFrom,
                 YearTo         = filter.YearTo,
                 TimeSlotStart  = filter.TimeSlot?.StartHour,
-                TimeSlotEnd    = filter.TimeSlot?.EndHour
+                TimeSlotEnd    = filter.TimeSlot?.EndHour,
+                Page           = page,
+                PageSize       = pageSize
             },
-            commandType: CommandType.StoredProcedure);
-        return rows.Select(r => r.ToDomain()).ToList();
+            commandType: CommandType.StoredProcedure)).ToList();
+
+        var total = rows.Count > 0 ? rows[0].TotalCount : 0;
+        return (rows.Select(r => r.ToDomain()).ToList(), total);
     }
 
     public async Task<IReadOnlyList<TheftCase>> GetByRadiusAsync(
@@ -132,6 +143,7 @@ public class SqlServerCrimeRepository : ICrimeRepository
     {
         public Guid Id { get; init; }
         public string CaseNumber { get; init; } = string.Empty;
+        public int TotalCount { get; init; }
         public int? CaseType { get; init; }
         public string? District { get; init; }
         public string OccurredDateRaw { get; init; } = string.Empty;
