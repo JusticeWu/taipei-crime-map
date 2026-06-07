@@ -153,4 +153,20 @@ public class InMemoryCrimeRepository : ICrimeRepository
     /// <param name="deg">角度值</param>
     /// <returns>對應的弧度值</returns>
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
+
+    public Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default)
+    {
+        var counts = _cases
+            .Where(c => c.District?.Name is not null)
+            .Where(c => !filter.CaseType.HasValue || c.CaseType == filter.CaseType)
+            .Where(c => filter.District is null || c.District?.Name == filter.District.Name)
+            .Where(c => !filter.YearFrom.HasValue || c.OccurredDate.Year >= filter.YearFrom)
+            .Where(c => !filter.YearTo.HasValue   || c.OccurredDate.Year <= filter.YearTo)
+            .GroupBy(c => c.District!.Name)
+            .Select(g => (District: g.Key, Count: g.Count()))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<(string District, int Count)>>(counts);
+    }
 }

@@ -13,14 +13,16 @@ public class CrimeController : ControllerBase
 {
     private readonly ImportCsvCommandHandler _importHandler;
     private readonly GetCrimesByFilterQueryHandler _queryHandler;
+    private readonly GetHeatmapQueryHandler _heatmapHandler;
 
     public CrimeController(
         ImportCsvCommandHandler importHandler,
-        GetCrimesByFilterQueryHandler queryHandler
-    )
+        GetCrimesByFilterQueryHandler queryHandler,
+        GetHeatmapQueryHandler heatmapHandler)
     {
         _importHandler = importHandler;
         _queryHandler = queryHandler;
+        _heatmapHandler = heatmapHandler;
     }
 
     /// <summary>
@@ -65,6 +67,23 @@ public class CrimeController : ControllerBase
         return Ok(results);
     }
 
+
+    /// <summary>
+    /// 行政區案件密度，供熱力圖使用（每區一點，瞬間渲染）
+    /// </summary>
+    [HttpGet("heatmap")]
+    [ProducesResponseType(typeof(IReadOnlyList<HeatmapPointDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetHeatmap(
+        [FromQuery] CaseType? caseType,
+        [FromQuery] string? districtName,
+        [FromQuery] int? yearFrom,
+        [FromQuery] int? yearTo,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetHeatmapQuery(caseType, districtName, yearFrom, yearTo);
+        var result = await _heatmapHandler.HandleAsync(query, cancellationToken);
+        return Ok(result);
+    }
 
     /// <summary>
     /// 匯入 CSV 的請求物件

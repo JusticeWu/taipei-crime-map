@@ -27,8 +27,9 @@
   /* -----------------------------------------------------------------------
      State
   ----------------------------------------------------------------------- */
-  let _lastData      = [];   // all accumulated records for current query
-  let _queryGeneration = 0;  // incremented on each new query to abort stale loads
+  let _lastData        = [];   // all accumulated records for current query
+  let _lastHeatmapData = null; // cached /api/crime/heatmap response
+  let _queryGeneration = 0;    // incremented on each new query to abort stale loads
 
   /* -----------------------------------------------------------------------
      Loading overlay
@@ -114,12 +115,29 @@
     if (elBtnQuery) elBtnQuery.disabled = true;
     setToggleDisabled(true);
 
-    _lastData = [];
+    _lastData        = [];
+    _lastHeatmapData = null;
 
     const mode = getDisplayMode();
 
     if (window.mapModule && typeof window.mapModule.startProgressiveLoad === 'function') {
       window.mapModule.startProgressiveLoad(mode);
+    }
+
+    // Heat mode: fetch district aggregation from /api/crime/heatmap in parallel.
+    // 12 points only → renders instantly while paged data loads for stats/charts.
+    if (mode === 'heat') {
+      const heatParams = buildQueryParams();
+      fetch(`${API_BASE}/heatmap?${heatParams}`, { headers: { Accept: 'application/json' } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data || generation !== _queryGeneration) return;
+          _lastHeatmapData = data;
+          if (window.mapModule && typeof window.mapModule.setHeatmap === 'function') {
+            window.mapModule.setHeatmap(data);
+          }
+        })
+        .catch(err => console.warn('Heatmap fetch failed:', err));
     }
 
     try {
@@ -202,12 +220,18 @@
   }
 
   /* -----------------------------------------------------------------------
-     Year select — set max dynamically to current year
+     Year select — set max and placeholder dynamically to current year
   ----------------------------------------------------------------------- */
   function populateYearSelects() {
     const currentYear = new Date().getFullYear();
-    if (elYearFrom) { elYearFrom.max = String(currentYear); }
-    if (elYearTo)   { elYearTo.max   = String(currentYear); }
+    if (elYearFrom) {
+      elYearFrom.max         = String(currentYear);
+      elYearFrom.placeholder = '2018';
+    }
+    if (elYearTo) {
+      elYearTo.max         = String(currentYear);
+      elYearTo.placeholder = String(currentYear);
+    }
   }
 
   /* -----------------------------------------------------------------------
@@ -218,6 +242,10 @@
     const mode = getDisplayMode();
     if (window.mapModule && typeof window.mapModule.update === 'function') {
       window.mapModule.update(_lastData, mode);
+    }
+    if (mode === 'heat' && _lastHeatmapData &&
+        window.mapModule && typeof window.mapModule.setHeatmap === 'function') {
+      window.mapModule.setHeatmap(_lastHeatmapData);
     }
   }
 

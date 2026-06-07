@@ -120,6 +120,32 @@ public class SqlServerCrimeRepository : ICrimeRepository
         return await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM theft_cases");
     }
 
+    public async Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT district, COUNT(*) AS weight
+            FROM theft_cases WITH (NOLOCK)
+            WHERE district IS NOT NULL
+              AND (@CaseType IS NULL OR case_type = @CaseType)
+              AND (@District IS NULL OR district  = @District)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo)
+            GROUP BY district
+            """;
+
+        await using var conn = CreateConnection();
+        var rows = await conn.QueryAsync<DistrictCountRow>(sql, new
+        {
+            CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
+            District = filter.District?.Name,
+            YearFrom = filter.YearFrom,
+            YearTo   = filter.YearTo,
+        });
+
+        return rows.Select(r => (r.District, r.Weight)).ToList();
+    }
+
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
     private const string InsertSql = """
@@ -201,5 +227,11 @@ public class SqlServerCrimeRepository : ICrimeRepository
                    Math.Cos(b.Latitude * Math.PI / 180.0) *
                    Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
         return R * 2 * Math.Atan2(Math.Sqrt(h), Math.Sqrt(1 - h));
+    }
+
+    private sealed record DistrictCountRow
+    {
+        public string District { get; init; } = string.Empty;
+        public int Weight { get; init; }
     }
 }

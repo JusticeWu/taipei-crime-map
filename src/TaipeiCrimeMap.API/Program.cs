@@ -22,6 +22,7 @@ builder.Services.AddInfrastructure(builder.Configuration);
 // Application handlers
 builder.Services.AddScoped<ImportCsvCommandHandler>();
 builder.Services.AddScoped<GetCrimesByFilterQueryHandler>();
+builder.Services.AddScoped<GetHeatmapQueryHandler>();
 
 var app = builder.Build();
 

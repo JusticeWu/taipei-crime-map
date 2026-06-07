@@ -371,21 +371,21 @@
       }, 0);
     },
 
-    // Called once after all pages loaded.
-    // Heat mode: show district bubbles first, then build heatmap on next tick
-    // so the browser renders the bubble state before the (potentially slow) heat calc.
+    // Apply heatmap data from /api/crime/heatmap (12 district aggregation points).
+    // Weight is normalised to [0,1] so Leaflet.heat scales colours correctly.
+    setHeatmap(points) {
+      if (!_map || !Array.isArray(points) || points.length === 0) return;
+      if (_heatLayer) { _map.removeLayer(_heatLayer); _heatLayer = null; }
+      const maxWeight = points.reduce((m, p) => Math.max(m, p.weight || 0), 1);
+      const heatPoints = points.map(p => [p.lat, p.lng, p.weight / maxWeight]);
+      _heatLayer = L.heatLayer(heatPoints, HEAT_OPTIONS).addTo(_map);
+    },
+
+    // Called once after all pages loaded: add district bubble markers.
+    // Heat layer is already rendered via setHeatmap(); no need to rebuild it here.
     finalizeLoad(allData, mode) {
       if (!_map) return;
-      if (mode === 'heat') {
-        buildDistrictFallbackLayer(allData);          // bubbles appear immediately
-        setTimeout(() => {
-          if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
-          buildHeatLayer(allData);                    // full heatmap in one pass
-          buildDistrictFallbackLayer(allData);        // re-add bubbles alongside heatmap
-        }, 0);
-      } else {
-        buildDistrictFallbackLayer(allData);
-      }
+      buildDistrictFallbackLayer(allData);
     },
 
     // Show / update progress indicator (top-left)
