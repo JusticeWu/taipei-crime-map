@@ -156,13 +156,18 @@ jobs:
       - name: Find latest report
         id: find_report
         run: |
-          LATEST=$(ls -t docs/reports/*.md 2>/dev/null | head -1)
-          if [ -z "$LATEST" ]; then
+          # 優先找本次 commit 新增的報告（git show 只需 HEAD，相容 shallow clone）
+          REPORT=$(git show --name-only --format='' HEAD -- 'docs/reports/*.md' | head -1)
+          # Fallback：按檔名倒序排（日期前綴 → 字母最大 = 最新）
+          if [ -z "$REPORT" ]; then
+            REPORT=$(ls docs/reports/*.md 2>/dev/null | sort -r | head -1)
+          fi
+          if [ -z "$REPORT" ]; then
             echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
           else
             {
               echo "content<<EOF"
-              cat "$LATEST"
+              cat "$REPORT"
               echo "EOF"
             } >> $GITHUB_OUTPUT
           fi
