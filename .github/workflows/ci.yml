@@ -137,6 +137,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 2   # 讓 git diff HEAD~1 可用，以找出本次 push 變更的報告
 
       - name: Azure login
         uses: azure/login@v2
@@ -195,15 +197,22 @@ jobs:
       - name: Find latest report
         id: find_report
         run: |
-          # 優先找本次 commit 新增的報告（git show 只需 HEAD，相容 shallow clone）
-          REPORT=$(git show --name-only --format='' HEAD -- 'docs/reports/*.md' | head -1)
-          # Fallback：按檔名倒序排（日期前綴 → 字母最大 = 最新）
+          # 找本次 push 新增或修改的報告（fetch-depth: 2 確保 HEAD~1 可用）
+          # sort -r：日期前綴檔名倒序 → 第一個 = 最新日期的報告
+          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
+            | sort -r | head -1)
+
+          # Fallback：本次沒有報告變動，取整個目錄最新的
           if [ -z "$REPORT" ]; then
             REPORT=$(ls docs/reports/*.md 2>/dev/null | sort -r | head -1)
           fi
+
           if [ -z "$REPORT" ]; then
+            echo "report_name=（無報告）" >> $GITHUB_OUTPUT
             echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
           else
+            REPORT_NAME=$(basename "$REPORT" .md)
+            echo "report_name=$REPORT_NAME" >> $GITHUB_OUTPUT
             {
               echo "content<<EOF"
               cat "$REPORT"
@@ -218,7 +227,7 @@ jobs:
           server_port: 587
           username: ${{ secrets.GMAIL_USERNAME }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: 任務報告：${{ github.event.head_commit.message }}
+          subject: "[台北市治安地圖] 任務報告：${{ steps.find_report.outputs.report_name }}"
           to: chengyi.ks@gmail.com
           from: ${{ secrets.GMAIL_USERNAME }}
           body: ${{ steps.find_report.outputs.content }}
