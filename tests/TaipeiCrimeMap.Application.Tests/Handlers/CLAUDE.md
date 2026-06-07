@@ -1,5 +1,11 @@
 # 台北市治安地圖 — Agent 工作說明
 
+## 開始任務前必須讀取
+- CLAUDE.md（本檔案）
+- docs/decisions.md（架構決策記錄）
+
+每次開始新任務前，請先讀取這兩個檔案，確保決策一致。
+
 ## 專案背景
 - .NET 9 / ASP.NET Core，DDD 架構
 - PostgreSQL + Dapper + Stored Procedure
@@ -42,6 +48,11 @@ feature/xxx → PR → uat → 自動部署 UAT → prod
 - chore：設定雜務
 - ci：CI/CD 設定
 
+## Dockerfile 規範
+- 永遠使用 debian-based image（`aspnet:9.0`），不使用 alpine
+- 原因：Microsoft.Data.SqlClient 等原生函式庫在 Alpine 上有相容性問題
+- 禁止使用：`aspnet:9.0-alpine`、`runtime:9.0-alpine`
+
 ## API 端點
 - POST /api/crime/import — 匯入 CSV
 - GET /api/crime — 依條件查詢案件
@@ -49,6 +60,17 @@ feature/xxx → PR → uat → 自動部署 UAT → prod
 ## 資料說明
 - 六類竊盜資料，共 11,514 筆
 - 案類：住宅竊盜、汽車竊盜、機車竊盜、自行車竊盜、搶奪、強盜
+
+## 任務完成前必須自我檢查
+在回報任務完成之前，請逐項確認：
+- [ ] 任務報告已存入 docs/reports/YYYY-MM-DD-[任務名稱].md
+- [ ] 報告包含第7項 Mermaid 流程圖或結構圖
+- [ ] 報告包含第8項分支與部署記錄
+- [ ] 所有測試通過（dotnet test）
+- [ ] 變更已 commit 並 push
+- [ ] PR 已建立並 merge 到 uat
+- [ ] CI pipeline 全部綠燈
+以上任一項未完成，不得回報任務完成。
 
 ## 任務完成後，必須產出任務報告
 格式如下，回答簡潔，其他內容盡量越少越好：
