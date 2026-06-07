@@ -16,13 +16,13 @@
    - **GlobalExceptionHandler**：設置一個「集中式垃圾桶」，所有未被捕捉的例外都在這裡統一處理，不讓錯誤資訊直接暴露。
    - **Problem Details（RFC 7807）**：API 錯誤回應的國際標準格式 `{ type, title, status, detail }`，讓前端可以機械化解析錯誤，不用靠字串比對。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 型別 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `GlobalExceptionHandler` | 實作 `IExceptionHandler`，DomainException → 400，其他 → 500 |
-   | `[HttpPost("import")]` | 對應 `POST /api/crime/import` |
-   | `[HttpGet]` | 對應 `GET /api/crime?...` |
+   | 例外處理位置（集中 GlobalExceptionHandler vs 各 Action try/catch） | 決定程式碼重複程度與錯誤處理一致性 |
+   | Exception 型別對應的 HTTP 狀態碼 | 決定 API 呼叫端能否區分「輸入錯誤」與「系統錯誤」 |
+   | `app.UseExceptionHandler()` 是否呼叫 | 決定 GlobalExceptionHandler 是否實際生效 |
 
 6. **新手可能常犯的誤區？**
    - Controller 直接 `try/catch` 每個 Action，重複程式碼多且容易遺漏。

@@ -15,12 +15,12 @@
    - **Controller return 常見錯誤**：`await handler.HandleAsync(query);` 和 `return Ok(await handler.HandleAsync(query));` 差一個 `return Ok()`，前者結果直接被丟棄。
    - **Null vs Empty**：`return null` 讓 ASP.NET Core 回傳 HTTP 204 No Content，`return Ok([])` 回傳 HTTP 200 with 空陣列，語意不同，前端需要不同處理。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 問題 | 原因 |
+   | 變因 | 影響 |
    |------|------|
-   | `GET /api/crime` 回傳 `[]` | Controller Action 忘記 `return Ok(result)` |
-   | Integration Test 驗證 | `response.Content.ReadAsStringAsync()` 後 deserialize 驗證筆數 |
+   | Controller 是否完整回傳 Handler 結果（`return Ok(result)`） | 決定 API 是否回傳正確資料還是空值 |
+   | Integration Test 是否覆蓋 Controller → Handler 串接 | 決定這類串接 bug 能否在 CI 中被發現 |
 
 6. **新手可能常犯的誤區？**
    - `await handler.HandleAsync(...)` 忘記把結果存到變數就直接 `return Ok()`，回傳 null。

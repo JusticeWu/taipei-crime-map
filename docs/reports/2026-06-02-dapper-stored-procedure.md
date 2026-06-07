@@ -16,13 +16,13 @@
    - **Stored Procedure 動態篩選**：用 `IF @District IS NOT NULL ... ELSE ...` 讓一個 SP 處理多種篩選組合，比建立很多個 SP 更好維護。
    - **DbUp SQL 版本管理**：SQL 腳本有版本號（`0001_create_table.sql`、`0002_create_sp.sql`），每次只跑新腳本，確保資料庫和程式碼版本同步。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `CommandType.StoredProcedure` | 告訴 Dapper 用 EXEC 方式呼叫 SP |
-   | `sp_get_theft_cases_by_filter` | 處理多條件篩選的 Stored Procedure 名稱 |
-   | `DateOnlyTypeHandler` | Dapper 自訂型別映射，解決 `DateOnly` ↔ `DATE` 的對應 |
+   | SQL 執行方式（StoredProcedure vs 字串拼接） | 決定是否有 SQL Injection 風險 |
+   | Dapper 型別映射（DateOnlyTypeHandler） | 決定 `DateOnly` 欄位能否正確從 DB 讀回 |
+   | 命名慣例對應（MatchNamesWithUnderscores） | 決定 snake_case 欄位是否自動映射到 PascalCase 屬性 |
 
 6. **新手可能常犯的誤區？**
    - 用字串拼接 SQL（`"WHERE district = '" + district + "'"），容易被 SQL Injection 攻擊。

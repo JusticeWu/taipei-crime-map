@@ -16,13 +16,13 @@
    - **Value Object**：`District`、`TaiwanDate` 沒有自己的 ID，只靠值來判斷是否相等，就像兩張「100元鈔票」，只要面額相同就是等價的。
    - **Repository Pattern**：`ICrimeRepository` 把「如何存取資料」的細節藏起來，Domain 層只知道「我可以找到案件」，不知道是存在記憶體還是資料庫。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 型別 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `TheftCase` | Aggregate Root，含 CaseNumber、CaseType、District 等屬性 |
-   | `ICrimeRepository` | 定義 Add/Get 操作的介面，Domain 層的邊界 |
-   | `InMemoryCrimeRepository` | 用 `List<TheftCase>` 模擬 DB，僅用於開發/測試 |
+   | Repository 介面定義位置（Domain vs Application） | 決定依賴方向是否正確，Domain 是否被上層污染 |
+   | Value Object 的相等比較實作（Equals / GetHashCode） | 決定集合去重、Dictionary 查找是否正確 |
+   | Domain 層是否引用 ORM 套件 | 決定 Clean Architecture 是否被破壞 |
 
 6. **新手可能常犯的誤區？**
    - 把 EF Core 或 Dapper 等 ORM 直接引用在 Domain 層，破壞 Clean Architecture 的依賴方向。

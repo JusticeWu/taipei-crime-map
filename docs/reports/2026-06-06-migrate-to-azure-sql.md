@@ -18,10 +18,10 @@
    - **動態 SQL 參數化**：PostgreSQL 用 `$1, $2`，SQL Server 用具名參數 `@Param` + `sp_executesql`，這樣才能防止 SQL Injection（有人偷塞壞指令的攻擊）。
    - **套件版本要對齊**：`dbup-sqlserver 7.1.0` 要求 `Microsoft.Data.SqlClient 6.1.4`，版本不對 NuGet restore 就會失敗，就像零件規格要符合才鎖得進去。
 
-5. **核心的變數是什麼？**
-   - `_connectionString`：決定連哪個資料庫的字串，格式從 `Host=...` 換成 `Server=...,1433;Database=...;`
-   - `CommandType.StoredProcedure`：告訴 Dapper 這是呼叫 SP 而非 SQL 查詢
-   - `sp_executesql @sql, @params, @Param = @Param`：SQL Server 動態 SQL 的安全執行方式
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
+   - **連線字串格式**（PostgreSQL `Host=` vs SQL Server `Server=,port;Database=;`）：決定能否連到正確的資料庫
+   - **動態 SQL 參數化方式**（PostgreSQL `$1,$2` vs SQL Server `@Param + sp_executesql`）：決定 SQL Injection 防護是否有效
+   - **NuGet 套件版本對齊**（dbup-sqlserver + Microsoft.Data.SqlClient 版本需一致）：決定 build 是否成功
 
 6. **新手可能常犯的誤區？**
    - `CREATE PROCEDURE` 在 SQL Server 必須是 batch 第一行，不能直接接在 DROP 後面（需要 `GO` 或用 `CREATE OR ALTER`）

@@ -14,10 +14,10 @@
    - **Gmail 應用程式密碼**：不是登入密碼，是 Google 另外發的「專用通行證」，只讓特定程式寄信。
    - **`$GITHUB_OUTPUT`**：步驟之間傳資料的便條紙，一個步驟寫進去，下一個步驟可以讀出來。
 
-5. **核心的變數是什麼？**
-   - `GMAIL_USERNAME` / `GMAIL_APP_PASSWORD`：寄信憑證
-   - `github.event.head_commit.message`：信件主旨來源
-   - `steps.find_report.outputs.content`：信件內文（最新報告的完整內容）
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
+   - **Gmail 密碼類型**（應用程式密碼 vs 登入密碼）：決定 SMTP 認證是否成功
+   - **`$GITHUB_OUTPUT` 多行寫法**（heredoc vs 直接賦值）：決定報告內容是否完整傳遞
+   - **部署 job 是否有 Checkout 步驟**：決定能否讀取 repo 裡的報告檔案
 
 6. **新手可能常犯的誤區？**
    - 用 Gmail 登入密碼而非應用程式密碼，導致 SMTP 認證失敗。

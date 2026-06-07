@@ -16,13 +16,13 @@
    - **DTO（Data Transfer Object）**：API 回傳的是 DTO 而非 Entity，就像餐廳給客人的是菜單（簡化版），不是食材庫存表（完整資料）。
    - **CrimeFilter Value Object**：把所有篩選條件打包成一個物件傳給 Repository，比傳 7 個參數更清晰，也更容易測試。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `GetCrimesByFilterQuery` | 含 CaseType, DistrictName, YearFrom/To, RawTimeSlot |
-   | `CrimeFilter` | Domain Value Object，封裝所有篩選邏輯 |
-   | `TheftCaseDto` | 回傳給前端的扁平資料結構，隱藏 Domain 複雜度 |
+   | 回傳 DTO vs Domain Entity | 決定是否將 Domain 內部結構暴露給 API 呼叫端 |
+   | 篩選封裝方式（CrimeFilter 物件 vs 多個參數） | 決定 Repository 介面複雜度與可測試性 |
+   | DomainException 是否被 GlobalExceptionHandler 捕捉 | 決定輸入錯誤是回傳 400 還是 500 |
 
 6. **新手可能常犯的誤區？**
    - Handler 直接回傳 `TheftCase` Entity，暴露 Domain 細節給 API，耦合過高。

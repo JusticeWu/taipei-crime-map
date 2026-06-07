@@ -16,13 +16,13 @@
    - **GitHub Secrets**：敏感資訊的保險箱，只有 GitHub Actions 執行時才開箱，不會出現在 git log 或 PR diff 裡。
    - **`if: github.event_name == 'push' && github.ref == 'refs/heads/uat'`**：PR 時只跑 build/test，真正 merge 才跑 deploy，避免每個 PR 都觸發部署。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `IMAGE_NAME` | ACR 完整 image 路徑（env 層級，全 job 共用） |
-   | `github.sha` | 每次 commit 唯一 hash，用於 image tag 確保版本可追溯 |
-   | `secrets.AZURE_CREDENTIALS` | Azure service principal JSON，deploy job 的認證憑證 |
+   | Image tag 策略（`github.sha` vs `latest`） | 決定是否可追溯哪個 commit 在 UAT 執行 |
+   | Job 觸發條件（`push` to `uat` 才 deploy） | 決定 PR 的 CI 是否誤觸發部署 |
+   | Secrets 管理（GitHub Secrets vs 明文） | 決定敏感憑證是否洩漏進 git log |
 
 6. **新手可能常犯的誤區？**
    - `push-to-acr` 忘記加 `needs: build-and-test`，導致 build 失敗時仍然 push 壞掉的 image。

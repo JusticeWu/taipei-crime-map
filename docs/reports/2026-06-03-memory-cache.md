@@ -16,13 +16,13 @@
    - **Cache Key 設計**：快取的門牌號碼，要包含所有影響結果的參數，少了一個就可能用錯快取（如 A 地區的結果被當成 B 地區回傳）。
    - **TTL（Time To Live）**：快取的保存期限，就像便當的賞味期限，太短 = 每次都重煮（沒省到），太長 = 吃到壞掉的（資料過期）。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `cacheKey` | `crimes:filter:{CaseType}:{District}:{YearFrom}:{YearTo}:{TimeSlot}` |
-   | `CacheDuration` | `TimeSpan.FromSeconds(5)` → 後升級為 30 分鐘（Garnet 版） |
-   | `IMemoryCache.TryGetValue` | 快取命中回傳 true，Handler 直接回傳快取結果 |
+   | Cache Key 包含的篩選條件 | 決定不同查詢是否誤用同一份快取（回傳錯誤資料） |
+   | TTL 長短 | 決定資料新鮮度與 DB 壓力之間的平衡 |
+   | 快取的物件型別（DTO vs Entity） | 決定快取是否與 Domain 層產生不必要的耦合 |
 
 6. **新手可能常犯的誤區？**
    - Cache Key 用 `crimes:all` 而非包含篩選條件，導致所有查詢共用同一快取（回傳錯誤資料）。

@@ -14,10 +14,10 @@
    - **`.gitignore` 例外規則**：`data/raw/*` 先全部忽略，再用 `!data/raw/*.csv` 把 CSV 撿回來，順序不能反。
    - **`az containerapp show --query`**：用 JMESPath 直接撈 FQDN，不需要解析整份 JSON，就像只問地址不用看整張戶籍謄本。
 
-5. **核心的變數是什麼？**
-   - `APP_URL`：`az containerapp show` 取得的 UAT FQDN
-   - `FILES` 關聯陣列：檔名 → CaseType 整數值的對應（1–6）
-   - `/app/data/raw/<filename>`：容器內的 CSV 路徑，對應 `ImportCsvRequest.FilePath`
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
+   - **UAT URL 取得方式**（az containerapp show 動態取得 vs 寫死）：決定 URL 變動時是否需要人工修改 CI
+   - **`curl --fail` 選項**：決定 API 匯入失敗時 CI 是否靜默繼續而非中止
+   - **`.gitignore` 例外規則順序**：決定 CSV 是否被正確 track 進 git，供 Docker COPY 使用
 
 6. **新手可能常犯的誤區？**
    - `.gitignore` 例外規則 `!data/raw/*.csv` 必須在 `data/raw/*` **之後**，寫在前面無效。

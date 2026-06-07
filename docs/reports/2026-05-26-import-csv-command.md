@@ -16,13 +16,13 @@
    - **Result Pattern vs 例外**：`ImportCsvResult` 回傳 `SuccessCount / FailedCount`，不拋例外，讓呼叫端可以決定失敗時的行為（部分成功可繼續）。
    - **介面隔離**：`ImportCsvCommandHandler` 只依賴 `ICsvParser` 和 `ICrimeRepository`，不知道底層是 CSV 還是 Excel，是 PostgreSQL 還是 InMemory。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `ImportCsvCommand.FilePath` | 容器內 CSV 路徑，如 `/app/data/raw/car.csv` |
-   | `ImportCsvCommand.CaseType` | 決定此 CSV 屬於哪類竊盜（1=住宅, 2=汽車...） |
-   | `ImportCsvResult.SuccessCount` | 成功匯入筆數，CI 用來判斷匯入是否有效 |
+   | CaseType 是否正確傳遞給 Parser | 決定匯入的案件是否被分類到正確的竊盜類型 |
+   | 批次寫入 vs 逐筆寫入 | 決定效能與 transaction 一致性（部分成功是否可能） |
+   | ICsvParser 以介面注入 vs 直接 new | 決定測試時是否能替換假實作 |
 
 6. **新手可能常犯的誤區？**
    - `Handler` 直接 `new CsvParser(...)` 而非注入 `ICsvParser`，導致無法在測試中替換假實作。

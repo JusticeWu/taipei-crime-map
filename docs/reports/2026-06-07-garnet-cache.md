@@ -42,14 +42,13 @@
 
 ---
 
-## 5. 核心的變數是什麼？
+## 5. 核心的變因是什麼？（影響結果的關鍵因素）
 
-| 變數 | 說明 |
+| 變因 | 影響 |
 |------|------|
-| `cacheKey` | `crimes:filter:{CaseType}:{DistrictName}:{YearFrom}:{YearTo}:{RawTimeSlot}`，決定哪些查詢共用快取 |
-| `CacheDuration` | `TimeSpan.FromMinutes(30)`，快取存活時間 |
-| `cachedBytes` | `byte[]?`，從 Redis 取回的序列化資料；`null` 代表快取未命中 |
-| `ConnectionStrings__Redis` | 連線字串，格式為 `host:port`（如 `localhost:6379`） |
+| Cache Key 組成（包含所有篩選條件） | 決定不同查詢是否誤用同一份快取 |
+| TTL 長短（30分鐘） | 決定資料新鮮度與 DB 壓力之間的平衡 |
+| 序列化型別一致性（存什麼型別，取回也要反序列化成同型別） | 決定 Redis 資料能否正確還原為 C# 物件 |
 
 ---
 

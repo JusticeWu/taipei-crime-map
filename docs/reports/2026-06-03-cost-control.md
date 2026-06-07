@@ -16,13 +16,13 @@
    - **BatchDelayMs**：每次 API 呼叫中間等一下（50ms），就像一個一個敲門而不是同時敲 100 扇門，避免被管理員（Google）封鎖。
    - **Options Pattern**：`GoogleMapsOptions` 用 `IOptions<T>` 注入設定，讓設定有強型別、可驗證，比 `IConfiguration["GoogleMaps:ApiKey"]` 更安全。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `GoogleMapsOptions.DailyQuotaLimit` | 每日最大 API 呼叫次數（預設 100） |
-   | `GoogleMapsOptions.BatchDelayMs` | 每次呼叫間隔毫秒（預設 50ms） |
-   | `_dailyCallCount` | Interlocked 計數器，追蹤今日已呼叫次數 |
+   | DailyQuotaLimit 的設定值 | 決定一次 CI 匯入是否超過 Google Maps 免費額度 |
+   | BatchDelayMs 的長短 | 決定是否觸發 Google Maps QPM（每分鐘上限）限制 |
+   | 計數器的執行緒安全（Interlocked vs int++） | 決定並發呼叫時配額計數是否準確 |
 
 6. **新手可能常犯的誤區？**
    - 配額計數器用 `int` 而非 `Interlocked.Increment`，多執行緒並發時計數不準確。

@@ -16,13 +16,13 @@
    - **Leaflet Heatmap vs CircleMarker**：熱力圖看整體密度分佈，點位圖看個別案件位置，兩者用同一份資料，切換模式只需清除圖層再重繪。
    - **`UseStaticFiles` 順序**：靜態檔案 middleware 必須在 `MapControllers` 之前註冊，否則靜態請求會被 API routing 攔截。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `_lastData` | app.js 快取最後一次 API 回應，切換地圖模式時不重新 fetch |
-   | `mode`（`'heat'`｜`'point'`） | 地圖顯示模式，由 radio toggle 控制 |
-   | `window.mapModule` / `window.chartModule` | 三個模組的唯一整合點 |
+   | 共享介面合約的明確程度（`window.mapModule` 規格是否預先定義） | 決定多模組並行開發後能否正確整合 |
+   | 地圖切換模式時是否重新 fetch（`_lastData` 快取策略） | 決定切換 heat/point 時的效能與一致性 |
+   | `UseStaticFiles` 在 `MapControllers` 之前的順序 | 決定靜態檔案請求是否被 API routing 攔截 |
 
 6. **新手可能常犯的誤區？**
    - `UseStaticFiles` 加在 `MapControllers` 之後，靜態檔案請求會被 404

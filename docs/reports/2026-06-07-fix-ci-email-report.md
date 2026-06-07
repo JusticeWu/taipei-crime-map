@@ -15,13 +15,13 @@
    - **`git diff HEAD~1 HEAD --name-only`**：只列出本次 push 變動的檔案路徑，不含內容，用來找「這次動了哪些報告」。
    - **`sort -r | head -1`**：日期前綴的檔名按倒序排列，第一個就是最新日期的報告，不需要 `ls -t`（按修改時間，CI 環境不可靠）。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `REPORT` | 本次 push 變更的報告路徑（`git diff HEAD~1 HEAD`取得） |
-   | `REPORT_NAME` | `basename "$REPORT" .md`，用於 email subject |
-   | `fetch-depth: 2` | Checkout 設定，確保 `HEAD~1` 可存取 |
+   | 取變更檔案的方式（`git diff HEAD~1 HEAD` vs `git show HEAD`） | 決定 merge commit 情境下能否找到正確的報告 |
+   | `fetch-depth` 設定（2 vs 1） | 決定 `HEAD~1` 是否可存取（shallow clone 限制） |
+   | 檔名排序方式（`sort -r` vs `ls -t`） | 決定日期最新的報告是否被選到（CI 環境 mtime 不可靠） |
 
 6. **新手可能常犯的誤區？**
    - 用 `git show HEAD` 找變更檔案：merge commit 本身不含檔案變更，導致回傳空值或錯誤檔案。

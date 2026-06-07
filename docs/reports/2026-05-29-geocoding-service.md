@@ -16,13 +16,13 @@
    - **Polly 重試策略**：網路請求偶爾失敗很正常，自動重試 3 次比直接報錯更友善，就像門沒開就多敲幾下。
    - **每日配額控制**：Google Maps API 有免費額度上限，超過就計費；用計數器限制每日最多呼叫 N 次，避免帳單意外暴增。
 
-5. **核心的變數是什麼？**
+5. **核心的變因是什麼？（影響結果的關鍵因素）**
 
-   | 變數 | 說明 |
+   | 變因 | 影響 |
    |------|------|
-   | `GoogleMapsOptions.ApiKey` | Google Maps API 金鑰，從 appsettings 讀取 |
-   | `GoogleMapsOptions.DailyQuotaLimit` | 每日最大 API 呼叫次數（預設 100） |
-   | `GoogleMapsOptions.BatchDelayMs` | 每次呼叫間隔（ms），避免觸發 rate limit |
+   | API Key 存放位置（appsettings vs 硬碼） | 決定金鑰是否洩漏進 git 歷史 |
+   | 每日配額上限（DailyQuotaLimit） | 決定一次批次匯入是否產生意外費用 |
+   | HttpClient 建立方式（Factory vs new） | 決定高並發時是否發生 socket exhaustion |
 
 6. **新手可能常犯的誤區？**
    - 直接 `new HttpClient()` 在每次請求時建立，造成 socket exhaustion（too many open sockets）。
