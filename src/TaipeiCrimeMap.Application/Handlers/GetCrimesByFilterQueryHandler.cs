@@ -76,11 +76,18 @@ public class GetCrimesByFilterQueryHandler
         var totalPages = query.PageSize > 0 ? (int)Math.Ceiling((double)total / query.PageSize) : 0;
         var result = new PagedResult<TheftCaseDto>(items, total, query.Page, query.PageSize, totalPages);
 
-        await _cache.SetAsync(
-            cacheKey,
-            JsonSerializer.SerializeToUtf8Bytes(result),
-            new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration },
-            cancellationToken);
+        try
+        {
+            await _cache.SetAsync(
+                cacheKey,
+                JsonSerializer.SerializeToUtf8Bytes(result),
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheDuration },
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "快取寫入失敗，忽略繼續：{CacheKey}", cacheKey);
+        }
 
         return result;
     }
