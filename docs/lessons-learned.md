@@ -39,3 +39,10 @@
 - 正確做法：快取失敗時 log warning 並 fallthrough 到資料庫，結果仍正常回傳
 - 相關模式：所有外部依賴（快取、第三方 API）都應有 graceful fallback，
   不能讓外部依賴的失敗影響核心功能
+
+## L006：變更未被正確 commit 導致部分修正遺失
+- 問題：SetAsync 的 try/catch 被認為已加入，但實際上沒有 commit
+- 根本原因：沒有在 commit 前確認所有預期的變更都已包含
+- 正確做法：commit 前執行 git diff 確認所有變更，
+  任務完成前自我檢查清單加入「git diff 確認變更完整」
+- 相關模式：多步驟修改時，每個步驟完成後立即 commit，不要累積
