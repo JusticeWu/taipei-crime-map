@@ -1,3 +1,5 @@
+<!-- 此檔案必須放在專案根目錄 D:\SourceCode\SiteProjects\taipei-crime-map\ -->
+
 # 台北市治安地圖 — Agent 工作說明
 
 ## 開始任務前必須讀取
