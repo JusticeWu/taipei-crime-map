@@ -117,13 +117,26 @@
 
       // ── Page 1 ────────────────────────────────────────────────────────────
       baseParams.set('page', '1');
-      const resp1 = await fetch(`${API_BASE}?${baseParams}`, { headers: { Accept: 'application/json' } });
-      if (!resp1.ok) throw new Error(`API ${resp1.status}`);
+      const url1 = `${API_BASE}?${baseParams}`;
+      console.log('[app] fetching page 1:', url1);
+
+      const resp1 = await fetch(url1, { headers: { Accept: 'application/json' } });
+      if (!resp1.ok) {
+        const body = await resp1.text().catch(() => '');
+        throw new Error(`API ${resp1.status}: ${body}`);
+      }
 
       const first = await resp1.json();
+      console.log('[app] page 1 response:', JSON.stringify(first).slice(0, 200));
+
       if (generation !== _queryGeneration) return;
 
-      const { data: firstData, total, totalPages } = first;
+      // 防禦：確保欄位存在
+      const firstData  = Array.isArray(first.data)   ? first.data   : [];
+      const total      = typeof first.total      === 'number' ? first.total      : firstData.length;
+      const totalPages = typeof first.totalPages === 'number' ? first.totalPages : 1;
+
+      console.log(`[app] total=${total}, totalPages=${totalPages}, page1 records=${firstData.length}`);
 
       _lastData = _lastData.concat(firstData);
       appendToMap(firstData, mode);
@@ -131,21 +144,24 @@
 
       // ── Pages 2..totalPages ───────────────────────────────────────────────
       for (let page = 2; page <= totalPages; page++) {
-        if (generation !== _queryGeneration) return; // aborted by new query
+        if (generation !== _queryGeneration) return;
 
         baseParams.set('page', String(page));
         const resp = await fetch(`${API_BASE}?${baseParams}`, { headers: { Accept: 'application/json' } });
-        if (!resp.ok) continue;
+        if (!resp.ok) { console.warn(`[app] page ${page} failed:`, resp.status); continue; }
 
         const pageResult = await resp.json();
         if (generation !== _queryGeneration) return;
 
-        _lastData = _lastData.concat(pageResult.data);
-        appendToMap(pageResult.data, mode);
+        const pageData = Array.isArray(pageResult.data) ? pageResult.data : [];
+        _lastData = _lastData.concat(pageData);
+        appendToMap(pageData, mode);
         updateProgress(_lastData.length, total);
       }
 
       // ── Finalize ──────────────────────────────────────────────────────────
+      console.log(`[app] all ${_lastData.length} records loaded`);
+
       if (window.mapModule && typeof window.mapModule.finalizeLoad === 'function') {
         window.mapModule.finalizeLoad(_lastData, mode);
       }
@@ -160,7 +176,7 @@
       }
 
     } catch (err) {
-      console.error('Query failed:', err);
+      console.error('[app] query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
       if (generation === _queryGeneration) {
@@ -180,6 +196,26 @@
     if (window.mapModule && typeof window.mapModule.setProgress === 'function') {
       window.mapModule.setProgress(loaded, total);
     }
+  }
+
+  /* -----------------------------------------------------------------------
+     Year selects — dynamic generation
+  ----------------------------------------------------------------------- */
+  function populateYearSelects() {
+    const MIN_YEAR    = 2015;
+    const currentYear = new Date().getFullYear();
+
+    [elYearFrom, elYearTo].forEach(el => {
+      if (!el) return;
+      // Remove existing dynamic options (keep the first "全部" option)
+      while (el.options.length > 1) el.remove(1);
+      for (let y = MIN_YEAR; y <= currentYear; y++) {
+        const opt = document.createElement('option');
+        opt.value       = String(y);
+        opt.textContent = String(y);
+        el.appendChild(opt);
+      }
+    });
   }
 
   /* -----------------------------------------------------------------------
@@ -207,6 +243,8 @@
     elStatWithCoords  = document.getElementById('stat-with-coords');
     elStatTopDistrict = document.getElementById('stat-top-district');
     elLoadingOverlay  = document.getElementById('loading-overlay');
+
+    populateYearSelects();
 
     if (window.mapModule && typeof window.mapModule.init === 'function') {
       window.mapModule.init('map');
