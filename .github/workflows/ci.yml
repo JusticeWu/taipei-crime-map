@@ -69,7 +69,7 @@ jobs:
   push-to-acr:
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/uat'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/uat' || github.ref == 'refs/heads/main')
 
     steps:
       - name: Checkout
@@ -88,7 +88,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:uat
+            ${{ env.IMAGE_NAME }}:${{ github.ref == 'refs/heads/main' && 'prod' || 'uat' }}
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Smoke test
@@ -133,6 +133,7 @@ jobs:
   deploy-to-uat:
     runs-on: ubuntu-latest
     needs: push-to-acr
+    if: github.ref == 'refs/heads/uat'
 
     steps:
       - name: Checkout
@@ -244,6 +245,130 @@ jobs:
             COLOR="danger"
             EMOJI=":x:"
             MSG="UAT 部署失敗"
+          fi
+          REPORT_NAME="${{ steps.find_report.outputs.report_name }}"
+          RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n報告：$REPORT_NAME\n<$RUN_URL|查看 CI 記錄>\"
+              }]
+            }"
+
+  deploy-to-prod:
+    runs-on: ubuntu-latest
+    needs: push-to-acr
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 2
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update Container App
+        uses: azure/container-apps-deploy-action@v1
+        with:
+          acrName: taipeicrimemap
+          containerAppName: taipei-crime-map-prod
+          resourceGroup: taipei-crime-map-rg
+          imageToDeploy: taipeicrimemap.azurecr.io/taipei-crime-map:${{ github.sha }}
+
+      - name: Check migration logs
+        run: |
+          echo "Waiting 30s for container startup..."
+          sleep 30
+          echo "=== DbUpMigrator logs ==="
+          az containerapp logs show \
+            --name taipei-crime-map-prod \
+            --resource-group taipei-crime-map-rg \
+            --tail 150 \
+            --format text 2>&1 \
+            | grep -iE "migration|migrate|schemaversion|theft_cases|執行|完成|Error" || true
+
+      - name: Import CSV data
+        continue-on-error: true
+        run: |
+          APP_URL=$(az containerapp show \
+            --name taipei-crime-map-prod \
+            --resource-group taipei-crime-map-rg \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          BASE_URL="https://${APP_URL}"
+          echo "Prod URL: $BASE_URL"
+
+          declare -A FILES
+          FILES["residential.csv"]=1
+          FILES["car.csv"]=2
+          FILES["motorcycle.csv"]=3
+          FILES["bicycle.csv"]=4
+          FILES["snatching.csv"]=5
+          FILES["robbery.csv"]=6
+
+          for FILENAME in "${!FILES[@]}"; do
+            CASE_TYPE=${FILES[$FILENAME]}
+            echo "Importing $FILENAME (CaseType=$CASE_TYPE)..."
+            curl --fail --silent --show-error \
+              -X POST "$BASE_URL/api/crime/import" \
+              -H "Content-Type: application/json" \
+              -d "{\"filePath\":\"/app/data/raw/$FILENAME\",\"caseType\":$CASE_TYPE}"
+            echo ""
+          done
+
+      - name: Find latest report
+        id: find_report
+        run: |
+          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
+            | sort -r | head -1)
+
+          if [ -z "$REPORT" ]; then
+            REPORT=$(ls docs/reports/*.md 2>/dev/null | sort -r | head -1)
+          fi
+
+          if [ -z "$REPORT" ]; then
+            echo "report_name=（無報告）" >> $GITHUB_OUTPUT
+            echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
+          else
+            REPORT_NAME=$(basename "$REPORT" .md)
+            echo "report_name=$REPORT_NAME" >> $GITHUB_OUTPUT
+            {
+              echo "content<<EOF"
+              cat "$REPORT"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send email report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "[台北市治安地圖][Prod] 任務報告：${{ steps.find_report.outputs.report_name }}"
+          to: chengyi.ks@gmail.com
+          from: ${{ secrets.GMAIL_USERNAME }}
+          body: ${{ steps.find_report.outputs.content }}
+
+      - name: Notify Slack
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            COLOR="good"
+            EMOJI=":rocket:"
+            MSG="Prod 部署成功"
+          else
+            COLOR="danger"
+            EMOJI=":x:"
+            MSG="Prod 部署失敗"
           fi
           REPORT_NAME="${{ steps.find_report.outputs.report_name }}"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

@@ -53,9 +53,15 @@ tests/
 scripts/          ← DbUp SQL scripts
 
 ## 分支策略（GitLab Flow）
-feature/xxx → PR → uat → 自動部署 UAT → prod
+feature/xxx → PR → uat → 自動部署 UAT → PR → main → 自動部署 Prod
 
-每個功能建立獨立分支，完成後開 PR merge 進 uat。
+每個功能建立獨立分支，完成後開 PR merge 進 uat；
+UAT 驗證通過後，從 uat 開 PR merge 進 main 觸發 Prod 部署。
+
+| 分支 | 環境 | Container App         | 觸發條件       |
+|------|------|-----------------------|----------------|
+| uat  | UAT  | taipei-crime-map-uat  | push to uat    |
+| main | Prod | taipei-crime-map-prod | push to main   |
 
 ## Commit 規範（Conventional Commits）
 - feat：新功能
