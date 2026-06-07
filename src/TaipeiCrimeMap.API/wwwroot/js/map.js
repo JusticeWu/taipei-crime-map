@@ -6,7 +6,7 @@
  *   update(data, mode)                 — full re-render (used by mode toggle)
  *   startProgressiveLoad(mode)         — clear layers, init empty layer for mode
  *   appendData(data, mode)             — add a page of data incrementally
- *   finalizeLoad(allData, mode)        — add district labels after all pages loaded
+ *   finalizeLoad(allData, mode)        — add district bubble markers after all pages loaded
  *   setProgress(loaded, total)         — update top-left progress indicator
  *   clearProgress()                    — remove progress indicator
  */
@@ -64,6 +64,22 @@
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
 
+  // District centroids — used for fallback markers when exact coords are unavailable
+  const DISTRICT_CENTROIDS = {
+    '中正區': [25.0328, 121.5199],
+    '大同區': [25.0637, 121.5131],
+    '中山區': [25.0694, 121.5326],
+    '松山區': [25.0499, 121.5776],
+    '大安區': [25.0266, 121.5432],
+    '萬華區': [25.0333, 121.4981],
+    '信義區': [25.0330, 121.5654],
+    '士林區': [25.0934, 121.5241],
+    '北投區': [25.1317, 121.4988],
+    '內湖區': [25.0831, 121.5874],
+    '南港區': [25.0549, 121.6076],
+    '文山區': [24.9989, 121.5699],
+  };
+
   // ---------------------------------------------------------------------------
   // Internal state
   // ---------------------------------------------------------------------------
@@ -71,10 +87,11 @@
   let _map              = null;
   let _heatLayer        = null;
   let _markerLayer      = null;
+  let _fallbackLayer    = null;   // district bubble markers for null-coord data
   let _legendCtrl       = null;
   let _districtLabelLayer = null;
   let _progressCtrl     = null;
-  let _baseLayers       = {};   // { label: L.tileLayer } for L.control.layers
+  let _baseLayers       = {};
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -131,6 +148,44 @@
     _markerLayer.addTo(_map);
   }
 
+  // District bubble markers — shown for items without exact coordinates.
+  // Groups all data by district and places one interactive bubble per district.
+  function buildDistrictFallbackLayer(data) {
+    if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
+
+    const counts = {};
+    data.forEach(item => {
+      if (item.district) counts[item.district] = (counts[item.district] || 0) + 1;
+    });
+
+    if (Object.keys(counts).length === 0) return;
+
+    _fallbackLayer = L.layerGroup();
+    Object.entries(DISTRICT_CENTROIDS).forEach(([district, latlng]) => {
+      const count = counts[district] || 0;
+      if (count === 0) return;
+
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="district-bubble">` +
+              `<div class="db-count">${count.toLocaleString()}</div>` +
+              `<div class="db-name">${escapeHtml(district)}</div>` +
+              `</div>`,
+        iconAnchor: [28, 28],
+        iconSize:   [56, 56],
+      });
+
+      L.marker(latlng, { icon, interactive: true })
+        .bindPopup(
+          `<strong>${escapeHtml(district)}</strong><br>` +
+          `案件數：${count.toLocaleString()} 筆`,
+          { maxWidth: 180 }
+        )
+        .addTo(_fallbackLayer);
+    });
+    _fallbackLayer.addTo(_map);
+  }
+
   // ---------------------------------------------------------------------------
   // Legend
   // ---------------------------------------------------------------------------
@@ -162,42 +217,8 @@
   }
 
   // ---------------------------------------------------------------------------
-  // District labels
+  // District labels (legacy text — kept for cleanup; replaced by bubble markers)
   // ---------------------------------------------------------------------------
-
-  const DISTRICT_CENTROIDS = {
-    '松山區': [25.0504, 121.5778], '信義區': [25.0326, 121.5697],
-    '大安區': [25.0267, 121.5441], '中山區': [25.0631, 121.5326],
-    '中正區': [25.0430, 121.5197], '大同區': [25.0637, 121.5119],
-    '萬華區': [25.0355, 121.4993], '文山區': [24.9964, 121.5705],
-    '南港區': [25.0546, 121.6074], '內湖區': [25.0830, 121.5871],
-    '士林區': [25.0934, 121.5193], '北投區': [25.1319, 121.4986],
-  };
-
-  function computeDistrictCounts(data) {
-    return data.reduce((acc, item) => {
-      if (item.district) acc[item.district] = (acc[item.district] || 0) + 1;
-      return acc;
-    }, {});
-  }
-
-  function addDistrictLabels(counts) {
-    _districtLabelLayer = L.layerGroup();
-    Object.entries(DISTRICT_CENTROIDS).forEach(([district, latlng]) => {
-      const count = counts[district] || 0;
-      if (count === 0) return;
-      const icon = L.divIcon({
-        className: '',
-        html: `<div class="district-label">` +
-              `<div class="district-name">${escapeHtml(district)}</div>` +
-              `<div class="district-count">${count}</div>` +
-              `</div>`,
-        iconAnchor: [40, 20], iconSize: [80, 40],
-      });
-      L.marker(latlng, { icon, interactive: false }).addTo(_districtLabelLayer);
-    });
-    _districtLabelLayer.addTo(_map);
-  }
 
   function removeDistrictLabels() {
     if (_districtLabelLayer) { _map.removeLayer(_districtLabelLayer); _districtLabelLayer = null; }
@@ -225,8 +246,9 @@
   // ---------------------------------------------------------------------------
 
   function clearLayers() {
-    if (_heatLayer)   { _map.removeLayer(_heatLayer);   _heatLayer   = null; }
-    if (_markerLayer) { _map.removeLayer(_markerLayer); _markerLayer = null; }
+    if (_heatLayer)     { _map.removeLayer(_heatLayer);     _heatLayer     = null; }
+    if (_markerLayer)   { _map.removeLayer(_markerLayer);   _markerLayer   = null; }
+    if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
     removeLegend();
   }
 
@@ -250,9 +272,10 @@
       .legend-dot   { display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0; border:1px solid rgba(255,255,255,.25); }
       .legend-label { white-space:nowrap; }
 
-      .district-label { text-align:center; pointer-events:none; user-select:none; }
-      .district-name  { font-size:11px; font-weight:bold; color:#fff; text-shadow:0 0 4px #000, 0 0 4px #000; line-height:1.2; }
-      .district-count { font-size:13px; font-weight:bold; color:#f1c40f; text-shadow:0 0 4px #000, 0 0 4px #000; line-height:1.2; }
+      .district-bubble { width:56px; height:56px; border-radius:50%; background:rgba(44,62,80,.88); border:2px solid rgba(255,255,255,.75); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s; }
+      .district-bubble:hover { transform:scale(1.12); }
+      .db-count { font-size:13px; font-weight:bold; color:#f1c40f; line-height:1.25; }
+      .db-name  { font-size:9px; color:rgba(255,255,255,.9); line-height:1.2; text-align:center; }
 
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
     `;
@@ -302,12 +325,12 @@
 
       if (mode === 'heat') {
         buildHeatLayer(data);
-        addDistrictLabels(computeDistrictCounts(data));
       } else if (mode === 'point') {
         buildMarkerLayer(data);
         addLegend();
-        addDistrictLabels(computeDistrictCounts(data));
       }
+
+      buildDistrictFallbackLayer(data);
 
       _map.setView(center, zoom, { animate: false });
     },
@@ -345,11 +368,10 @@
       }
     },
 
-    // Called once after all pages loaded: add district labels
+    // Called once after all pages loaded: add district bubble markers
     finalizeLoad(allData, mode) {
       if (!_map) return;
-      removeDistrictLabels();
-      addDistrictLabels(computeDistrictCounts(allData));
+      buildDistrictFallbackLayer(allData);
     },
 
     // Show / update progress indicator (top-left)

@@ -4,7 +4,7 @@
  * Responsibilities:
  *  1. Read filter values from the UI
  *  2. Progressive GET /api/crime?page=N&pageSize=200
- *  3. Append each page to the map immediately
+ *  3. Pages 2+ are fetched in parallel; each renders immediately on arrival
  *  4. Show loading progress (top-left of map)
  *  5. Update stats panel and charts after all pages load
  *  6. Re-render on display-mode toggle using cached data
@@ -129,21 +129,28 @@
       appendToMap(firstData, mode);
       updateProgress(_lastData.length, total);
 
-      // ── Pages 2..totalPages ───────────────────────────────────────────────
-      for (let page = 2; page <= totalPages; page++) {
-        if (generation !== _queryGeneration) return; // aborted by new query
-
-        baseParams.set('page', String(page));
-        const resp = await fetch(`${API_BASE}?${baseParams}`, { headers: { Accept: 'application/json' } });
-        if (!resp.ok) continue;
-
-        const pageResult = await resp.json();
-        if (generation !== _queryGeneration) return;
-
-        _lastData = _lastData.concat(pageResult.data);
-        appendToMap(pageResult.data, mode);
-        updateProgress(_lastData.length, total);
+      // ── Pages 2..totalPages — fetch all in parallel, render each on arrival
+      if (totalPages > 1) {
+        const tasks = [];
+        for (let page = 2; page <= totalPages; page++) {
+          const params = new URLSearchParams(baseParams);
+          params.set('page', String(page));
+          tasks.push(
+            fetch(`${API_BASE}?${params}`, { headers: { Accept: 'application/json' } })
+              .then(r => r.ok ? r.json() : null)
+              .then(pageResult => {
+                if (!pageResult || generation !== _queryGeneration) return;
+                _lastData = _lastData.concat(pageResult.data);
+                appendToMap(pageResult.data, mode);
+                updateProgress(_lastData.length, total);
+              })
+              .catch(err => console.warn(`Page fetch failed:`, err))
+          );
+        }
+        await Promise.allSettled(tasks);
       }
+
+      if (generation !== _queryGeneration) return;
 
       // ── Finalize ──────────────────────────────────────────────────────────
       if (window.mapModule && typeof window.mapModule.finalizeLoad === 'function') {
