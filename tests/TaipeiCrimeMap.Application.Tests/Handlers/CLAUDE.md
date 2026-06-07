@@ -65,6 +65,14 @@ feature/xxx → PR → uat → 自動部署 UAT → prod
 
 > **⚠️ 第7項是必須完成的，不可省略。每份任務報告都必須包含 Mermaid 流程圖或結構圖。**
 
+8. 分支與部署記錄
+   - 開發分支：feature/xxx
+   - PR 編號：#N
+   - Merge 到：uat
+   - Merge 時間：YYYY-MM-DD HH:MM
+   - CI 結果：✅ 成功 / ❌ 失敗
+   - UAT 部署：✅ 成功 / ❌ 失敗
+
 ## 配額耗盡時的處理
 在停止前必須把進度寫入 PROGRESS.md，格式：
 
