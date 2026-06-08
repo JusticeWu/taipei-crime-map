@@ -371,14 +371,42 @@
       }, 0);
     },
 
-    // Apply heatmap data from /api/crime/heatmap (12 district aggregation points).
+    // Apply heatmap API data: builds heat layer + district bubble markers together.
     // Weight is normalised to [0,1] so Leaflet.heat scales colours correctly.
+    // Replaces any existing heat layer and fallback bubbles.
     setHeatmap(points) {
       if (!_map || !Array.isArray(points) || points.length === 0) return;
+
+      // Heat layer
       if (_heatLayer) { _map.removeLayer(_heatLayer); _heatLayer = null; }
       const maxWeight = points.reduce((m, p) => Math.max(m, p.weight || 0), 1);
-      const heatPoints = points.map(p => [p.lat, p.lng, p.weight / maxWeight]);
-      _heatLayer = L.heatLayer(heatPoints, HEAT_OPTIONS).addTo(_map);
+      _heatLayer = L.heatLayer(
+        points.map(p => [p.lat, p.lng, p.weight / maxWeight]),
+        HEAT_OPTIONS
+      ).addTo(_map);
+
+      // District bubble markers from aggregated data
+      if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
+      _fallbackLayer = L.layerGroup();
+      points.forEach(p => {
+        if (!p.district || !(p.weight > 0)) return;
+        const icon = L.divIcon({
+          className: '',
+          html: `<div class="district-bubble">` +
+                `<div class="db-count">${p.weight.toLocaleString()}</div>` +
+                `<div class="db-name">${escapeHtml(p.district)}</div>` +
+                `</div>`,
+          iconAnchor: [28, 28],
+          iconSize:   [56, 56],
+        });
+        L.marker([p.lat, p.lng], { icon, interactive: true })
+          .bindPopup(
+            `<strong>${escapeHtml(p.district)}</strong><br>案件數：${p.weight.toLocaleString()} 筆`,
+            { maxWidth: 180 }
+          )
+          .addTo(_fallbackLayer);
+      });
+      _fallbackLayer.addTo(_map);
     },
 
     // Called once after all pages loaded: add district bubble markers.

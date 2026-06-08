@@ -3,11 +3,11 @@
  *
  * Responsibilities:
  *  1. Read filter values from the UI
- *  2. Progressive GET /api/crime?page=N&pageSize=200
- *  3. Pages 2+ are fetched in parallel; each renders immediately on arrival
+ *  2. Heat mode: GET /api/crime/heatmap only (12 district points, instant)
+ *  3. Point mode: parallel GET /api/crime?page=N&pageSize=200 + heatmap in background
  *  4. Show loading progress (top-left of map)
- *  5. Update stats panel and charts after all pages load
- *  6. Re-render on display-mode toggle using cached data
+ *  5. Update stats panel and charts after load
+ *  6. Smart mode toggle: switches display without re-fetching when data is cached
  */
 
 (function () {
@@ -27,7 +27,7 @@
   /* -----------------------------------------------------------------------
      State
   ----------------------------------------------------------------------- */
-  let _lastData        = [];   // all accumulated records for current query
+  let _lastData        = [];   // paged individual records (point mode)
   let _lastHeatmapData = null; // cached /api/crime/heatmap response
   let _queryGeneration = 0;    // incremented on each new query to abort stale loads
 
@@ -99,6 +99,15 @@
     return { total: data.length, withCoords, topDistrict };
   }
 
+  function computeStatsFromHeatmap(data) {
+    if (!Array.isArray(data) || data.length === 0)
+      return { total: 0, withCoords: 0, topDistrict: '—' };
+
+    const total = data.reduce((s, p) => s + (p.weight || 0), 0);
+    const top   = data.reduce((a, b) => (a.weight || 0) >= (b.weight || 0) ? a : b, data[0]);
+    return { total, withCoords: 0, topDistrict: top.district || '—' };
+  }
+
   function renderStats(stats) {
     if (elStatTotal)       elStatTotal.textContent       = stats.total.toLocaleString();
     if (elStatWithCoords)  elStatWithCoords.textContent  = stats.withCoords.toLocaleString();
@@ -106,7 +115,56 @@
   }
 
   /* -----------------------------------------------------------------------
-     Progressive query
+     Heat mode query — calls /api/crime/heatmap only (12 district points)
+  ----------------------------------------------------------------------- */
+  async function queryHeatmapOnly() {
+    const generation = ++_queryGeneration;
+
+    setLoading(true);
+    if (elBtnQuery) elBtnQuery.disabled = true;
+    setToggleDisabled(true);
+
+    _lastData        = [];
+    _lastHeatmapData = null;
+
+    if (window.mapModule && typeof window.mapModule.startProgressiveLoad === 'function') {
+      window.mapModule.startProgressiveLoad('heat');
+    }
+
+    try {
+      const resp = await fetch(`${API_BASE}/heatmap?${buildQueryParams()}`,
+        { headers: { Accept: 'application/json' } });
+      if (!resp.ok) throw new Error(`API ${resp.status}`);
+
+      const data = await resp.json();
+      if (generation !== _queryGeneration) return;
+
+      _lastHeatmapData = data;
+
+      if (window.mapModule && typeof window.mapModule.setHeatmap === 'function') {
+        window.mapModule.setHeatmap(data);
+      }
+      if (window.mapModule && typeof window.mapModule.clearProgress === 'function') {
+        window.mapModule.clearProgress();
+      }
+
+      renderStats(computeStatsFromHeatmap(data));
+
+    } catch (err) {
+      console.error('Heatmap query failed:', err);
+      renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
+    } finally {
+      if (generation === _queryGeneration) {
+        setLoading(false);
+        if (elBtnQuery) elBtnQuery.disabled = false;
+        setToggleDisabled(false);
+      }
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Point mode query — progressive paged load of all individual records.
+     Also fetches /api/crime/heatmap in background so heat mode switch is instant.
   ----------------------------------------------------------------------- */
   async function queryProgressive() {
     const generation = ++_queryGeneration;
@@ -118,27 +176,16 @@
     _lastData        = [];
     _lastHeatmapData = null;
 
-    const mode = getDisplayMode();
-
     if (window.mapModule && typeof window.mapModule.startProgressiveLoad === 'function') {
-      window.mapModule.startProgressiveLoad(mode);
+      window.mapModule.startProgressiveLoad('point');
     }
 
-    // Heat mode: fetch district aggregation from /api/crime/heatmap in parallel.
-    // 12 points only → renders instantly while paged data loads for stats/charts.
-    if (mode === 'heat') {
-      const heatParams = buildQueryParams();
-      fetch(`${API_BASE}/heatmap?${heatParams}`, { headers: { Accept: 'application/json' } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (!data || generation !== _queryGeneration) return;
-          _lastHeatmapData = data;
-          if (window.mapModule && typeof window.mapModule.setHeatmap === 'function') {
-            window.mapModule.setHeatmap(data);
-          }
-        })
-        .catch(err => console.warn('Heatmap fetch failed:', err));
-    }
+    // Fetch heatmap in background so heat mode switch won't require a new request
+    const heatParams = buildQueryParams();
+    fetch(`${API_BASE}/heatmap?${heatParams}`, { headers: { Accept: 'application/json' } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data && generation === _queryGeneration) _lastHeatmapData = data; })
+      .catch(() => {});
 
     try {
       const baseParams = buildQueryParams();
@@ -155,7 +202,7 @@
       const { data: firstData, total, totalPages } = first;
 
       _lastData = _lastData.concat(firstData);
-      appendToMap(firstData, mode);
+      appendToMap(firstData, 'point');
       updateProgress(_lastData.length, total);
 
       // ── Pages 2..totalPages — fetch all in parallel, render each on arrival
@@ -170,10 +217,10 @@
               .then(pageResult => {
                 if (!pageResult || generation !== _queryGeneration) return;
                 _lastData = _lastData.concat(pageResult.data);
-                appendToMap(pageResult.data, mode);
+                appendToMap(pageResult.data, 'point');
                 updateProgress(_lastData.length, total);
               })
-              .catch(err => console.warn(`Page fetch failed:`, err))
+              .catch(err => console.warn('Page fetch failed:', err))
           );
         }
         await Promise.allSettled(tasks);
@@ -183,7 +230,7 @@
 
       // ── Finalize ──────────────────────────────────────────────────────────
       if (window.mapModule && typeof window.mapModule.finalizeLoad === 'function') {
-        window.mapModule.finalizeLoad(_lastData, mode);
+        window.mapModule.finalizeLoad(_lastData, 'point');
       }
       if (window.mapModule && typeof window.mapModule.clearProgress === 'function') {
         window.mapModule.clearProgress();
@@ -204,6 +251,17 @@
         if (elBtnQuery) elBtnQuery.disabled = false;
         setToggleDisabled(false);
       }
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Dispatch query based on current mode
+  ----------------------------------------------------------------------- */
+  function doQuery() {
+    if (getDisplayMode() === 'heat') {
+      queryHeatmapOnly();
+    } else {
+      queryProgressive();
     }
   }
 
@@ -235,17 +293,36 @@
   }
 
   /* -----------------------------------------------------------------------
-     Mode toggle — re-render without re-fetch
+     Mode toggle — smart switch using cached data when available
   ----------------------------------------------------------------------- */
   function onModeChange() {
-    if (!_lastData.length) return;
     const mode = getDisplayMode();
-    if (window.mapModule && typeof window.mapModule.update === 'function') {
-      window.mapModule.update(_lastData, mode);
-    }
-    if (mode === 'heat' && _lastHeatmapData &&
-        window.mapModule && typeof window.mapModule.setHeatmap === 'function') {
-      window.mapModule.setHeatmap(_lastHeatmapData);
+
+    if (mode === 'point') {
+      if (_lastData.length > 0) {
+        // Already have point data — just re-render
+        if (window.mapModule && typeof window.mapModule.update === 'function') {
+          window.mapModule.update(_lastData, 'point');
+        }
+      } else {
+        // No data yet — load it now
+        queryProgressive();
+      }
+    } else { // 'heat'
+      if (_lastHeatmapData) {
+        // Have cached heatmap — re-render without fetching
+        if (window.mapModule) {
+          if (typeof window.mapModule.update === 'function') {
+            window.mapModule.update(_lastData, 'heat');
+          }
+          if (typeof window.mapModule.setHeatmap === 'function') {
+            window.mapModule.setHeatmap(_lastHeatmapData);
+          }
+        }
+      } else {
+        // No heatmap data — fetch it now
+        queryHeatmapOnly();
+      }
     }
   }
 
@@ -273,10 +350,10 @@
 
     populateYearSelects();
 
-    if (elBtnQuery) elBtnQuery.addEventListener('click', queryProgressive);
+    if (elBtnQuery) elBtnQuery.addEventListener('click', doQuery);
     if (elToggleMode) elToggleMode.addEventListener('change', onModeChange);
 
-    queryProgressive();
+    doQuery(); // defaults to heat mode → queryHeatmapOnly() (instant)
   }
 
   if (document.readyState === 'loading') {
