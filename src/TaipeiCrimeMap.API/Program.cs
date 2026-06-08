@@ -35,8 +35,27 @@ if (app.Environment.IsDevelopment())
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();
+
     var migrator = scope.ServiceProvider.GetRequiredService<DbUpMigrator>();
     migrator.MigrateUp();
+
+    // 預熱資料庫連線，避免第一個使用者請求等待冷啟動
+    try
+    {
+        var connStr = scope.ServiceProvider
+            .GetRequiredService<IConfiguration>()
+            .GetConnectionString("DefaultConnection");
+        using var conn = new Microsoft.Data.SqlClient.SqlConnection(connStr);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT 1";
+        cmd.ExecuteScalar();
+        app.Logger.LogInformation("資料庫連線預熱完成");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "資料庫連線預熱失敗，繼續啟動");
+    }
 }
 
 app.UseExceptionHandler();
