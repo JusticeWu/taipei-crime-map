@@ -85,11 +85,11 @@ classDiagram
 
 ## 8. 分支與部署記錄
 - 開發分支：feature/timing-tracker
-- PR 編號：（待建立後補上）
+- PR 編號：#26
 - Merge 到：uat
-- Merge 時間：（待 PR merge 後補上）
-- CI 結果：（待 CI 執行後補上）
-- UAT 部署：（待部署後補上）
+- Merge 時間：2026-06-08 20:08（squash merge，commit b806c1b）
+- CI 結果：✅ 成功（build-and-test、push-to-acr、deploy-to-uat 全綠）
+- UAT 部署：✅ 成功（taipei-crime-map-uat Container App 已更新）
 
 ## 補充：本機驗證限制
 驗收條件第 3、4 項要求啟動 API 並觀察 `[Timing]` log 的真實輸出，需要連線到 Azure SQL Database。本機環境未設定 `ConnectionStrings:DefaultConnection`，且 `docker-compose.yml` 仍是已棄用的 PostgreSQL 設定（架構已於 2026-06-04 遷移至 Azure SQL，見 `docs/decisions.md`），故與使用者確認後，本次略過本機 Runtime 驗證，改以單元測試（已涵蓋 `Track`/`LogSummary` 呼叫時機與空實作不拋例外）作為正確性證明。建議在 UAT 部署後，透過 Container App 的 log stream 觀察 `[Timing]` 輸出格式是否符合預期。
