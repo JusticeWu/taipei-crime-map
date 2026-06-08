@@ -76,3 +76,14 @@
 - 正確做法：uat → main 的 PR merge 一律用 gh pr merge --merge，不加 --delete-branch；
   feature/xxx → uat 才用 gh pr merge --squash --delete-branch
 - 相關模式：長期分支（uat、main）永遠不刪；merge 指令需依「分支是否為長期分支」分流
+
+## L010：Bash session 讀不到 Windows User 層級環境變數 SLACK_WEBHOOK_URL
+- 問題：在 Bash 工具直接執行 CLAUDE.md 範例的 python3 urllib 通知指令，
+  os.environ['SLACK_WEBHOOK_URL'] 拋出 KeyError，通知發送失敗
+- 根本原因：SLACK_WEBHOOK_URL 是設定在 Windows「使用者」層級環境變數，
+  但 Bash 工具啟動的 shell 並未繼承該變數（PowerShell session 才看得到）
+- 正確做法：先用 PowerShell 以 [Environment]::GetEnvironmentVariable(...,'User')
+  取得變數值，於同一個 PowerShell session 中設定 $env:SLACK_WEBHOOK_URL
+  後再執行 python 指令發送；不要直接假設 Bash 能讀到 Windows 使用者環境變數
+- 相關模式：跨 shell（Bash vs PowerShell）環境變數不互通——
+  涉及機密/設定值的指令，先確認執行環境是否能讀到該變數，必要時換到能讀到的 shell
