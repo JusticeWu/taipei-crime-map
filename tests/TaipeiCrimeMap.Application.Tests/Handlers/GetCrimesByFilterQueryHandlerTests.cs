@@ -6,6 +6,7 @@ using Moq;
 using System.Text.Json;
 using TaipeiCrimeMap.Application.DTOs;
 using TaipeiCrimeMap.Application.Handlers;
+using TaipeiCrimeMap.Application.Interfaces;
 using TaipeiCrimeMap.Application.Queries;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Exceptions;
@@ -19,6 +20,7 @@ public class GetCrimesByFilterQueryHandlerTests
     private readonly Mock<ICrimeRepository> _repositoryMock;
     private readonly Mock<IDistributedCache> _cacheMock;
     private readonly IMemoryCache _memoryCache;
+    private readonly Mock<ITimingTracker> _timingMock;
     private readonly GetCrimesByFilterQueryHandler _handler;
 
     public GetCrimesByFilterQueryHandlerTests()
@@ -26,6 +28,8 @@ public class GetCrimesByFilterQueryHandlerTests
         _repositoryMock = new Mock<ICrimeRepository>();
         _cacheMock = new Mock<IDistributedCache>();
         _memoryCache = new MemoryCache(new MemoryCacheOptions());
+        _timingMock = new Mock<ITimingTracker>();
+        _timingMock.Setup(t => t.Track(It.IsAny<string>())).Returns(Mock.Of<IDisposable>());
 
         _cacheMock
             .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
@@ -40,6 +44,7 @@ public class GetCrimesByFilterQueryHandlerTests
             _repositoryMock.Object,
             _cacheMock.Object,
             _memoryCache,
+            _timingMock.Object,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
     }
 
@@ -316,6 +321,7 @@ public class GetCrimesByFilterQueryHandlerTests
             _repositoryMock.Object,
             _cacheMock.Object,
             memoryCacheMock.Object,
+            _timingMock.Object,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         // Act
@@ -372,6 +378,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         var handler = new GetCrimesByFilterQueryHandler(
             _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _timingMock.Object,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();
@@ -426,6 +433,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         var handler = new GetCrimesByFilterQueryHandler(
             _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _timingMock.Object,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();
@@ -473,6 +481,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         var handler = new GetCrimesByFilterQueryHandler(
             _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _timingMock.Object,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();
@@ -523,6 +532,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         var handler = new GetCrimesByFilterQueryHandler(
             _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _timingMock.Object,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();

@@ -52,3 +52,27 @@
 - 根本原因：匯入前沒有檢查資料是否已存在
 - 正確做法：deploy 前先查 record count，> 0 則跳過匯入
 - 相關模式：冪等性（Idempotency）— 重複執行同一操作結果應相同
+
+## L008：docker-compose.yml 與實際架構不一致，導致本機驗證卡住
+- 問題：實作 timing-tracker 時想啟動本機環境驗證 [Timing] log，
+  執行 docker compose up 起了 postgres + garnet，但 API 連不上資料庫
+  （ConnectionString 屬性尚未初始化），最後判斷無法在本機完整驗證
+- 根本原因：docs/decisions.md 記載 2026-06-04 已將資料庫從 PostgreSQL
+  遷移到 Azure SQL Database（程式改用 Microsoft.Data.SqlClient），
+  但 docker-compose.yml 仍停留在舊架構（postgres image），
+  CLAUDE.md 的「技術棧」說明也還寫著「PostgreSQL + Dapper」未同步更新
+- 正確做法：架構決策變更時，需同步更新 docker-compose.yml、CLAUDE.md
+  技術棧描述等周邊文件，避免後續任務誤判本機環境可直接驗證；
+  本機若要連 Azure SQL，應在 README 或 decisions.md 註明連線字串
+  取得方式（user-secrets / 環境變數），而不是留下會誤導的本機 compose 設定
+- 相關模式：文件與架構需同步更新（Documentation Drift）—
+  決策記錄變更時，連帶檢查所有引用舊架構的設定檔與說明文件
+
+## L009：uat 長期分支被 gh pr merge --delete-branch 自動刪除
+- 問題：merge uat → main 的 PR 時使用了 --delete-branch，導致 uat 被刪除，
+  後續 PR 無法以 uat 為 base
+- 根本原因：--delete-branch 對 feature/xxx 這種一次性分支是正確做法，
+  但不應該套用在 uat、main 這種對應永久環境的長期分支上
+- 正確做法：uat → main 的 PR merge 一律用 gh pr merge --merge，不加 --delete-branch；
+  feature/xxx → uat 才用 gh pr merge --squash --delete-branch
+- 相關模式：長期分支（uat、main）永遠不刪；merge 指令需依「分支是否為長期分支」分流
