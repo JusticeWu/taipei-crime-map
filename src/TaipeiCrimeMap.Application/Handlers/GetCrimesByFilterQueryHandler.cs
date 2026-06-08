@@ -62,21 +62,29 @@ public class GetCrimesByFilterQueryHandler
         var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
 
         // L1: MemoryCache（1 分鐘）
+        // 注意：LogSummary() 必須在 using 區塊結束（StageTimer.Dispose 寫入 _records）之後才能呼叫，
+        // 否則命中時 _records 還是空的，LogSummary 會直接略過不輸出任何內容
+        PagedResult<TheftCaseDto>? l1Result = null;
         using (_timing.Track("L1-Cache"))
         {
             try
             {
-                if (_memoryCache.TryGetValue(cacheKey, out PagedResult<TheftCaseDto>? l1Result) && l1Result is not null)
+                if (_memoryCache.TryGetValue(cacheKey, out PagedResult<TheftCaseDto>? cached) && cached is not null)
                 {
-                    _logger.LogInformation("L1 快取命中：{CacheKey}", cacheKey);
-                    _timing.LogSummary();
-                    return l1Result;
+                    l1Result = cached;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "L1 快取讀取失敗，繼續往下：{CacheKey}", cacheKey);
             }
+        }
+
+        if (l1Result is not null)
+        {
+            _logger.LogInformation("L1 快取命中：{CacheKey}", cacheKey);
+            _timing.LogSummary();
+            return l1Result;
         }
 
         // L2: Garnet / DistributedCache（30 分鐘）
