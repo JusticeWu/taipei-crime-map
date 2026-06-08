@@ -93,6 +93,10 @@
   let _progressCtrl     = null;
   let _baseLayers       = {};
 
+  // Render queue: ensures one page of markers is added per animation frame
+  let _renderQueue  = [];
+  let _renderRafId  = null;
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -242,6 +246,35 @@
   });
 
   // ---------------------------------------------------------------------------
+  // Render queue — one page of markers per animation frame
+  // ---------------------------------------------------------------------------
+
+  function drainOneFromQueue() {
+    if (_renderQueue.length === 0) { _renderRafId = null; return; }
+
+    const { data } = _renderQueue.shift();
+    if (_markerLayer) {
+      data.filter(hasCoords).forEach(item => {
+        const color  = colorForType(item.caseType);
+        const marker = L.circleMarker([item.latitude, item.longitude], {
+          radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+        });
+        marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
+        _markerLayer.addLayer(marker);
+      });
+    }
+
+    _renderRafId = _renderQueue.length > 0
+      ? requestAnimationFrame(drainOneFromQueue)
+      : null;
+  }
+
+  function clearRenderQueue() {
+    _renderQueue = [];
+    if (_renderRafId) { cancelAnimationFrame(_renderRafId); _renderRafId = null; }
+  }
+
+  // ---------------------------------------------------------------------------
   // Layer cleanup
   // ---------------------------------------------------------------------------
 
@@ -249,6 +282,7 @@
     if (_heatLayer)     { _map.removeLayer(_heatLayer);     _heatLayer     = null; }
     if (_markerLayer)   { _map.removeLayer(_markerLayer);   _markerLayer   = null; }
     if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
+    clearRenderQueue();
     removeLegend();
   }
 
@@ -350,25 +384,17 @@
     },
 
     // Add one page of data without clearing existing layers.
-    // Heat mode: no-op — all points are rendered at once in finalizeLoad.
-    // Point mode: deferred via setTimeout(0) so the browser can repaint between pages.
+    // Heat mode: no-op — heatmap rendered via setHeatmap().
+    // Point mode: enqueued and rendered one page per requestAnimationFrame so the
+    // browser repaints between pages and the user sees markers appear progressively.
     appendData(data, mode) {
       if (!_map || !Array.isArray(data)) return;
-      if (mode === 'heat') return; // heat collected by app.js, rendered in finalizeLoad
+      if (mode === 'heat') return;
 
-      setTimeout(() => {
-        const coordData = data.filter(hasCoords);
-        if (mode === 'point' && _markerLayer) {
-          coordData.forEach(item => {
-            const color  = colorForType(item.caseType);
-            const marker = L.circleMarker([item.latitude, item.longitude], {
-              radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
-            });
-            marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
-            _markerLayer.addLayer(marker);
-          });
-        }
-      }, 0);
+      _renderQueue.push({ data });
+      if (!_renderRafId) {
+        _renderRafId = requestAnimationFrame(drainOneFromQueue);
+      }
     },
 
     // Apply heatmap API data: builds heat layer + district bubble markers together.
