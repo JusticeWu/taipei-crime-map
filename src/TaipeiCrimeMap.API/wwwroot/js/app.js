@@ -163,6 +163,43 @@
   }
 
   /* -----------------------------------------------------------------------
+     sessionStorage cache for point-mode data
+     key: crimes:{caseType}:{districtName}:{yearFrom}:{yearTo}
+  ----------------------------------------------------------------------- */
+  const CACHE_PREFIX = 'crimes:';
+
+  function buildCacheKey() {
+    const p = buildQueryParams();
+    return CACHE_PREFIX +
+      (p.get('caseType')     || '') + ':' +
+      (p.get('districtName') || '') + ':' +
+      (p.get('yearFrom')     || '') + ':' +
+      (p.get('yearTo')       || '');
+  }
+
+  function readFromCache(key) {
+    try {
+      const raw = sessionStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  }
+
+  function writeToCache(key, data) {
+    try {
+      // Remove other crime cache entries first to stay within ~5 MB limit
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith(CACHE_PREFIX) && k !== key) {
+          sessionStorage.removeItem(k);
+        }
+      }
+      sessionStorage.setItem(key, JSON.stringify(data));
+    } catch {
+      // Quota exceeded or serialisation error — ignore, fall through to normal API
+    }
+  }
+
+  /* -----------------------------------------------------------------------
      Point mode query — progressive paged load of all individual records.
      Also fetches /api/crime/heatmap in background so heat mode switch is instant.
   ----------------------------------------------------------------------- */
@@ -186,6 +223,29 @@
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data && generation === _queryGeneration) _lastHeatmapData = data; })
       .catch(() => {});
+
+    // ── sessionStorage cache check ────────────────────────────────────────
+    const cacheKey = buildCacheKey();
+    const cached = readFromCache(cacheKey);
+    if (cached && cached.length > 0 && generation === _queryGeneration) {
+      _lastData = cached;
+      // Queue cached data as PAGE_SIZE chunks for progressive rAF rendering
+      for (let i = 0; i < cached.length; i += PAGE_SIZE) {
+        appendToMap(cached.slice(i, i + PAGE_SIZE), 'point');
+      }
+      if (window.mapModule) {
+        window.mapModule.finalizeLoad(_lastData, 'point');
+        window.mapModule.clearProgress();
+      }
+      renderStats(computeStats(_lastData));
+      if (window.chartModule && typeof window.chartModule.update === 'function') {
+        window.chartModule.update(_lastData);
+      }
+      setLoading(false);
+      if (elBtnQuery) elBtnQuery.disabled = false;
+      setToggleDisabled(false);
+      return;
+    }
 
     try {
       const baseParams = buildQueryParams();
@@ -227,6 +287,9 @@
       }
 
       if (generation !== _queryGeneration) return;
+
+      // ── Save to sessionStorage ─────────────────────────────────────────
+      writeToCache(cacheKey, _lastData);
 
       // ── Finalize ──────────────────────────────────────────────────────────
       if (window.mapModule && typeof window.mapModule.finalizeLoad === 'function') {
