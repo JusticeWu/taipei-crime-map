@@ -114,3 +114,31 @@
   原則上不加入允許清單，保留手動確認作為防線
 - 相關模式：權限設定的最小授權原則（Principle of Least Privilege）——
   新增任何免確認規則前，先想清楚它「最壞情況下」能做到什麼，而不是只看「最常見用法」
+
+## L013：TimingTracker LogSummary 在 using 區塊內呼叫導致 L1 命中時不輸出
+- 問題：LogSummary 在 using 區塊內被呼叫，StageTimer.Dispose 還未執行，
+  _records 是空的，導致 L1 命中時完全不輸出 Timing 摘要，
+  造成「L1 永遠 miss」的錯覺
+- 根本原因：LogSummary 呼叫時機在 using 區塊結束之前
+- 正確做法：在所有 using 區塊結束後再呼叫 LogSummary
+- 相關模式：IDisposable 計時器的結果只有在 Dispose 後才會寫入，
+  呼叫摘要前必須確保所有計時器已結束
+
+## L014：Garnet 連線逾時預設值過長導致每次 L2 失敗都要等 20 秒
+- 問題：StackExchange.Redis 預設 ConnectTimeout 和 SyncTimeout 過長，
+  Garnet 連線失敗時要等 16,000～21,000ms 才 fallback 到 DB，
+  整體請求耗時 ~45 秒
+- 根本原因：連線逾時未針對 cache-aside 模式設定合理的快速失敗值
+- 正確做法：ConnectTimeout 和 SyncTimeout 設為 2000ms，
+  讓快取失敗時快速 fallback，不阻塞主流程
+- 相關模式：快取是非強依賴，失敗要快速放棄，
+  不能讓快取的問題拖慢核心業務
+
+## L015：Log 篩選條件造成「L1 永遠 miss」的觀測偏差
+- 問題：用 [Timing] 總計= 關鍵字篩選 log 時，
+  天生只會選到 L1 未命中的樣本（L1 命中時因 L013 的 bug 不會輸出這行），
+  造成「L1 永遠 miss」的錯覺
+- 根本原因：觀測工具的篩選條件影響了觀測結果
+- 正確做法：診斷快取問題時，同時觀察命中和未命中兩種 log，
+  不能只看單一關鍵字
+- 相關模式：觀測偏差，篩選條件本身會影響你看到的結果
