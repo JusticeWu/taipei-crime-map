@@ -13,8 +13,9 @@
 (function () {
   'use strict';
 
-  const API_BASE  = '/api/crime';
-  const PAGE_SIZE = 200;
+  const API_BASE        = '/api/crime';
+  const API_POINTS      = '/api/crime/points'; // slim DTO endpoint for point mode
+  const PAGE_SIZE       = 500;                 // 11,514 records → 24 requests (was 58)
 
   /* -----------------------------------------------------------------------
      DOM references
@@ -166,7 +167,7 @@
      sessionStorage cache for point-mode data
      key: crimes:{caseType}:{districtName}:{yearFrom}:{yearTo}
   ----------------------------------------------------------------------- */
-  const CACHE_PREFIX = 'crimes:';
+  const CACHE_PREFIX = 'crimes:points:'; // versioned to avoid collision with old full-DTO cache
 
   function buildCacheKey() {
     const p = buildQueryParams();
@@ -253,7 +254,7 @@
 
       // ── Page 1 ────────────────────────────────────────────────────────────
       baseParams.set('page', '1');
-      const resp1 = await fetch(`${API_BASE}?${baseParams}`, { headers: { Accept: 'application/json' } });
+      const resp1 = await fetch(`${API_POINTS}?${baseParams}`, { headers: { Accept: 'application/json' } });
       if (!resp1.ok) throw new Error(`API ${resp1.status}`);
 
       const first = await resp1.json();
@@ -272,7 +273,7 @@
           const params = new URLSearchParams(baseParams);
           params.set('page', String(page));
           tasks.push(
-            fetch(`${API_BASE}?${params}`, { headers: { Accept: 'application/json' } })
+            fetch(`${API_POINTS}?${params}`, { headers: { Accept: 'application/json' } })
               .then(r => r.ok ? r.json() : null)
               .then(pageResult => {
                 if (!pageResult || generation !== _queryGeneration) return;

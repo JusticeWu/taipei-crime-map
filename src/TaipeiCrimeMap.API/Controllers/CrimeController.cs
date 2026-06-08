@@ -69,6 +69,36 @@ public class CrimeController : ControllerBase
 
 
     /// <summary>
+    /// 點位圖專用端點：只回傳 lat/lng/caseType/occurredDate，
+    /// 省略不需要的欄位，大幅降低 JSON 大小（約減少 70%）
+    /// </summary>
+    [HttpGet("points")]
+    [ProducesResponseType(typeof(PagedResult<PointCrimeDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCrimePoints(
+        [FromQuery] CaseType? caseType,
+        [FromQuery] string? districtName,
+        [FromQuery] int? yearFrom,
+        [FromQuery] int? yearTo,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 500,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetCrimesByFilterQuery(
+            CaseType: caseType,
+            DistrictName: districtName,
+            YearFrom: yearFrom,
+            YearTo: yearTo,
+            Page: page,
+            PageSize: pageSize);
+
+        var full = await _queryHandler.HandleAsync(query, cancellationToken);
+        var points = full.Data
+            .Select(d => new PointCrimeDto(d.Latitude, d.Longitude, d.CaseType, d.OccurredDate))
+            .ToList();
+        return Ok(new PagedResult<PointCrimeDto>(points, full.Total, full.Page, full.PageSize, full.TotalPages));
+    }
+
+    /// <summary>
     /// 行政區案件密度，供熱力圖使用（每區一點，瞬間渲染）
     /// </summary>
     [HttpGet("heatmap")]
