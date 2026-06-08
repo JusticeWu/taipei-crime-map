@@ -140,7 +140,7 @@
   }
 
   function buildMarkerLayer(data) {
-    _markerLayer = L.layerGroup();
+    _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
     data.filter(hasCoords).forEach(item => {
       const color  = colorForType(item.caseType);
       const marker = L.circleMarker([item.latitude, item.longitude], {
@@ -377,10 +377,11 @@
       removeDistrictLabels();
 
       if (mode === 'point') {
-        _markerLayer = L.layerGroup().addTo(_map);
+        _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
+        _markerLayer.addTo(_map);
         addLegend();
       }
-      // heat: no layer created here — buildHeatLayer called once in finalizeLoad
+      // heat: no layer created here — setHeatmap() handles it
     },
 
     // Add one page of data without clearing existing layers.
