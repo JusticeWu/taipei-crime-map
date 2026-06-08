@@ -47,8 +47,15 @@ public class SqlServerCrimeRepository : ICrimeRepository
 
     public async Task<IReadOnlyList<TheftCase>> GetByFilterAsync(CrimeFilter filter, CancellationToken cancellationToken = default)
     {
+        var (cases, _) = await GetPagedByFilterAsync(filter, page: 1, pageSize: int.MaxValue, cancellationToken);
+        return cases;
+    }
+
+    public async Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
+        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
         await using var conn = CreateConnection();
-        var rows = await conn.QueryAsync<TheftCaseRow>(
+        var rows = (await conn.QueryAsync<TheftCaseRow>(
             "sp_get_theft_cases_by_filter",
             new
             {
@@ -57,10 +64,14 @@ public class SqlServerCrimeRepository : ICrimeRepository
                 YearFrom       = filter.YearFrom,
                 YearTo         = filter.YearTo,
                 TimeSlotStart  = filter.TimeSlot?.StartHour,
-                TimeSlotEnd    = filter.TimeSlot?.EndHour
+                TimeSlotEnd    = filter.TimeSlot?.EndHour,
+                Page           = page,
+                PageSize       = pageSize
             },
-            commandType: CommandType.StoredProcedure);
-        return rows.Select(r => r.ToDomain()).ToList();
+            commandType: CommandType.StoredProcedure)).ToList();
+
+        var total = rows.Count > 0 ? rows[0].TotalCount : 0;
+        return (rows.Select(r => r.ToDomain()).ToList(), total);
     }
 
     public async Task<IReadOnlyList<TheftCase>> GetByRadiusAsync(
@@ -109,6 +120,32 @@ public class SqlServerCrimeRepository : ICrimeRepository
         return await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM theft_cases");
     }
 
+    public async Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            SELECT district, COUNT(*) AS weight
+            FROM theft_cases WITH (NOLOCK)
+            WHERE district IS NOT NULL
+              AND (@CaseType IS NULL OR case_type = @CaseType)
+              AND (@District IS NULL OR district  = @District)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo)
+            GROUP BY district
+            """;
+
+        await using var conn = CreateConnection();
+        var rows = await conn.QueryAsync<DistrictCountRow>(sql, new
+        {
+            CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
+            District = filter.District?.Name,
+            YearFrom = filter.YearFrom,
+            YearTo   = filter.YearTo,
+        });
+
+        return rows.Select(r => (r.District, r.Weight)).ToList();
+    }
+
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
     private const string InsertSql = """
@@ -132,6 +169,7 @@ public class SqlServerCrimeRepository : ICrimeRepository
     {
         public Guid Id { get; init; }
         public string CaseNumber { get; init; } = string.Empty;
+        public int TotalCount { get; init; }
         public int? CaseType { get; init; }
         public string? District { get; init; }
         public string OccurredDateRaw { get; init; } = string.Empty;
@@ -189,5 +227,11 @@ public class SqlServerCrimeRepository : ICrimeRepository
                    Math.Cos(b.Latitude * Math.PI / 180.0) *
                    Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
         return R * 2 * Math.Atan2(Math.Sqrt(h), Math.Sqrt(1 - h));
+    }
+
+    private sealed record DistrictCountRow
+    {
+        public string District { get; init; } = string.Empty;
+        public int Weight { get; init; }
     }
 }

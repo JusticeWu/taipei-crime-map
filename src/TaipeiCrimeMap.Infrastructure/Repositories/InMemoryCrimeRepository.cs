@@ -61,6 +61,35 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult<IReadOnlyList<TheftCase>>(query.ToList());
     }
 
+    public Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
+        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = _cases.AsEnumerable();
+
+        if (filter.CaseType.HasValue)
+            query = query.Where(c => c.CaseType == filter.CaseType.Value);
+
+        if (filter.District != null)
+            query = query.Where(c => c.District != null && c.District.Name == filter.District.Name);
+
+        if (filter.YearFrom.HasValue)
+            query = query.Where(c => c.OccurredDate.Year.HasValue && c.OccurredDate.Year >= filter.YearFrom.Value);
+
+        if (filter.YearTo.HasValue)
+            query = query.Where(c => c.OccurredDate.Year.HasValue && c.OccurredDate.Year <= filter.YearTo.Value);
+
+        if (filter.TimeSlot != null && filter.TimeSlot.StartHour.HasValue && filter.TimeSlot.EndHour.HasValue)
+            query = query.Where(c => c.TimeSlot != null
+                && c.TimeSlot.StartHour == filter.TimeSlot.StartHour.Value
+                && c.TimeSlot.EndHour == filter.TimeSlot.EndHour.Value);
+
+        var all = query.ToList();
+        var total = all.Count;
+        var paged = all.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return Task.FromResult<(IReadOnlyList<TheftCase>, int)>((paged, total));
+    }
+
     public Task<TheftCase?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var result = _cases.FirstOrDefault(c => c.Id == id);
@@ -124,4 +153,20 @@ public class InMemoryCrimeRepository : ICrimeRepository
     /// <param name="deg">角度值</param>
     /// <returns>對應的弧度值</returns>
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
+
+    public Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default)
+    {
+        var counts = _cases
+            .Where(c => c.District?.Name is not null)
+            .Where(c => !filter.CaseType.HasValue || c.CaseType == filter.CaseType)
+            .Where(c => filter.District is null || c.District?.Name == filter.District.Name)
+            .Where(c => !filter.YearFrom.HasValue || c.OccurredDate.Year >= filter.YearFrom)
+            .Where(c => !filter.YearTo.HasValue   || c.OccurredDate.Year <= filter.YearTo)
+            .GroupBy(c => c.District!.Name)
+            .Select(g => (District: g.Key, Count: g.Count()))
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<(string District, int Count)>>(counts);
+    }
 }

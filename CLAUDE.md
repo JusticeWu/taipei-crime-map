@@ -71,6 +71,11 @@ UAT 驗證通過後，從 uat 開 PR merge 進 main 觸發 Prod 部署。
 - chore：設定雜務
 - ci：CI/CD 設定
 
+## 指令執行規範
+- 避免用 `&&` 串接多個指令
+- 每個指令獨立執行，等上一個完成再執行下一個
+- 例外：`git add && git commit` 這種原子操作可以串接
+
 ## Dockerfile 規範
 - 永遠使用 debian-based image（`aspnet:9.0`），不使用 alpine
 - 原因：Microsoft.Data.SqlClient 等原生函式庫在 Alpine 上有相容性問題
@@ -94,13 +99,14 @@ UAT 驗證通過後，從 uat 開 PR merge 進 main 觸發 Prod 部署。
 - [ ] PR 已建立並 merge 到 uat
 - [ ] CI pipeline 全部綠燈
 - [ ] 發送任務完成 Slack 通知（規則二）
-- [ ] 如果此次任務遇到任何錯誤、意外行為、或需要修正的問題，
-      將教訓寫入 docs/lessons-learned.md，格式：
+- [ ] 此次任務是否遇到錯誤、意外行為、設計缺陷或需要修正的問題？
+      如果是，必須寫入 docs/lessons-learned.md，格式：
       ## L[下一個編號]：[問題標題]
       - 問題：
       - 根本原因：
       - 正確做法：
       - 相關模式：
+      注意：功能修正和架構改善同樣需要記錄，不只是操作錯誤。
 以上任一項未完成，不得回報任務完成。
 
 ## 任務完成後，必須產出任務報告
@@ -139,17 +145,21 @@ urllib.request.urlopen(req)
 "
 ```
 
-### 規則一：提問之前必須先發通知
+### 規則一：提問之前必須先發通知（強制，不可跳過）
 
-在向使用者提出任何需要確認的問題**之前**，先執行以下指令，再提問：
+在終端機顯示任何問題或選項給用戶之前，**必須先執行以下 Python 指令**發送 Slack 通知，
+這是強制步驟，不可跳過。
+
+**執行順序：1. 發送 Slack 通知 → 2. 顯示問題給用戶**
 
 ```bash
 python3 -c "
 import urllib.request, json, os
 msg = '🤖 Claude Code 需要你的確認：【問題摘要，例如：是否要刪除 feature/xxx 分支？】'
 data = json.dumps({'text': msg}).encode('utf-8')
-req = urllib.request.Request(os.environ['SLACK_WEBHOOK_URL'], data=data, headers={'Content-Type': 'application/json'})
-urllib.request.urlopen(req)
+req = urllib.request.Request(os.environ.get('SLACK_WEBHOOK_URL',''), data=data, headers={'Content-Type': 'application/json'})
+try: urllib.request.urlopen(req)
+except: pass
 "
 ```
 

@@ -16,7 +16,9 @@
       "Bash(az *)",
       "Bash(curl *)",
       "Bash(npm *)",
-      "Bash(pip *)"
+      "Bash(pip *)",
+      "Bash(python3 *)",
+      "Bash(python *)"
     ]
   }
 }
