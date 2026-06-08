@@ -71,6 +71,11 @@ UAT 驗證通過後，從 uat 開 PR merge 進 main 觸發 Prod 部署。
 - chore：設定雜務
 - ci：CI/CD 設定
 
+## 指令執行規範
+- 避免用 `&&` 串接多個指令
+- 每個指令獨立執行，等上一個完成再執行下一個
+- 例外：`git add && git commit` 這種原子操作可以串接
+
 ## Dockerfile 規範
 - 永遠使用 debian-based image（`aspnet:9.0`），不使用 alpine
 - 原因：Microsoft.Data.SqlClient 等原生函式庫在 Alpine 上有相容性問題
