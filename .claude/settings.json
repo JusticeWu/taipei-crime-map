@@ -18,7 +18,8 @@
       "Bash(npm *)",
       "Bash(pip *)",
       "Bash(python3 *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

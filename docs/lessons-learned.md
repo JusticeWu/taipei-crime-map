@@ -142,3 +142,24 @@
 - 正確做法：診斷快取問題時，同時觀察命中和未命中兩種 log，
   不能只看單一關鍵字
 - 相關模式：觀測偏差，篩選條件本身會影響你看到的結果
+
+## L016：Container App 內部連線應使用短名稱，FQDN 會導致 DNS 解析異常造成 ConnectTimeout
+- 問題：UAT 連到同一個 Container Apps Environment 內的 Garnet，
+  連線字串使用完整內部 FQDN
+  （`taipei-crime-map-garnet.internal.<env-domain>.azurecontainerapps.io:6379`），
+  每次都會卡在 `RedisConnectionException ... ConnectTimeout`，
+  且連線狀態顯示 `rs: NotStarted, ws: Initializing`（連線從未進入交握階段）。
+  曾依序排除映像路徑、Container Apps Environment 是否相同、`exposedPort`/`targetPort`、
+  Garnet 健康狀態、mTLS/IP 限制等假說，皆與此無關
+- 根本原因：在這個環境中，完整內部 FQDN 的 DNS 解析或路由層出現異常，
+  導致封包根本沒有送達目的地容器；改用短名稱
+  （`taipei-crime-map-garnet:6379`，由同環境內的 Envoy proxy 直接以 app name 路由）
+  後，連線立即恢復正常（L2-Cache 從 16,000~21,000ms 降到 123~578ms，
+  且完全不再出現 `RedisConnectionException`）
+- 正確做法：同一個 Container Apps Environment 內部的服務間連線，
+  優先使用「短名稱:port」（例如 `<app-name>:<port>`），不要用完整 FQDN；
+  這也符合 Microsoft 官方文件對內部呼叫的建議——短名稱路徑更簡單，
+  少一層 FQDN DNS 解析，較不容易遇到平台層的解析異常
+- 相關模式：診斷連線逾時類問題時，「換一種更簡單的定址方式測試」
+  （短名稱 vs FQDN、IP vs 主機名稱）是低成本、高訊息量的排查手段，
+  可以在深入懷疑平台限制／改採其他服務之前先嘗試
