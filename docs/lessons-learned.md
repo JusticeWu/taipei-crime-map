@@ -68,8 +68,11 @@
 - 相關模式：文件與架構需同步更新（Documentation Drift）—
   決策記錄變更時，連帶檢查所有引用舊架構的設定檔與說明文件
 
-## L009：uat 長期分支被 GitHub 自動刪除
-- 問題：PR #25 merge 後 uat 分支被自動刪除，導致後續 PR 無法以 uat 為 base
-- 根本原因：GitHub repo 開啟了「Automatically delete head branches」，對所有分支一視同仁
-- 正確做法：Settings → General → 關閉「Automatically delete head branches」
-- 相關模式：對應永久環境的長期分支（uat、main）不應被自動刪除
+## L009：uat 長期分支被 gh pr merge --delete-branch 自動刪除
+- 問題：merge uat → main 的 PR 時使用了 --delete-branch，導致 uat 被刪除，
+  後續 PR 無法以 uat 為 base
+- 根本原因：--delete-branch 對 feature/xxx 這種一次性分支是正確做法，
+  但不應該套用在 uat、main 這種對應永久環境的長期分支上
+- 正確做法：uat → main 的 PR merge 一律用 gh pr merge --merge，不加 --delete-branch；
+  feature/xxx → uat 才用 gh pr merge --squash --delete-branch
+- 相關模式：長期分支（uat、main）永遠不刪；merge 指令需依「分支是否為長期分支」分流
