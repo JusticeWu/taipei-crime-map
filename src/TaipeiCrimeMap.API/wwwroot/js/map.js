@@ -94,8 +94,10 @@
   let _baseLayers       = {};
 
   // Render queue: ensures one page of markers is added per animation frame
-  let _renderQueue  = [];
-  let _renderRafId  = null;
+  let _renderQueue      = [];
+  let _renderRafId      = null;
+  let _renderStartTime  = null; // performance.now() when first chunk starts rendering
+  let _renderTotalChunks = 0;   // total chunks queued for current load
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -252,6 +254,12 @@
   function drainOneFromQueue() {
     if (_renderQueue.length === 0) { _renderRafId = null; return; }
 
+    // Log render start on the very first chunk
+    if (_renderStartTime === null) {
+      _renderStartTime = performance.now();
+      console.log(`[點位圖] 開始渲染｜render queue: ${_renderTotalChunks} chunks`);
+    }
+
     const { data } = _renderQueue.shift();
     if (_markerLayer) {
       data.filter(hasCoords).forEach(item => {
@@ -264,13 +272,21 @@
       });
     }
 
-    _renderRafId = _renderQueue.length > 0
-      ? requestAnimationFrame(drainOneFromQueue)
-      : null;
+    if (_renderQueue.length > 0) {
+      _renderRafId = requestAnimationFrame(drainOneFromQueue);
+    } else {
+      _renderRafId = null;
+      const ms = (performance.now() - _renderStartTime).toFixed(0);
+      console.log(`[點位圖] 渲染完成｜渲染耗時: ${ms} ms`);
+      _renderStartTime   = null;
+      _renderTotalChunks = 0;
+    }
   }
 
   function clearRenderQueue() {
-    _renderQueue = [];
+    _renderQueue       = [];
+    _renderStartTime   = null;
+    _renderTotalChunks = 0;
     if (_renderRafId) { cancelAnimationFrame(_renderRafId); _renderRafId = null; }
   }
 
@@ -393,6 +409,7 @@
       if (mode === 'heat') return;
 
       _renderQueue.push({ data });
+      _renderTotalChunks++;
       if (!_renderRafId) {
         _renderRafId = requestAnimationFrame(drainOneFromQueue);
       }

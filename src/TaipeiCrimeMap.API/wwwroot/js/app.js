@@ -229,6 +229,7 @@
     const cacheKey = buildCacheKey();
     const cached = readFromCache(cacheKey);
     if (cached && cached.length > 0 && generation === _queryGeneration) {
+      console.log(`[點位圖] sessionStorage 命中，跳過 API｜${cached.length} 筆，開始渲染`);
       _lastData = cached;
       // Queue cached data as PAGE_SIZE chunks for progressive rAF rendering
       for (let i = 0; i < cached.length; i += PAGE_SIZE) {
@@ -253,6 +254,9 @@
       baseParams.set('pageSize', String(PAGE_SIZE));
 
       // ── Page 1 ────────────────────────────────────────────────────────────
+      const t0 = performance.now();
+      console.log('[點位圖] 開始發請求');
+
       baseParams.set('page', '1');
       const resp1 = await fetch(`${API_POINTS}?${baseParams}`, { headers: { Accept: 'application/json' } });
       if (!resp1.ok) throw new Error(`API ${resp1.status}`);
@@ -261,6 +265,7 @@
       if (generation !== _queryGeneration) return;
 
       const { data: firstData, total, totalPages } = first;
+      console.log(`[點位圖] Page 1 到達｜totalPages: ${totalPages}，total: ${total}｜T+${(performance.now()-t0).toFixed(0)}ms`);
 
       _lastData = _lastData.concat(firstData);
       appendToMap(firstData, 'point');
@@ -288,6 +293,9 @@
       }
 
       if (generation !== _queryGeneration) return;
+
+      const t1 = performance.now();
+      console.log(`[點位圖] 所有請求完成｜網路耗時: ${(t1-t0).toFixed(0)} ms｜${_lastData.length} 筆`);
 
       // ── Save to sessionStorage ─────────────────────────────────────────
       writeToCache(cacheKey, _lastData);
