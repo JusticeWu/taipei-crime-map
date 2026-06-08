@@ -67,3 +67,9 @@
   取得方式（user-secrets / 環境變數），而不是留下會誤導的本機 compose 設定
 - 相關模式：文件與架構需同步更新（Documentation Drift）—
   決策記錄變更時，連帶檢查所有引用舊架構的設定檔與說明文件
+
+## L009：uat 長期分支被 GitHub 自動刪除
+- 問題：PR #25 merge 後 uat 分支被自動刪除，導致後續 PR 無法以 uat 為 base
+- 根本原因：GitHub repo 開啟了「Automatically delete head branches」，對所有分支一視同仁
+- 正確做法：Settings → General → 關閉「Automatically delete head branches」
+- 相關模式：對應永久環境的長期分支（uat、main）不應被自動刪除
