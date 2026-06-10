@@ -14,15 +14,18 @@ public class CrimeController : ControllerBase
     private readonly ImportCsvCommandHandler _importHandler;
     private readonly GetCrimesByFilterQueryHandler _queryHandler;
     private readonly GetHeatmapQueryHandler _heatmapHandler;
+    private readonly GeocodeBatchCommandHandler _geocodeHandler;
 
     public CrimeController(
         ImportCsvCommandHandler importHandler,
         GetCrimesByFilterQueryHandler queryHandler,
-        GetHeatmapQueryHandler heatmapHandler)
+        GetHeatmapQueryHandler heatmapHandler,
+        GeocodeBatchCommandHandler geocodeHandler)
     {
         _importHandler = importHandler;
         _queryHandler = queryHandler;
         _heatmapHandler = heatmapHandler;
+        _geocodeHandler = geocodeHandler;
     }
 
     /// <summary>
@@ -112,6 +115,21 @@ public class CrimeController : ControllerBase
     {
         var query = new GetHeatmapQuery(caseType, districtName, yearFrom, yearTo);
         var result = await _heatmapHandler.HandleAsync(query, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// 批次補齊座標：對 Latitude/Longitude 為 NULL 的案件執行 Geocoding，
+    /// 優先複用相同 RawLocation 的既有座標，剩餘的才呼叫 Google Maps API
+    /// </summary>
+    [HttpPost("geocode")]
+    [ProducesResponseType(typeof(GeocodeBatchResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GeocodeBatch(
+        [FromQuery] int batchSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new GeocodeBatchCommand(batchSize);
+        var result = await _geocodeHandler.HandleAsync(command, cancellationToken);
         return Ok(result);
     }
 

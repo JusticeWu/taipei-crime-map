@@ -154,6 +154,37 @@ public class InMemoryCrimeRepository : ICrimeRepository
     /// <returns>對應的弧度值</returns>
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
+    public Task<IReadOnlyList<TheftCase>> GetCasesWithMissingCoordinatesAsync(int batchSize, CancellationToken cancellationToken = default)
+    {
+        var result = _cases
+            .Where(c => c.Coordinate is null)
+            .OrderBy(c => c.CaseNumber, StringComparer.Ordinal)
+            .Take(batchSize)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<TheftCase>>(result);
+    }
+
+    public Task<GeoCoordinate?> FindCoordinateByRawLocationAsync(string rawLocation, CancellationToken cancellationToken = default)
+    {
+        var match = _cases.FirstOrDefault(c => c.RawLocation == rawLocation && c.Coordinate is not null);
+
+        return Task.FromResult(match?.Coordinate);
+    }
+
+    public Task UpdateCoordinateAsync(Guid id, GeoCoordinate coordinate, CancellationToken cancellationToken = default)
+    {
+        var theftCase = _cases.FirstOrDefault(c => c.Id == id);
+        theftCase?.UpdateCoordinate(coordinate);
+
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_cases.Count(c => c.Coordinate is null));
+    }
+
     public Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
         CrimeFilter filter, CancellationToken cancellationToken = default)
     {
