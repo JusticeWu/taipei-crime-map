@@ -283,3 +283,29 @@
     取規格範圍內較保守的數值（如 4px / 0.25），而非範圍上限
 - 相關模式：[[L022]]（drop-shadow 光暈實作）；新增視覺效果參數時，
   要同時考量「資料量大、同色點位密集」的最壞情況，而非只驗證單一點位的外觀
+
+## L024：群聚圖示白色外框修正後仍存在，需用更高權重 CSS 全面覆蓋 leaflet-div-icon 預設樣式
+
+- 問題：上一輪修正（L023/PR #37）已對 `.crime-cluster-icon` 加上
+  `border:none; outline:none; background:transparent`，但使用者在 Brave、Edge
+  兩個瀏覽器（已排除快取因素）仍看到群聚圓圈白色外框
+- 根本原因：Leaflet `DivIcon` 的預設 `options.className` 為
+  `'leaflet-div-icon'`，對應 `leaflet.css` 規則
+  `.leaflet-div-icon { background:#fff; border:1px solid #666; }`。
+  雖然自訂 `iconCreateFunction` 已指定 `className: 'crime-cluster-icon'`
+  理論上會取代預設值，但 map.js 內以一般 `<style>` 注入的覆蓋規則
+  權重不足（無 `!important`，且載入順序可能晚於/早於 leaflet.css 而被
+  瀏覽器快取或樣式表合併順序影響），在部分瀏覽器仍可能套用到
+  `.leaflet-div-icon` 的預設白底/灰邊
+- 正確做法：
+  - 修正第三方函式庫（Leaflet/MarkerCluster）預設樣式時，應在專案的
+    `style.css`（載入順序在第三方 CSS 之後）以 `!important` +
+    多重選擇器（涵蓋 `.leaflet-div-icon`、自訂 className、
+    `.marker-cluster` 系列）一次性覆蓋，避免單一選擇器漏網
+  - 受影響的回報若已排除快取因素，且 code review 找不到邏輯錯誤，
+    應優先檢查「第三方函式庫的預設樣式/className」是否仍會生效
+  - 本環境無圖形化瀏覽器可用 DevTools 實際 Inspect 時，改以下載
+    第三方 CSS 原始檔（leaflet.css、MarkerCluster.css、
+    MarkerCluster.Default.css）逐條比對候選規則
+- 相關模式：[[L023]]；第三方 UI 函式庫的「預設值會被自訂選項取代」
+  之假設，在跨瀏覽器情境下不一定成立，覆蓋時應採防禦性的高權重寫法
