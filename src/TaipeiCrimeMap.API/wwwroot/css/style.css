@@ -339,6 +339,28 @@ input[type="number"]::-webkit-outer-spin-button {
   background-color: var(--bg-primary);
 }
 
+/* ===========================
+   群聚圖示（MarkerCluster）— 移除預設白色外框/背景
+   Leaflet DivIcon 預設 className 為 leaflet-div-icon
+   （background:#fff; border:1px solid #666;），即使自訂
+   iconCreateFunction 指定了 className，部分瀏覽器仍可能
+   套用此預設規則，造成圓形圖示外圍露出方形白底/灰邊。
+   以較高權重（!important + 多重選擇器）一併覆蓋掉。
+   =========================== */
+.leaflet-marker-pane .leaflet-div-icon,
+.leaflet-marker-pane .crime-cluster-icon,
+.crime-cluster-icon,
+.marker-cluster,
+.marker-cluster div {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+}
+
+.crime-cluster-icon {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .5) !important;
+}
+
 /* Fix Leaflet z-index conflicts */
 .leaflet-control-zoom {
   border: none !important;
