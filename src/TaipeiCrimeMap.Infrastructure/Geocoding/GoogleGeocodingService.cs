@@ -17,6 +17,9 @@ public sealed class GoogleGeocodingService : IGeocodingService
 
     private int _dailyRequestCount;
     private DateOnly _quotaResetDate = DateOnly.FromDateTime(DateTime.UtcNow);
+    private int _monthlyRequestCount;
+    private int _quotaResetMonth = DateTime.UtcNow.Month;
+    private int _quotaResetYear = DateTime.UtcNow.Year;
     private readonly object _quotaLock = new();
 
     public GoogleGeocodingService(HttpClient httpClient, IOptions<GoogleMapsOptions> options,
@@ -29,22 +32,35 @@ public sealed class GoogleGeocodingService : IGeocodingService
 
     private bool TryAcquireQuota()
     {
-        if (_options.DailyQuotaLimit <= 0)
+        if (_options.DailyQuotaLimit <= 0 && _options.MonthlyQuotaLimit <= 0)
             return true;
 
         lock (_quotaLock)
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var now = DateTime.UtcNow;
+
+            var today = DateOnly.FromDateTime(now);
             if (today > _quotaResetDate)
             {
                 _dailyRequestCount = 0;
                 _quotaResetDate = today;
             }
 
-            if (_dailyRequestCount >= _options.DailyQuotaLimit)
+            if (now.Year > _quotaResetYear || (now.Year == _quotaResetYear && now.Month > _quotaResetMonth))
+            {
+                _monthlyRequestCount = 0;
+                _quotaResetYear = now.Year;
+                _quotaResetMonth = now.Month;
+            }
+
+            if (_options.DailyQuotaLimit > 0 && _dailyRequestCount >= _options.DailyQuotaLimit)
+                return false;
+
+            if (_options.MonthlyQuotaLimit > 0 && _monthlyRequestCount >= _options.MonthlyQuotaLimit)
                 return false;
 
             _dailyRequestCount++;
+            _monthlyRequestCount++;
             return true;
         }
     }
