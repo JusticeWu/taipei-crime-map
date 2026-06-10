@@ -109,6 +109,13 @@
     return String(backgroundColor).toUpperCase() === '#B7950B' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
   }
 
+  // 點位圓點半徑與半透明光暈設定
+  // 光暈以 SVG stroke 實現：weight 為 stroke 寬度，會以路徑為中心向內外各延伸一半，
+  // 因此向外露出的光暈寬度約為 weight / 2，在所有縮放層級皆以固定像素呈現
+  const MARKER_RADIUS = 6;
+  const MARKER_HALO_WIDTH = 10;   // 光暈寬度（px），向外露出約 5px
+  const MARKER_HALO_OPACITY = 0.35;
+
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
 
@@ -166,6 +173,24 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  /**
+   * 建立單一案件點位的 circleMarker，外圍帶半透明同色光暈（以 SVG stroke 實現）
+   * @param {object} item - 含 latitude/longitude/caseType 的案件資料
+   * @returns {L.CircleMarker}
+   */
+  function createPointMarker(item) {
+    const color = colorForType(item.caseType);
+    return L.circleMarker([item.latitude, item.longitude], {
+      radius: MARKER_RADIUS,
+      fillColor: color,
+      fillOpacity: 0.85,
+      color,
+      weight: MARKER_HALO_WIDTH,
+      opacity: MARKER_HALO_OPACITY,
+      caseType: item.caseType,
+    });
+  }
+
   function buildPopupHtml(item) {
     return [
       '<div class="crime-popup">',
@@ -208,10 +233,7 @@
   function buildMarkerLayer(data) {
     _markerLayer = L.markerClusterGroup({ chunkedLoading: true, iconCreateFunction: clusterIconCreateFunction });
     data.filter(hasCoords).forEach(item => {
-      const color  = colorForType(item.caseType);
-      const marker = L.circleMarker([item.latitude, item.longitude], {
-        radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1, caseType: item.caseType,
-      });
+      const marker = createPointMarker(item);
       marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
       _markerLayer.addLayer(marker);
     });
@@ -327,10 +349,7 @@
     const { data } = _renderQueue.shift();
     if (_markerLayer) {
       data.filter(hasCoords).forEach(item => {
-        const color  = colorForType(item.caseType);
-        const marker = L.circleMarker([item.latitude, item.longitude], {
-          radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1, caseType: item.caseType,
-        });
+        const marker = createPointMarker(item);
         marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
         _markerLayer.addLayer(marker);
       });
