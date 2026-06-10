@@ -11,18 +11,18 @@
 
 const CASE_TYPE_COLORS = {
   '住宅竊盜':   '#1E8449',
-  '強盜':      '#E67E22',
-  '搶奪':      '#D4A017',
-  '汽車竊盜':   '#16A085',
-  '機車竊盜':   '#1A5276',
-  '自行車竊盜': '#8E44AD',
+  '汽車竊盜':   '#0E6655',
+  '機車竊盜':   '#2471A3',
+  '自行車竊盜': '#A569BD',
+  '搶奪':      '#B7950B',
+  '強盜':      '#CA6F1E',
 };
 const DEFAULT_COLOR = '#95A5A6';
 
 // MarkerCluster 群聚內包含多種案類時使用的顏色
 const MIXED_CLUSTER_COLOR = '#C0392B';
 
-// 淺色背景（如搶奪的深黃 #D4A017）需要深色文字才能清楚閱讀
+// 淺色背景（如搶奪的深黃 #B7950B）需要深色文字才能清楚閱讀
 const DARK_TEXT_COLOR  = '#333333';
 const LIGHT_TEXT_COLOR = '#FFFFFF';
 
@@ -48,7 +48,7 @@ function getClusterColor(caseTypes) {
 }
 
 function getClusterTextColor(backgroundColor) {
-  return String(backgroundColor).toUpperCase() === '#D4A017' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
+  return String(backgroundColor).toUpperCase() === '#B7950B' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
 }
 
 // ── getCaseTypeColor ────────────────────────────────────────────────────────
@@ -59,23 +59,23 @@ describe('getCaseTypeColor', () => {
   });
 
   test('numeric 2 (汽車竊盜) → 藍綠色', () => {
-    expect(getCaseTypeColor(2)).toBe('#16A085');
+    expect(getCaseTypeColor(2)).toBe('#0E6655');
   });
 
   test('numeric 3 (機車竊盜) → 藍色', () => {
-    expect(getCaseTypeColor(3)).toBe('#1A5276');
+    expect(getCaseTypeColor(3)).toBe('#2471A3');
   });
 
   test('numeric 4 (自行車竊盜) → 紫色', () => {
-    expect(getCaseTypeColor(4)).toBe('#8E44AD');
+    expect(getCaseTypeColor(4)).toBe('#A569BD');
   });
 
   test('numeric 5 (搶奪) → 深黃色', () => {
-    expect(getCaseTypeColor(5)).toBe('#D4A017');
+    expect(getCaseTypeColor(5)).toBe('#B7950B');
   });
 
   test('numeric 6 (強盜) → 橙色', () => {
-    expect(getCaseTypeColor(6)).toBe('#E67E22');
+    expect(getCaseTypeColor(6)).toBe('#CA6F1E');
   });
 
   test('中文字串 "住宅竊盜" → 綠色', () => {
@@ -83,7 +83,7 @@ describe('getCaseTypeColor', () => {
   });
 
   test('中文字串 "機車竊盜" → 藍色', () => {
-    expect(getCaseTypeColor('機車竊盜')).toBe('#1A5276');
+    expect(getCaseTypeColor('機車竊盜')).toBe('#2471A3');
   });
 
   test('未知數字代碼 999 → 灰色 fallback', () => {
@@ -104,7 +104,7 @@ describe('getCaseTypeColor', () => {
 
 describe('getClusterColor', () => {
   test('全部同一案類（數字）→ 該案類顏色', () => {
-    expect(getClusterColor([3, 3, 3])).toBe('#1A5276');
+    expect(getClusterColor([3, 3, 3])).toBe('#2471A3');
   });
 
   test('全部同一案類（中文字串）→ 該案類顏色', () => {
@@ -124,7 +124,7 @@ describe('getClusterColor', () => {
   });
 
   test('單一元素 → 該案類顏色', () => {
-    expect(getClusterColor([5])).toBe('#D4A017');
+    expect(getClusterColor([5])).toBe('#B7950B');
   });
 });
 
@@ -132,11 +132,11 @@ describe('getClusterColor', () => {
 
 describe('getClusterTextColor', () => {
   test('搶奪深黃色背景 → 深色文字', () => {
-    expect(getClusterTextColor('#D4A017')).toBe('#333333');
+    expect(getClusterTextColor('#B7950B')).toBe('#333333');
   });
 
   test('搶奪深黃色背景（小寫）→ 深色文字', () => {
-    expect(getClusterTextColor('#d4a017')).toBe('#333333');
+    expect(getClusterTextColor('#b7950b')).toBe('#333333');
   });
 
   test('其他背景顏色 → 白色文字', () => {
