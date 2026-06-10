@@ -51,15 +51,16 @@
   const TAIPEI_CENTER = [25.0478, 121.5318];
   const DEFAULT_ZOOM  = 13;
 
+  // 依嚴重性排序：住宅竊盜（紅）> 強盜（橙）> 搶奪（黃）> 汽車竊盜（綠）> 機車竊盜（青）> 自行車竊盜（紫）
   const CASE_TYPE_COLORS = {
-    '住宅竊盜':   '#e74c3c',
-    '汽車竊盜':   '#e67e22',
-    '機車竊盜':   '#f1c40f',
-    '自行車竊盜': '#2ecc71',
-    '搶奪':      '#9b59b6',
-    '強盜':      '#1abc9c',
+    '住宅竊盜':   '#E74C3C',
+    '強盜':      '#E67E22',
+    '搶奪':      '#F1C40F',
+    '汽車竊盜':   '#27AE60',
+    '機車竊盜':   '#1ABC9C',
+    '自行車竊盜': '#9B59B6',
   };
-  const DEFAULT_COLOR = '#95a5a6';
+  const DEFAULT_COLOR = '#95A5A6';
 
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
