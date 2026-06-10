@@ -53,18 +53,18 @@
 
   const CASE_TYPE_COLORS = {
     '住宅竊盜':   '#1E8449',
-    '強盜':      '#E67E22',
-    '搶奪':      '#D4A017',
-    '汽車竊盜':   '#16A085',
-    '機車竊盜':   '#1A5276',
-    '自行車竊盜': '#8E44AD',
+    '汽車竊盜':   '#0E6655',
+    '機車竊盜':   '#2471A3',
+    '自行車竊盜': '#A569BD',
+    '搶奪':      '#B7950B',
+    '強盜':      '#CA6F1E',
   };
   const DEFAULT_COLOR = '#95A5A6';
 
   // MarkerCluster 群聚內包含多種案類時使用的顏色
   const MIXED_CLUSTER_COLOR = '#C0392B';
 
-  // 淺色背景（如搶奪的深黃 #D4A017）需要深色文字才能清楚閱讀
+  // 淺色背景（如搶奪的深黃 #B7950B）需要深色文字才能清楚閱讀
   const DARK_TEXT_COLOR  = '#333333';
   const LIGHT_TEXT_COLOR = '#FFFFFF';
 
@@ -106,7 +106,7 @@
    * @returns {string} 文字顏色十六進位碼
    */
   function getClusterTextColor(backgroundColor) {
-    return String(backgroundColor).toUpperCase() === '#D4A017' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
+    return String(backgroundColor).toUpperCase() === '#B7950B' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
   }
 
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
@@ -172,9 +172,9 @@
       `  <strong>${escapeHtml(item.caseType || '未知')}</strong>`,
       '  <table>',
       `    <tr><th>行政區</th><td>${escapeHtml(item.district || '—')}</td></tr>`,
-      `    <tr><th>日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || '—')}</td></tr>`,
       `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || '—')}</td></tr>`,
+      `    <tr><th>發生日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       '  </table>',
       '</div>',
     ].join('\n');

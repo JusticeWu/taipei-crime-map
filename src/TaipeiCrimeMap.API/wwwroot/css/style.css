@@ -151,6 +151,12 @@ input[type="number"]::-webkit-outer-spin-button {
   opacity: 0.4;
 }
 
+/* 起始/結束年份輸入框：提高文字對比度，深色背景下更易閱讀 */
+#input-year-from,
+#input-year-to {
+  color: #DDDDDD;
+}
+
 /* Toggle Mode */
 .toggle-group {
   display: flex;

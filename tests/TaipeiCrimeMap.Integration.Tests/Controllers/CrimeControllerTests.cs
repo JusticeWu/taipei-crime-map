@@ -78,4 +78,27 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task GetCrimePoints_ShouldIncludeDistrictTimeSlotAndRawLocation()
+    {
+        // Arrange：先匯入資料
+        var filePath = Path.Combine(AppContext.BaseDirectory, "TestData", "residential_sample.csv");
+        var importRequest = new { FilePath = filePath, CaseType = (int)CaseType.Residential };
+        await _client.PostAsJsonAsync("/api/crime/import", importRequest);
+
+        // Act
+        var response = await _client.GetAsync("/api/crime/points?pageSize=1");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var result = await response.Content.ReadFromJsonAsync<PagedResult<PointCrimeDto>>();
+        result.Should().NotBeNull();
+        result!.Data.Should().NotBeEmpty();
+
+        var point = result.Data.First();
+        point.District.Should().NotBeNullOrWhiteSpace();
+        point.TimeSlot.Should().NotBeNullOrWhiteSpace();
+        point.RawLocation.Should().NotBeNullOrWhiteSpace();
+    }
 }
