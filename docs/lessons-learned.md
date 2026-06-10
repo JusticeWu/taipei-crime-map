@@ -164,6 +164,19 @@
   （短名稱 vs FQDN、IP vs 主機名稱）是低成本、高訊息量的排查手段，
   可以在深入懷疑平台限制／改採其他服務之前先嘗試
 
+## L018：CI push-to-acr 因 mcr.microsoft.com 回傳 403 Forbidden 暫時性失敗
+- 問題：PR #29 merge 到 uat 後，CI 的 push-to-acr 階段在
+  `docker buildx build` 拉取 `mcr.microsoft.com/dotnet/sdk:9.0` 時
+  收到 `403 Forbidden`，build-and-test 已通過，但整個 workflow 標記為失敗
+- 根本原因：mcr.microsoft.com（Microsoft Container Registry）端的暫時性
+  限流或服務異常，與本次程式碼變更（純前端配色調整）無關
+- 正確做法：確認 build-and-test 已通過、且失敗訊息明確指向外部映像倉庫的
+  HTTP 403/5xx 時，先用 `gh run rerun <run-id> --failed` 重新執行失敗的
+  job，不需要修改程式碼；本次 rerun 後 push-to-acr、deploy-to-uat 皆成功
+- 相關模式：CI 失敗時，先看錯誤訊息的「來源」是專案程式碼、測試，
+  還是外部服務（容器倉庫、套件來源等）；外部服務的暫時性錯誤通常
+  rerun 即可解決，不必盲目修改程式碼或設定
+
 ## L017：Container App 新增/修改環境變數（Secret）後，立即呼叫 API 仍會失敗一段時間
 - 問題：UAT 新增 `googlemaps-api-key` Secret 與 `GoogleMaps__ApiKey` 環境變數、
   並完成部署後，立即呼叫 `/api/crime/geocode` 仍然 100% 失敗
