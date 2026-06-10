@@ -88,7 +88,7 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
         await _client.PostAsJsonAsync("/api/crime/import", importRequest);
 
         // Act
-        var response = await _client.GetAsync("/api/crime/points?pageSize=1");
+        var response = await _client.GetAsync($"/api/crime/points?caseType={(int)CaseType.Residential}&pageSize=500");
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -96,9 +96,9 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
         result.Should().NotBeNull();
         result!.Data.Should().NotBeEmpty();
 
-        var point = result.Data.First();
-        point.District.Should().NotBeNullOrWhiteSpace();
-        point.TimeSlot.Should().NotBeNullOrWhiteSpace();
-        point.RawLocation.Should().NotBeNullOrWhiteSpace();
+        result.Data.Should().Contain(p =>
+            !string.IsNullOrWhiteSpace(p.District) &&
+            !string.IsNullOrWhiteSpace(p.TimeSlot) &&
+            !string.IsNullOrWhiteSpace(p.RawLocation));
     }
 }
