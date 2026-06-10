@@ -51,16 +51,22 @@
   const TAIPEI_CENTER = [25.0478, 121.5318];
   const DEFAULT_ZOOM  = 13;
 
-  // 依嚴重性排序：住宅竊盜（紅）> 強盜（橙）> 搶奪（黃）> 汽車竊盜（綠）> 機車竊盜（青）> 自行車竊盜（紫）
   const CASE_TYPE_COLORS = {
-    '住宅竊盜':   '#E74C3C',
+    '住宅竊盜':   '#1E8449',
     '強盜':      '#E67E22',
-    '搶奪':      '#F1C40F',
-    '汽車竊盜':   '#27AE60',
-    '機車竊盜':   '#1ABC9C',
-    '自行車竊盜': '#9B59B6',
+    '搶奪':      '#D4A017',
+    '汽車竊盜':   '#16A085',
+    '機車竊盜':   '#1A5276',
+    '自行車竊盜': '#8E44AD',
   };
   const DEFAULT_COLOR = '#95A5A6';
+
+  // MarkerCluster 群聚內包含多種案類時使用的顏色
+  const MIXED_CLUSTER_COLOR = '#C0392B';
+
+  // 淺色背景（如搶奪的深黃 #D4A017）需要深色文字才能清楚閱讀
+  const DARK_TEXT_COLOR  = '#333333';
+  const LIGHT_TEXT_COLOR = '#FFFFFF';
 
   // 數字案類代碼（CaseType enum）→ 中文名稱，對應 CASE_TYPE_COLORS 的 key
   const CASE_TYPE_ID_TO_NAME = {
@@ -80,6 +86,27 @@
   function getCaseTypeColor(caseType) {
     const name = CASE_TYPE_ID_TO_NAME[caseType] || caseType;
     return CASE_TYPE_COLORS[name] || DEFAULT_COLOR;
+  }
+
+  /**
+   * 依群聚內所有點位的案類，決定群聚圓圈顏色：
+   * 全部同一案類 → 該案類顏色；包含多種案類 → MIXED_CLUSTER_COLOR
+   * @param {Array<string|number>} caseTypes
+   * @returns {string} 十六進位顏色碼
+   */
+  function getClusterColor(caseTypes) {
+    if (!Array.isArray(caseTypes) || caseTypes.length === 0) return MIXED_CLUSTER_COLOR;
+    const colors = new Set(caseTypes.map(getCaseTypeColor));
+    return colors.size === 1 ? [...colors][0] : MIXED_CLUSTER_COLOR;
+  }
+
+  /**
+   * 依背景顏色決定文字顏色，確保可讀性（例如深黃底用深色字）
+   * @param {string} backgroundColor
+   * @returns {string} 文字顏色十六進位碼
+   */
+  function getClusterTextColor(backgroundColor) {
+    return String(backgroundColor).toUpperCase() === '#D4A017' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
   }
 
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
@@ -162,12 +189,28 @@
     _heatLayer = L.heatLayer(points, HEAT_OPTIONS).addTo(_map);
   }
 
+  // 群聚圓圈圖示：依群聚內所有點位的案類決定顏色與文字顏色
+  function clusterIconCreateFunction(cluster) {
+    const caseTypes = cluster.getAllChildMarkers().map(m => m.options.caseType);
+    const color     = getClusterColor(caseTypes);
+    const textColor = getClusterTextColor(color);
+    const count     = cluster.getChildCount();
+    return L.divIcon({
+      html: `<div style="background:${color};color:${textColor};` +
+            `width:100%;height:100%;border-radius:50%;display:flex;` +
+            `align-items:center;justify-content:center;font-weight:bold;">` +
+            `${count}</div>`,
+      className: 'crime-cluster-icon',
+      iconSize: L.point(40, 40),
+    });
+  }
+
   function buildMarkerLayer(data) {
-    _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
+    _markerLayer = L.markerClusterGroup({ chunkedLoading: true, iconCreateFunction: clusterIconCreateFunction });
     data.filter(hasCoords).forEach(item => {
       const color  = colorForType(item.caseType);
       const marker = L.circleMarker([item.latitude, item.longitude], {
-        radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+        radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1, caseType: item.caseType,
       });
       marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
       _markerLayer.addLayer(marker);
@@ -286,7 +329,7 @@
       data.filter(hasCoords).forEach(item => {
         const color  = colorForType(item.caseType);
         const marker = L.circleMarker([item.latitude, item.longitude], {
-          radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+          radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1, caseType: item.caseType,
         });
         marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
         _markerLayer.addLayer(marker);
@@ -349,6 +392,8 @@
       .db-name  { font-size:9px; color:rgba(255,255,255,.9); line-height:1.2; text-align:center; }
 
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+
+      .crime-cluster-icon { width:40px; height:40px; box-shadow:0 1px 4px rgba(0,0,0,.5); }
     `;
     document.head.appendChild(style);
   }
@@ -414,7 +459,7 @@
       removeDistrictLabels();
 
       if (mode === 'point') {
-        _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
+        _markerLayer = L.markerClusterGroup({ chunkedLoading: true, iconCreateFunction: clusterIconCreateFunction });
         _markerLayer.addTo(_map);
         addLegend();
       }
