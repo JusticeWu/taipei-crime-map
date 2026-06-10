@@ -9,7 +9,7 @@
 
 // ── Functions under test ────────────────────────────────────────────────────
 
-const CACHE_PREFIX = 'crimes:points:';
+const CACHE_PREFIX = 'crimes:points:v2:';
 
 function buildCacheKey(caseType, district, yearFrom, yearTo) {
   return CACHE_PREFIX +
@@ -63,21 +63,21 @@ function computeStatsFromHeatmap(data) {
 
 describe('buildCacheKey', () => {
   test('no filter → all segments empty', () => {
-    expect(buildCacheKey('', '', '', '')).toBe('crimes:points::::');
+    expect(buildCacheKey('', '', '', '')).toBe('crimes:points:v2::::');
   });
 
   test('caseType only', () => {
-    expect(buildCacheKey('1', '', '', '')).toBe('crimes:points:1:::');
+    expect(buildCacheKey('1', '', '', '')).toBe('crimes:points:v2:1:::');
   });
 
   test('all filters set', () => {
     expect(buildCacheKey('2', '大安區', '2020', '2024'))
-      .toBe('crimes:points:2:大安區:2020:2024');
+      .toBe('crimes:points:v2:2:大安區:2020:2024');
   });
 
   test('null / undefined treated as empty string', () => {
     expect(buildCacheKey(null, undefined, null, undefined))
-      .toBe('crimes:points::::');
+      .toBe('crimes:points:v2::::');
   });
 
   test('different filters produce different keys', () => {

@@ -72,8 +72,8 @@ public class CrimeController : ControllerBase
 
 
     /// <summary>
-    /// 點位圖專用端點：只回傳 lat/lng/caseType/occurredDate，
-    /// 省略不需要的欄位，大幅降低 JSON 大小（約減少 70%）
+    /// 點位圖專用端點：回傳 lat/lng/caseType/district/occurredDate/timeSlot/rawLocation，
+    /// 省略 id、caseNumber、isDataComplete 以縮減 JSON 大小
     /// </summary>
     [HttpGet("points")]
     [ProducesResponseType(typeof(PagedResult<PointCrimeDto>), StatusCodes.Status200OK)]
@@ -96,7 +96,7 @@ public class CrimeController : ControllerBase
 
         var full = await _queryHandler.HandleAsync(query, cancellationToken);
         var points = full.Data
-            .Select(d => new PointCrimeDto(d.Latitude, d.Longitude, d.CaseType, d.OccurredDate))
+            .Select(d => new PointCrimeDto(d.Latitude, d.Longitude, d.CaseType, d.District, d.OccurredDate, d.TimeSlot, d.RawLocation))
             .ToList();
         return Ok(new PagedResult<PointCrimeDto>(points, full.Total, full.Page, full.PageSize, full.TotalPages));
     }
