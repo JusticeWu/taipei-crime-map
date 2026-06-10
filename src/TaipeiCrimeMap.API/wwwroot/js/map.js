@@ -62,6 +62,26 @@
   };
   const DEFAULT_COLOR = '#95A5A6';
 
+  // 數字案類代碼（CaseType enum）→ 中文名稱，對應 CASE_TYPE_COLORS 的 key
+  const CASE_TYPE_ID_TO_NAME = {
+    1: '住宅竊盜',
+    2: '汽車竊盜',
+    3: '機車竊盜',
+    4: '自行車竊盜',
+    5: '搶奪',
+    6: '強盜',
+  };
+
+  /**
+   * 依案類（中文字串或數字代碼）取得對應顏色，找不到時回傳灰色 DEFAULT_COLOR
+   * @param {string|number} caseType
+   * @returns {string} 十六進位顏色碼
+   */
+  function getCaseTypeColor(caseType) {
+    const name = CASE_TYPE_ID_TO_NAME[caseType] || caseType;
+    return CASE_TYPE_COLORS[name] || DEFAULT_COLOR;
+  }
+
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
 
@@ -110,7 +130,7 @@
   }
 
   function colorForType(caseType) {
-    return CASE_TYPE_COLORS[caseType] || DEFAULT_COLOR;
+    return getCaseTypeColor(caseType);
   }
 
   function escapeHtml(str) {
