@@ -228,3 +228,37 @@
   寫斷言前要假設既存資料可能存在資料品質缺口（空值、未預期格式），
   應以篩選條件 + Contain/Any 縮小到自己控制的資料範圍，
   避免依賴「第一筆」或「全部」這類對既存資料敏感的假設
+
+## L021：擴充 API 回應 DTO 欄位後，前端 sessionStorage 快取未升版導致欄位顯示為「—」
+- 問題：PR #32 將 PointCrimeDto 擴充加入 district/timeSlot/rawLocation，
+  但點位圖的 sessionStorage 快取 key prefix（`crimes:points:`）未一併升版。
+  瀏覽器若在 #32 部署前已快取過相同篩選條件的資料，重新查詢時會直接命中
+  舊快取，回傳缺少這三個欄位的舊資料，導致 popup 的「行政區/時段/地點」
+  顯示為「—」
+- 根本原因：後端 DTO schema 變更，但前端快取 key 沒有版本資訊，
+  快取命中與否只看篩選條件是否相同，無法感知「資料形狀」已改變
+- 正確做法：每次擴充/變更 API 回應的 DTO 欄位時，
+  同步檢查前端是否有對應的 client-side 快取（sessionStorage/localStorage/IndexedDB），
+  並提升快取 key 的版本字串（例如 `crimes:points:` → `crimes:points:v2:`），
+  強制略過舊版快取
+- 相關模式：「後端回應格式變更」與「前端快取版本」要視為同一組變更，
+  review 時要互相對照，否則症狀會延遲出現（只有「曾經查詢過該篩選條件」
+  的使用者才會踩到），難以在開發環境重現
+
+## L022：CSS 規則對覆蓋顏色，但忘了一併處理 ::placeholder 與渲染方式假設錯誤
+- 問題一：年份輸入框已設定 `color: #DDDDDD`，但欄位為空、顯示 placeholder
+  （例如「2018」）時文字仍顯示為深灰色，使用者反應「文字顏色仍然太深」
+- 根本原因一：`color` 屬性不會套用到 `::placeholder` 偽元素，
+  瀏覽器對 placeholder 有獨立的預設顏色（且 Firefox 預設 `opacity` < 1），
+  必須額外撰寫 `::placeholder` 規則
+- 問題二：點位光暈最初以「加粗 circleMarker 的 SVG stroke」實作，
+  在 MarkerCluster 群聚／非最大縮放層級被使用者回報為「方形色塊」
+- 根本原因二：對 Leaflet 在不同縮放層級下個別點位與群聚圖示的渲染方式
+  做了過於樂觀的假設；`box-shadow` 對 SVG `<path>` 元素無效，
+  改用 `filter: drop-shadow(...)` 才能在 SVG 元素上產生正確的圓形光暈
+- 正確做法：
+  - 任何「文字顏色」的可讀性修正，都要連同 `::placeholder` 一併檢查
+  - 為 SVG 元素（如 Leaflet circleMarker）做光暈/陰影效果時，
+    使用 `filter: drop-shadow()` 而非 `box-shadow`
+- 相關模式：CSS 修正後應實際在瀏覽器（含空白輸入框、不同縮放層級）
+  檢視效果，不能只憑程式碼推論「應該已經套用」
