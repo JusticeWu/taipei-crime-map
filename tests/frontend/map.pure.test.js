@@ -53,8 +53,8 @@ function getClusterTextColor(backgroundColor) {
 
 // 點位圓點半徑與半透明光暈設定
 const MARKER_RADIUS = 6;
-const MARKER_HALO_BLUR = 5;
-const MARKER_HALO_OPACITY = 0.4;
+const MARKER_HALO_BLUR = 4;
+const MARKER_HALO_OPACITY = 0.25;
 
 function hexToRgba(hex, alpha) {
   const m = String(hex).replace('#', '');
@@ -225,7 +225,7 @@ describe('buildPointHaloCss', () => {
     expect(css).not.toContain('box-shadow');
   });
 
-  test('光暈模糊半徑為 5px（落在 4~6px 範圍）且透明度為同色 0.4', () => {
+  test('光暈模糊半徑為 4px（落在 4~6px 範圍）且透明度為同色 0.25', () => {
     const expectedShadow = hexToRgba('#1E8449', MARKER_HALO_OPACITY);
     expect(css).toContain(`drop-shadow(0 0 ${MARKER_HALO_BLUR}px ${expectedShadow})`);
     expect(MARKER_HALO_BLUR).toBeGreaterThanOrEqual(4);

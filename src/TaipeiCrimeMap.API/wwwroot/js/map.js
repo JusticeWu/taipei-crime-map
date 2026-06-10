@@ -114,8 +114,8 @@
   // blur/spread 為固定像素值，不受地圖縮放影響，且不會像加粗 stroke 一樣
   // 在群聚／非最大縮放層級被渲染成方形色塊
   const MARKER_RADIUS = 6;
-  const MARKER_HALO_BLUR = 5;       // 光暈模糊半徑（px），約等於圓點外露出的寬度
-  const MARKER_HALO_OPACITY = 0.4;
+  const MARKER_HALO_BLUR = 4;       // 光暈模糊半徑（px），約等於圓點外露出的寬度
+  const MARKER_HALO_OPACITY = 0.25; // 大量同色點位重疊時，避免光暈疊加成類似熱力圖的色塊
 
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
@@ -439,7 +439,15 @@
 
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
 
-      .crime-cluster-icon { width:40px; height:40px; box-shadow:0 1px 4px rgba(0,0,0,.5); }
+      .crime-cluster-icon {
+        width:40px; height:40px;
+        box-shadow:0 1px 4px rgba(0,0,0,.5);
+        border: none;
+        outline: none;
+        background: transparent;
+      }
+      .crime-cluster-icon:focus,
+      .leaflet-marker-icon.crime-cluster-icon { outline: none; }
 
 ${buildPointHaloCss()}
     `;
