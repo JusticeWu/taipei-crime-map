@@ -53,8 +53,20 @@ function getClusterTextColor(backgroundColor) {
 
 // 點位圓點半徑與半透明光暈設定
 const MARKER_RADIUS = 6;
-const MARKER_HALO_WIDTH = 10;
-const MARKER_HALO_OPACITY = 0.35;
+const MARKER_HALO_BLUR = 5;
+const MARKER_HALO_OPACITY = 0.4;
+
+function hexToRgba(hex, alpha) {
+  const m = String(hex).replace('#', '');
+  const r = parseInt(m.substring(0, 2), 16);
+  const g = parseInt(m.substring(2, 4), 16);
+  const b = parseInt(m.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function haloClassName(color) {
+  return 'point-halo-' + String(color).replace('#', '').toLowerCase();
+}
 
 function buildPointMarkerOptions(item) {
   const color = getCaseTypeColor(item.caseType);
@@ -63,10 +75,19 @@ function buildPointMarkerOptions(item) {
     fillColor: color,
     fillOpacity: 0.85,
     color,
-    weight: MARKER_HALO_WIDTH,
-    opacity: MARKER_HALO_OPACITY,
+    weight: 1,
+    opacity: 1,
+    className: haloClassName(color),
     caseType: item.caseType,
   };
+}
+
+function buildPointHaloCss() {
+  const colors = [...new Set([...Object.values(CASE_TYPE_COLORS), DEFAULT_COLOR])];
+  return colors.map(color => {
+    const shadow = hexToRgba(color, MARKER_HALO_OPACITY);
+    return `.${haloClassName(color)} { filter: drop-shadow(0 0 ${MARKER_HALO_BLUR}px ${shadow}); }`;
+  }).join('\n');
 }
 
 // ── getCaseTypeColor ────────────────────────────────────────────────────────
@@ -167,25 +188,47 @@ describe('getClusterTextColor', () => {
 // ── buildPointMarkerOptions（光暈效果）────────────────────────────────────────
 
 describe('buildPointMarkerOptions', () => {
-  test('帶有光暈設定：weight 與 opacity 形成半透明同色光暈', () => {
+  test('circleMarker 本體維持正常樣式，光暈交由 CSS class 處理', () => {
     const options = buildPointMarkerOptions({ caseType: '住宅竊盜' });
     expect(options.color).toBe('#1E8449');
     expect(options.fillColor).toBe('#1E8449');
     expect(options.radius).toBe(6);
-    expect(options.weight).toBe(10);
-    expect(options.opacity).toBeCloseTo(0.35);
+    expect(options.weight).toBe(1);
+    expect(options.opacity).toBe(1);
     expect(options.fillOpacity).toBeCloseTo(0.85);
+    expect(options.className).toBe('point-halo-1e8449');
   });
 
-  test('光暈顏色與點位主色相同（同色光暈）', () => {
-    const options = buildPointMarkerOptions({ caseType: '搶奪' });
-    expect(options.color).toBe(options.fillColor);
+  test('光暈 class 名稱依案類顏色而異', () => {
+    const a = buildPointMarkerOptions({ caseType: '搶奪' });
+    const b = buildPointMarkerOptions({ caseType: '機車竊盜' });
+    expect(a.className).toBe('point-halo-b7950b');
+    expect(b.className).toBe('point-halo-2471a3');
+    expect(a.className).not.toBe(b.className);
+  });
+});
+
+// ── buildPointHaloCss（光暈 CSS，filter: drop-shadow）─────────────────────────
+
+describe('buildPointHaloCss', () => {
+  const css = buildPointHaloCss();
+
+  test('每個案類顏色都產生對應的 drop-shadow class', () => {
+    Object.values(CASE_TYPE_COLORS).forEach(color => {
+      expect(css).toContain(`.${haloClassName(color)}`);
+    });
+    expect(css).toContain(`.${haloClassName(DEFAULT_COLOR)}`);
   });
 
-  test('光暈寬度的一半即為向外露出的光暈半徑（4~6px 範圍）', () => {
-    const options = buildPointMarkerOptions({ caseType: '機車竊盜' });
-    const haloRadius = options.weight / 2;
-    expect(haloRadius).toBeGreaterThanOrEqual(4);
-    expect(haloRadius).toBeLessThanOrEqual(6);
+  test('使用 filter: drop-shadow 而非 box-shadow（避免 SVG path 方形問題）', () => {
+    expect(css).toContain('filter: drop-shadow(');
+    expect(css).not.toContain('box-shadow');
+  });
+
+  test('光暈模糊半徑為 5px（落在 4~6px 範圍）且透明度為同色 0.4', () => {
+    const expectedShadow = hexToRgba('#1E8449', MARKER_HALO_OPACITY);
+    expect(css).toContain(`drop-shadow(0 0 ${MARKER_HALO_BLUR}px ${expectedShadow})`);
+    expect(MARKER_HALO_BLUR).toBeGreaterThanOrEqual(4);
+    expect(MARKER_HALO_BLUR).toBeLessThanOrEqual(6);
   });
 });
