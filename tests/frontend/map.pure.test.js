@@ -51,6 +51,24 @@ function getClusterTextColor(backgroundColor) {
   return String(backgroundColor).toUpperCase() === '#B7950B' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
 }
 
+// 點位圓點半徑與半透明光暈設定
+const MARKER_RADIUS = 6;
+const MARKER_HALO_WIDTH = 10;
+const MARKER_HALO_OPACITY = 0.35;
+
+function buildPointMarkerOptions(item) {
+  const color = getCaseTypeColor(item.caseType);
+  return {
+    radius: MARKER_RADIUS,
+    fillColor: color,
+    fillOpacity: 0.85,
+    color,
+    weight: MARKER_HALO_WIDTH,
+    opacity: MARKER_HALO_OPACITY,
+    caseType: item.caseType,
+  };
+}
+
 // ── getCaseTypeColor ────────────────────────────────────────────────────────
 
 describe('getCaseTypeColor', () => {
@@ -143,5 +161,31 @@ describe('getClusterTextColor', () => {
     expect(getClusterTextColor('#1E8449')).toBe('#FFFFFF');
     expect(getClusterTextColor('#C0392B')).toBe('#FFFFFF');
     expect(getClusterTextColor('#95A5A6')).toBe('#FFFFFF');
+  });
+});
+
+// ── buildPointMarkerOptions（光暈效果）────────────────────────────────────────
+
+describe('buildPointMarkerOptions', () => {
+  test('帶有光暈設定：weight 與 opacity 形成半透明同色光暈', () => {
+    const options = buildPointMarkerOptions({ caseType: '住宅竊盜' });
+    expect(options.color).toBe('#1E8449');
+    expect(options.fillColor).toBe('#1E8449');
+    expect(options.radius).toBe(6);
+    expect(options.weight).toBe(10);
+    expect(options.opacity).toBeCloseTo(0.35);
+    expect(options.fillOpacity).toBeCloseTo(0.85);
+  });
+
+  test('光暈顏色與點位主色相同（同色光暈）', () => {
+    const options = buildPointMarkerOptions({ caseType: '搶奪' });
+    expect(options.color).toBe(options.fillColor);
+  });
+
+  test('光暈寬度的一半即為向外露出的光暈半徑（4~6px 範圍）', () => {
+    const options = buildPointMarkerOptions({ caseType: '機車竊盜' });
+    const haloRadius = options.weight / 2;
+    expect(haloRadius).toBeGreaterThanOrEqual(4);
+    expect(haloRadius).toBeLessThanOrEqual(6);
   });
 });
