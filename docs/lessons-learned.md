@@ -210,3 +210,21 @@
 - 相關模式：任何「修改雲端資源設定後立即驗證」的場景，
   都應預留設定傳播時間並用小規模重試確認，
   避免把「設定剛生效中」誤判為「設定錯誤」
+
+## L020：Integration Test 對含真實種子資料的資料庫斷言 .First()，因資料品質缺口而失敗
+- 問題：PR #32 新增的 `GetCrimePoints_ShouldIncludeDistrictTimeSlotAndRawLocation`
+  測試使用 `pageSize=1` 且未過濾案類，merge 到 uat 後 CI 失敗：
+  `Expected point.TimeSlot not to be <null> or whitespace, but found <null>.`
+  本機無法重現（本機因缺少連線字串，全部 Integration Test 都無法執行）
+- 根本原因：CI 的測試資料庫已包含 11,514 筆真實種子資料，
+  測試只匯入 3 筆乾淨的測試資料後即查詢 `pageSize=1`（未過濾），
+  預設排序回傳的「第一筆」可能是真實資料中 TimeSlot 原始值無法解析、
+  `Normalize()` 回傳空字串的記錄，導致 `NotBeNullOrWhiteSpace` 斷言失敗
+- 正確做法：撰寫針對「剛匯入的測試資料」的斷言時，
+  應加上篩選條件（如 `caseType=` 對應匯入的案類）縮小範圍，
+  並用 `Should().Contain(p => ...)` 斷言「至少一筆符合預期」，
+  而不是對未過濾查詢的 `.First()` 做斷言
+- 相關模式：任何 Integration Test 在「資料庫已有大量既存/真實資料」的環境執行時，
+  寫斷言前要假設既存資料可能存在資料品質缺口（空值、未預期格式），
+  應以篩選條件 + Contain/Any 縮小到自己控制的資料範圍，
+  避免依賴「第一筆」或「全部」這類對既存資料敏感的假設
