@@ -19,6 +19,7 @@
       "Bash(pip *)",
       "Bash(python3 *)",
       "Bash(python *)",
+      "Bash($env:SLACK_WEBHOOK_URL = [Environment]::GetEnvironmentVariable('SLACK_WEBHOOK_URL','User')*)",
       "WebFetch(domain:github.com)"
     ]
   }

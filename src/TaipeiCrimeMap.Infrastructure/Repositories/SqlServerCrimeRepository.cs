@@ -120,6 +120,51 @@ public class SqlServerCrimeRepository : ICrimeRepository
         return await conn.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM theft_cases");
     }
 
+    public async Task<IReadOnlyList<TheftCase>> GetCasesWithMissingCoordinatesAsync(int batchSize, CancellationToken cancellationToken = default)
+    {
+        await using var conn = CreateConnection();
+        var rows = await conn.QueryAsync<TheftCaseRow>(
+            """
+            SELECT TOP (@BatchSize) *
+            FROM theft_cases
+            WHERE latitude IS NULL OR longitude IS NULL
+            ORDER BY case_number
+            """,
+            new { BatchSize = batchSize });
+
+        return rows.Select(r => r.ToDomain()).ToList();
+    }
+
+    public async Task<GeoCoordinate?> FindCoordinateByRawLocationAsync(string rawLocation, CancellationToken cancellationToken = default)
+    {
+        await using var conn = CreateConnection();
+        var row = await conn.QueryFirstOrDefaultAsync<CoordinateRow>(
+            """
+            SELECT TOP 1 latitude, longitude
+            FROM theft_cases
+            WHERE raw_location = @RawLocation
+              AND latitude IS NOT NULL AND longitude IS NOT NULL
+            """,
+            new { RawLocation = rawLocation });
+
+        return row is null ? null : GeoCoordinate.Create(row.Latitude!.Value, row.Longitude!.Value);
+    }
+
+    public async Task UpdateCoordinateAsync(Guid id, GeoCoordinate coordinate, CancellationToken cancellationToken = default)
+    {
+        await using var conn = CreateConnection();
+        await conn.ExecuteAsync(
+            "UPDATE theft_cases SET latitude = @Latitude, longitude = @Longitude WHERE id = @Id",
+            new { Id = id, coordinate.Latitude, coordinate.Longitude });
+    }
+
+    public async Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default)
+    {
+        await using var conn = CreateConnection();
+        return await conn.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM theft_cases WHERE latitude IS NULL OR longitude IS NULL");
+    }
+
     public async Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
         CrimeFilter filter, CancellationToken cancellationToken = default)
     {
@@ -233,5 +278,11 @@ public class SqlServerCrimeRepository : ICrimeRepository
     {
         public string District { get; init; } = string.Empty;
         public int Weight { get; init; }
+    }
+
+    private sealed record CoordinateRow
+    {
+        public double? Latitude { get; init; }
+        public double? Longitude { get; init; }
     }
 }
