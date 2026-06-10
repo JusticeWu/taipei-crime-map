@@ -16,6 +16,8 @@
       "Bash(az *)",
       "Bash(curl *)",
       "Bash(npm *)",
+      "Bash(npx jest*)",
+      "Bash(node --check src/*)",
       "Bash(pip *)",
       "Bash(python3 *)",
       "Bash(python *)",
