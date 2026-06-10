@@ -52,70 +52,14 @@
   const DEFAULT_ZOOM  = 13;
 
   const CASE_TYPE_COLORS = {
-    '住宅竊盜':   '#1E8449',
-    '汽車竊盜':   '#0E6655',
-    '機車竊盜':   '#2471A3',
-    '自行車竊盜': '#A569BD',
-    '搶奪':      '#B7950B',
-    '強盜':      '#CA6F1E',
+    '住宅竊盜':   '#e74c3c',
+    '汽車竊盜':   '#e67e22',
+    '機車竊盜':   '#f1c40f',
+    '自行車竊盜': '#2ecc71',
+    '搶奪':      '#9b59b6',
+    '強盜':      '#1abc9c',
   };
-  const DEFAULT_COLOR = '#95A5A6';
-
-  // MarkerCluster 群聚內包含多種案類時使用的顏色
-  const MIXED_CLUSTER_COLOR = '#C0392B';
-
-  // 淺色背景（如搶奪的深黃 #B7950B）需要深色文字才能清楚閱讀
-  const DARK_TEXT_COLOR  = '#333333';
-  const LIGHT_TEXT_COLOR = '#FFFFFF';
-
-  // 數字案類代碼（CaseType enum）→ 中文名稱，對應 CASE_TYPE_COLORS 的 key
-  const CASE_TYPE_ID_TO_NAME = {
-    1: '住宅竊盜',
-    2: '汽車竊盜',
-    3: '機車竊盜',
-    4: '自行車竊盜',
-    5: '搶奪',
-    6: '強盜',
-  };
-
-  /**
-   * 依案類（中文字串或數字代碼）取得對應顏色，找不到時回傳灰色 DEFAULT_COLOR
-   * @param {string|number} caseType
-   * @returns {string} 十六進位顏色碼
-   */
-  function getCaseTypeColor(caseType) {
-    const name = CASE_TYPE_ID_TO_NAME[caseType] || caseType;
-    return CASE_TYPE_COLORS[name] || DEFAULT_COLOR;
-  }
-
-  /**
-   * 依群聚內所有點位的案類，決定群聚圓圈顏色：
-   * 全部同一案類 → 該案類顏色；包含多種案類 → MIXED_CLUSTER_COLOR
-   * @param {Array<string|number>} caseTypes
-   * @returns {string} 十六進位顏色碼
-   */
-  function getClusterColor(caseTypes) {
-    if (!Array.isArray(caseTypes) || caseTypes.length === 0) return MIXED_CLUSTER_COLOR;
-    const colors = new Set(caseTypes.map(getCaseTypeColor));
-    return colors.size === 1 ? [...colors][0] : MIXED_CLUSTER_COLOR;
-  }
-
-  /**
-   * 依背景顏色決定文字顏色，確保可讀性（例如深黃底用深色字）
-   * @param {string} backgroundColor
-   * @returns {string} 文字顏色十六進位碼
-   */
-  function getClusterTextColor(backgroundColor) {
-    return String(backgroundColor).toUpperCase() === '#B7950B' ? DARK_TEXT_COLOR : LIGHT_TEXT_COLOR;
-  }
-
-  // 點位圓點半徑與半透明光暈設定
-  // 光暈以 CSS filter: drop-shadow 實現（套用在 circleMarker 的 SVG <path> 上），
-  // blur/spread 為固定像素值，不受地圖縮放影響，且不會像加粗 stroke 一樣
-  // 在群聚／非最大縮放層級被渲染成方形色塊
-  const MARKER_RADIUS = 6;
-  const MARKER_HALO_BLUR = 4;       // 光暈模糊半徑（px），約等於圓點外露出的寬度
-  const MARKER_HALO_OPACITY = 0.25; // 大量同色點位重疊時，避免光暈疊加成類似熱力圖的色塊
+  const DEFAULT_COLOR = '#95a5a6';
 
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
@@ -165,7 +109,7 @@
   }
 
   function colorForType(caseType) {
-    return getCaseTypeColor(caseType);
+    return CASE_TYPE_COLORS[caseType] || DEFAULT_COLOR;
   }
 
   function escapeHtml(str) {
@@ -174,59 +118,15 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  /**
-   * 將 #RRGGBB 轉為 rgba(r,g,b,alpha) 字串
-   * @param {string} hex
-   * @param {number} alpha
-   * @returns {string}
-   */
-  function hexToRgba(hex, alpha) {
-    const m = String(hex).replace('#', '');
-    const r = parseInt(m.substring(0, 2), 16);
-    const g = parseInt(m.substring(2, 4), 16);
-    const b = parseInt(m.substring(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  }
-
-  /**
-   * 依案類顏色產生光暈用的 CSS class 名稱（不含前置 .）
-   * @param {string} color - #RRGGBB
-   * @returns {string}
-   */
-  function haloClassName(color) {
-    return 'point-halo-' + String(color).replace('#', '').toLowerCase();
-  }
-
-  /**
-   * 建立單一案件點位的 circleMarker，外圍帶半透明同色光暈
-   * （以 CSS filter: drop-shadow 實現，避免群聚／非最大縮放層級時
-   * 加粗 SVG stroke 被渲染成方形色塊的問題）
-   * @param {object} item - 含 latitude/longitude/caseType 的案件資料
-   * @returns {L.CircleMarker}
-   */
-  function createPointMarker(item) {
-    const color = colorForType(item.caseType);
-    return L.circleMarker([item.latitude, item.longitude], {
-      radius: MARKER_RADIUS,
-      fillColor: color,
-      fillOpacity: 0.85,
-      color,
-      weight: 1,
-      opacity: 1,
-      className: haloClassName(color),
-      caseType: item.caseType,
-    });
-  }
-
   function buildPopupHtml(item) {
     return [
       '<div class="crime-popup">',
       `  <strong>${escapeHtml(item.caseType || '未知')}</strong>`,
       '  <table>',
       `    <tr><th>行政區</th><td>${escapeHtml(item.district || '—')}</td></tr>`,
+      `    <tr><th>日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || '—')}</td></tr>`,
       `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || '—')}</td></tr>`,
-      `    <tr><th>發生日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       '  </table>',
       '</div>',
     ].join('\n');
@@ -241,26 +141,13 @@
     _heatLayer = L.heatLayer(points, HEAT_OPTIONS).addTo(_map);
   }
 
-  // 群聚圓圈圖示：依群聚內所有點位的案類決定顏色與文字顏色
-  function clusterIconCreateFunction(cluster) {
-    const caseTypes = cluster.getAllChildMarkers().map(m => m.options.caseType);
-    const color     = getClusterColor(caseTypes);
-    const textColor = getClusterTextColor(color);
-    const count     = cluster.getChildCount();
-    return L.divIcon({
-      html: `<div style="background:${color};color:${textColor};` +
-            `width:100%;height:100%;border-radius:50%;display:flex;` +
-            `align-items:center;justify-content:center;font-weight:bold;">` +
-            `${count}</div>`,
-      className: 'crime-cluster-icon',
-      iconSize: L.point(40, 40),
-    });
-  }
-
   function buildMarkerLayer(data) {
-    _markerLayer = L.markerClusterGroup({ chunkedLoading: true, iconCreateFunction: clusterIconCreateFunction });
+    _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
     data.filter(hasCoords).forEach(item => {
-      const marker = createPointMarker(item);
+      const color  = colorForType(item.caseType);
+      const marker = L.circleMarker([item.latitude, item.longitude], {
+        radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+      });
       marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
       _markerLayer.addLayer(marker);
     });
@@ -376,7 +263,10 @@
     const { data } = _renderQueue.shift();
     if (_markerLayer) {
       data.filter(hasCoords).forEach(item => {
-        const marker = createPointMarker(item);
+        const color  = colorForType(item.caseType);
+        const marker = L.circleMarker([item.latitude, item.longitude], {
+          radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+        });
         marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
         _markerLayer.addLayer(marker);
       });
@@ -432,39 +322,14 @@
       .legend-dot   { display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0; border:1px solid rgba(255,255,255,.25); }
       .legend-label { white-space:nowrap; }
 
-      .district-bubble { width:56px; height:56px; border-radius:50%; background:rgba(44,62,80,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s; }
+      .district-bubble { width:56px; height:56px; border-radius:50%; background:rgba(44,62,80,.88); border:2px solid rgba(255,255,255,.75); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s; }
       .district-bubble:hover { transform:scale(1.12); }
       .db-count { font-size:13px; font-weight:bold; color:#f1c40f; line-height:1.25; }
       .db-name  { font-size:9px; color:rgba(255,255,255,.9); line-height:1.2; text-align:center; }
 
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
-
-      .crime-cluster-icon {
-        width:40px; height:40px;
-        box-shadow:0 1px 4px rgba(0,0,0,.5);
-        border: none;
-        outline: none;
-        background: transparent;
-      }
-      .crime-cluster-icon:focus,
-      .leaflet-marker-icon.crime-cluster-icon { outline: none; }
-
-${buildPointHaloCss()}
     `;
     document.head.appendChild(style);
-  }
-
-  /**
-   * 為每個案類顏色（含 fallback）產生光暈用的 CSS class，
-   * 使用 filter: drop-shadow 在 circleMarker 的 SVG <path> 外圍加上半透明同色光暈
-   * @returns {string}
-   */
-  function buildPointHaloCss() {
-    const colors = [...new Set([...Object.values(CASE_TYPE_COLORS), DEFAULT_COLOR])];
-    return colors.map(color => {
-      const shadow = hexToRgba(color, MARKER_HALO_OPACITY);
-      return `      .${haloClassName(color)} { filter: drop-shadow(0 0 ${MARKER_HALO_BLUR}px ${shadow}); }`;
-    }).join('\n');
   }
 
   // ---------------------------------------------------------------------------
@@ -528,7 +393,7 @@ ${buildPointHaloCss()}
       removeDistrictLabels();
 
       if (mode === 'point') {
-        _markerLayer = L.markerClusterGroup({ chunkedLoading: true, iconCreateFunction: clusterIconCreateFunction });
+        _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
         _markerLayer.addTo(_map);
         addLegend();
       }

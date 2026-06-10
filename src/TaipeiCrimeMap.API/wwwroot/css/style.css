@@ -151,19 +151,6 @@ input[type="number"]::-webkit-outer-spin-button {
   opacity: 0.4;
 }
 
-/* 起始/結束年份輸入框：提高文字對比度，深色背景下更易閱讀 */
-#input-year-from,
-#input-year-to {
-  color: #EEEEEE;
-}
-
-/* placeholder 預設顏色較深，需另外覆寫並關閉瀏覽器預設透明度 */
-#input-year-from::placeholder,
-#input-year-to::placeholder {
-  color: #EEEEEE;
-  opacity: 1;
-}
-
 /* Toggle Mode */
 .toggle-group {
   display: flex;
@@ -337,38 +324,6 @@ input[type="number"]::-webkit-outer-spin-button {
   width: 100%;
   height: 100vh;
   background-color: var(--bg-primary);
-}
-
-/* ===========================
-   群聚圖示（MarkerCluster）— 移除預設白色外框/背景
-   Leaflet DivIcon 預設 className 為 leaflet-div-icon
-   （background:#fff; border:1px solid #666;），即使自訂
-   iconCreateFunction 指定了 className，部分瀏覽器仍可能
-   套用此預設規則，造成圓形圖示外圍露出方形白底/灰邊。
-   以較高權重（!important + 多重選擇器）一併覆蓋掉。
-   =========================== */
-.leaflet-marker-pane .leaflet-div-icon,
-.leaflet-marker-pane .crime-cluster-icon,
-.crime-cluster-icon,
-.marker-cluster,
-.marker-cluster div {
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-}
-
-.leaflet-div-icon {
-  background: transparent !important;
-  border: none !important;
-}
-
-.leaflet-marker-icon.crime-cluster-icon {
-  background: transparent !important;
-  border: none !important;
-}
-
-.crime-cluster-icon {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .5) !important;
 }
 
 /* Fix Leaflet z-index conflicts */
