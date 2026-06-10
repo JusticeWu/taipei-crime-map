@@ -432,7 +432,7 @@
       .legend-dot   { display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0; border:1px solid rgba(255,255,255,.25); }
       .legend-label { white-space:nowrap; }
 
-      .district-bubble { width:56px; height:56px; border-radius:50%; background:rgba(44,62,80,.88); border:2px solid rgba(255,255,255,.75); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s; }
+      .district-bubble { width:56px; height:56px; border-radius:50%; background:rgba(44,62,80,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s; }
       .district-bubble:hover { transform:scale(1.12); }
       .db-count { font-size:13px; font-weight:bold; color:#f1c40f; line-height:1.25; }
       .db-name  { font-size:9px; color:rgba(255,255,255,.9); line-height:1.2; text-align:center; }
