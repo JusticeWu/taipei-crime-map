@@ -164,6 +164,24 @@
   （短名稱 vs FQDN、IP vs 主機名稱）是低成本、高訊息量的排查手段，
   可以在深入懷疑平台限制／改採其他服務之前先嘗試
 
+## L019：視覺映射邏輯（資料欄位 → 顏色/樣式）需要單元測試，不能只靠人眼驗證
+- 問題：map.js 的 colorForType 直接用 `CASE_TYPE_COLORS[caseType]` 查表，
+  沒有任何測試覆蓋；如果 API 回傳格式（中文字串 vs 數字代碼）與
+  CASE_TYPE_COLORS 的 key 格式不一致，畫面會變成全部點位都是
+  DEFAULT_COLOR（或顏色錯亂），但 CI 不會抓到，因為沒有測試比對
+  「資料欄位值」與「顏色表 key」是否能對上
+- 根本原因：資料欄位格式（字串/數字）與顯示用的對照表 key 是分散在
+  後端 DTO 與前端常數物件兩處維護的「隱性契約」，沒有測試把兩者
+  綁在一起驗證
+- 正確做法：把「欄位值 → 顏色」的查表邏輯抽成一個純函數
+  （例如 getCaseTypeColor(caseType)），同時支援中文字串與數字代碼，
+  找不到對應時回傳明確的 fallback 顏色；並在 Jest 測試中針對
+  每個案類代碼（1~6）與未知值都寫斷言，確保顏色表的 key 與
+  實際資料格式保持一致
+- 相關模式：任何「資料 → 視覺呈現」的對照表（顏色、圖示、文字標籤）
+  都應視為需要測試的邏輯，而不是單純的設定檔；CI 綠燈不代表
+  畫面正確，需要有測試把資料格式與顯示對照表綁在一起檢查
+
 ## L018：CI push-to-acr 因 mcr.microsoft.com 回傳 403 Forbidden 暫時性失敗
 - 問題：PR #29 merge 到 uat 後，CI 的 push-to-acr 階段在
   `docker buildx build` 拉取 `mcr.microsoft.com/dotnet/sdk:9.0` 時
