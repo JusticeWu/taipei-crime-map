@@ -384,9 +384,6 @@
       if (_lastHeatmapData) {
         // Have cached heatmap — re-render without fetching
         if (window.mapModule) {
-          if (typeof window.mapModule.update === 'function') {
-            window.mapModule.update(_lastData, 'heat');
-          }
           if (typeof window.mapModule.setHeatmap === 'function') {
             window.mapModule.setHeatmap(_lastHeatmapData);
           }
