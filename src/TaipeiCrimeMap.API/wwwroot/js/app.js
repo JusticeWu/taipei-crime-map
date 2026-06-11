@@ -167,7 +167,7 @@
      sessionStorage cache for point-mode data
      key: crimes:{caseType}:{districtName}:{yearFrom}:{yearTo}
   ----------------------------------------------------------------------- */
-  const CACHE_PREFIX = 'crimes:points:v2:'; // v2: PointCrimeDto 加入 district/timeSlot/rawLocation
+  const CACHE_PREFIX = 'crimes:points:'; // versioned to avoid collision with old full-DTO cache
 
   function buildCacheKey() {
     const p = buildQueryParams();

@@ -124,9 +124,9 @@
       `  <strong>${escapeHtml(item.caseType || '未知')}</strong>`,
       '  <table>',
       `    <tr><th>行政區</th><td>${escapeHtml(item.district || '—')}</td></tr>`,
+      `    <tr><th>日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || '—')}</td></tr>`,
       `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || '—')}</td></tr>`,
-      `    <tr><th>發生日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       '  </table>',
       '</div>',
     ].join('\n');
