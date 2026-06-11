@@ -294,3 +294,24 @@
   文字（▼ / ▲）讓使用者看得出目前狀態
 - 相關模式：position:fixed 的覆蓋層若與觸發它的按鈕同處頁面頂端，務必
   檢查兩者的 z-index / 版面位置關係，避免覆蓋層蓋住觸發點造成「按鈕失靈」
+
+## L026：手機版用同一條 .leaflet-bottom 規則同時偏移 attribution 與自訂控制項，導致 attribution 留白
+- 問題：手機版地圖右下角的 OpenStreetMap attribution 列與地圖底部之間
+  多了約 70px 的空白，即使在 `index.html` 加入 `!important` 的
+  `.leaflet-control-attribution` 樣式也無法消除
+- 根本原因：`map.js` 的手機版規則
+  `.leaflet-bottom.leaflet-left, .leaflet-bottom.leaflet-right { bottom: 70px; }`
+  原意是讓左下角縮放按鈕與右下角圖例離地圖底部 80px，但 Leaflet 的
+  attribution 控制項預設也放在 `.leaflet-bottom.leaflet-right` 這個
+  共用容器內，因此被同一條規則一起往上推了 70px，造成空白
+- 正確做法：在 `style.css` 的手機版媒體查詢中，額外加入
+  `.leaflet-bottom.leaflet-right { bottom: 0 !important; }`，用
+  `!important` 蓋過共用的 70px 偏移，讓該容器（含 attribution）
+  緊貼地圖底部；`.leaflet-bottom.leaflet-left`（縮放按鈕側）維持
+  `bottom: 70px` 不變。圖例與圖層切換按鈕因為改用
+  `positionLayerPicker()`／自身的 `position:absolute; bottom:Xpx`
+  動態定位，整體位置會隨容器下移但相對關係不受影響
+- 相關模式：[[L025]]；Leaflet 的四個角落容器（`.leaflet-top/.leaflet-bottom`
+  × `.leaflet-left/.leaflet-right`）可能同時承載「框架內建控制項
+  （如 attribution、zoom）」與「自訂控制項（如圖例、圖層按鈕）」，
+  對整個容器套用版面偏移前，需先確認容器內還有哪些控制項會被一併影響
