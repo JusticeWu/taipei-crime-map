@@ -366,16 +366,29 @@
   /* -----------------------------------------------------------------------
      Mobile filter panel — slide down/up from top, auto-collapse after query
   ----------------------------------------------------------------------- */
+  function updateFilterToggleLabel() {
+    if (!elBtnFilterToggle || !elFilterPanel) return;
+    elBtnFilterToggle.textContent = elFilterPanel.classList.contains('open')
+      ? '篩選條件 ▲'
+      : '篩選條件 ▼';
+  }
+
   function openFilterPanel() {
-    if (elFilterPanel) elFilterPanel.classList.add('open');
+    if (!elFilterPanel) return;
+    elFilterPanel.classList.add('open');
+    updateFilterToggleLabel();
   }
 
   function closeFilterPanel() {
-    if (elFilterPanel) elFilterPanel.classList.remove('open');
+    if (!elFilterPanel) return;
+    elFilterPanel.classList.remove('open');
+    updateFilterToggleLabel();
   }
 
   function toggleFilterPanel() {
-    if (elFilterPanel) elFilterPanel.classList.toggle('open');
+    if (!elFilterPanel) return;
+    elFilterPanel.classList.toggle('open');
+    updateFilterToggleLabel();
   }
 
   function closeFilterPanelOnMobile() {
