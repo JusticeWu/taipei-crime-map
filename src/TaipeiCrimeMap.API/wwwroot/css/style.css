@@ -357,11 +357,12 @@ input[type="number"]::placeholder {
   background-color: var(--bg-accent) !important;
 }
 
-/* 縮小屬性宣告列高度，使其緊貼地圖底部 */
+/* 縮小屬性宣告列高度，使其緊貼地圖底部（須加 !important 覆蓋 Leaflet 預設樣式） */
 .leaflet-control-attribution {
-  margin-bottom: 0;
-  padding: 2px 4px;
+  margin-bottom: 0 !important;
+  padding: 2px 4px !important;
   font-size: 10px;
+  line-height: 1 !important;
 }
 
 /* 桌面版：縮放按鈕位置下移，避免太貼近左上角邊緣 */
