@@ -370,6 +370,27 @@
 
       .emoji-marker { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.5); }
 
+      /* 手機版：底圖切換控制項縮小，避免占用過多畫面 */
+      @media (max-width: 768px) {
+        .leaflet-control-layers {
+          font-size: 11px;
+          max-width: 130px;
+          padding: 4px 6px;
+        }
+        .leaflet-control-layers-list label {
+          margin-bottom: 2px;
+        }
+        .leaflet-control-layers-base label,
+        .leaflet-control-layers-overlays label {
+          font-size: 11px;
+          line-height: 1.3;
+        }
+        .leaflet-control-layers-base span,
+        .leaflet-control-layers-overlays span {
+          font-size: 11px;
+        }
+      }
+
       /* 手機版：圖例縮小字體，緊接在底圖切換控制項下方 */
       @media (max-width: 768px) {
         .crime-legend { font-size:12px; padding:6px 10px; min-width:90px; margin-top:6px; }
