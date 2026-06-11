@@ -24,6 +24,9 @@
   let elBtnQuery, elToggleMode;
   let elStatTotal, elStatWithCoords, elStatTopDistrict;
   let elLoadingOverlay;
+  let elFilterPanel, elBtnFilterToggle, elBtnFilterClose;
+
+  const MOBILE_BREAKPOINT = 768;
 
   /* -----------------------------------------------------------------------
      State
@@ -53,9 +56,9 @@
      Display mode
   ----------------------------------------------------------------------- */
   function getDisplayMode() {
-    if (!elToggleMode) return 'heat';
+    if (!elToggleMode) return 'point';
     const checked = elToggleMode.querySelector('input[type="radio"]:checked');
-    return checked ? checked.value : 'heat';
+    return checked ? checked.value : 'point';
   }
 
   /* -----------------------------------------------------------------------
@@ -115,6 +118,43 @@
     if (elStatTopDistrict) elStatTopDistrict.textContent = stats.topDistrict;
   }
 
+  /**
+   * 點位圖模式（/api/crime/points）的精簡 DTO 不含 district 欄位，
+   * 因此「最多案件行政區」改以 /api/crime/stats 的 districtDistribution
+   * 為準（涵蓋完整篩選結果，且兩種模式皆適用）
+   */
+  function renderTopDistrictFromStats(stats) {
+    if (!elStatTopDistrict) return;
+    const distribution = (stats && stats.districtDistribution) || [];
+    if (distribution.length === 0) return;
+
+    let top = distribution[0];
+    for (const d of distribution) {
+      if ((d.count || 0) > (top.count || 0)) top = d;
+    }
+    elStatTopDistrict.textContent = top.district || '—';
+  }
+
+  /* -----------------------------------------------------------------------
+     Distribution charts — fetch pre-aggregated stats from /api/crime/stats
+  ----------------------------------------------------------------------- */
+  async function fetchAndRenderCharts() {
+    if (!window.chartModule || typeof window.chartModule.update !== 'function') return;
+
+    try {
+      const resp = await fetch(`${API_BASE}/stats?${buildQueryParams()}`,
+        { headers: { Accept: 'application/json' } });
+      if (!resp.ok) throw new Error(`API ${resp.status}`);
+
+      const stats = await resp.json();
+      window.chartModule.update(stats);
+      renderTopDistrictFromStats(stats);
+    } catch (err) {
+      console.error('Stats query failed:', err);
+      window.chartModule.update({ districtDistribution: [], timeSlotDistribution: [] });
+    }
+  }
+
   /* -----------------------------------------------------------------------
      Heat mode query — calls /api/crime/heatmap only (12 district points)
   ----------------------------------------------------------------------- */
@@ -150,6 +190,7 @@
       }
 
       renderStats(computeStatsFromHeatmap(data));
+      fetchAndRenderCharts();
 
     } catch (err) {
       console.error('Heatmap query failed:', err);
@@ -240,9 +281,7 @@
         window.mapModule.clearProgress();
       }
       renderStats(computeStats(_lastData));
-      if (window.chartModule && typeof window.chartModule.update === 'function') {
-        window.chartModule.update(_lastData);
-      }
+      fetchAndRenderCharts();
       setLoading(false);
       if (elBtnQuery) elBtnQuery.disabled = false;
       setToggleDisabled(false);
@@ -309,10 +348,7 @@
       }
 
       renderStats(computeStats(_lastData));
-
-      if (window.chartModule && typeof window.chartModule.update === 'function') {
-        window.chartModule.update(_lastData);
-      }
+      fetchAndRenderCharts();
 
     } catch (err) {
       console.error('Query failed:', err);
@@ -327,6 +363,38 @@
   }
 
   /* -----------------------------------------------------------------------
+     Mobile filter panel — slide down/up from top, auto-collapse after query
+  ----------------------------------------------------------------------- */
+  function updateFilterToggleLabel() {
+    if (!elBtnFilterToggle || !elFilterPanel) return;
+    elBtnFilterToggle.textContent = elFilterPanel.classList.contains('open')
+      ? '篩選條件  ▲'
+      : '篩選條件  ▼';
+  }
+
+  function openFilterPanel() {
+    if (!elFilterPanel) return;
+    elFilterPanel.classList.add('open');
+    updateFilterToggleLabel();
+  }
+
+  function closeFilterPanel() {
+    if (!elFilterPanel) return;
+    elFilterPanel.classList.remove('open');
+    updateFilterToggleLabel();
+  }
+
+  function toggleFilterPanel() {
+    if (!elFilterPanel) return;
+    elFilterPanel.classList.toggle('open');
+    updateFilterToggleLabel();
+  }
+
+  function closeFilterPanelOnMobile() {
+    if (window.innerWidth < MOBILE_BREAKPOINT) closeFilterPanel();
+  }
+
+  /* -----------------------------------------------------------------------
      Dispatch query based on current mode
   ----------------------------------------------------------------------- */
   function doQuery() {
@@ -335,6 +403,7 @@
     } else {
       queryProgressive();
     }
+    closeFilterPanelOnMobile();
   }
 
   function appendToMap(data, mode) {
@@ -356,7 +425,7 @@
     const currentYear = new Date().getFullYear();
     if (elYearFrom) {
       elYearFrom.max         = String(currentYear);
-      elYearFrom.placeholder = '2018';
+      elYearFrom.placeholder = '2015';
     }
     if (elYearTo) {
       elYearTo.max         = String(currentYear);
@@ -412,6 +481,9 @@
     elStatWithCoords  = document.getElementById('stat-with-coords');
     elStatTopDistrict = document.getElementById('stat-top-district');
     elLoadingOverlay  = document.getElementById('loading-overlay');
+    elFilterPanel     = document.getElementById('filter-panel');
+    elBtnFilterToggle = document.getElementById('btn-filter-toggle');
+    elBtnFilterClose  = document.getElementById('btn-filter-close');
 
     if (window.mapModule && typeof window.mapModule.init === 'function') {
       window.mapModule.init('map');
@@ -424,8 +496,10 @@
 
     if (elBtnQuery) elBtnQuery.addEventListener('click', doQuery);
     if (elToggleMode) elToggleMode.addEventListener('change', onModeChange);
+    if (elBtnFilterToggle) elBtnFilterToggle.addEventListener('click', toggleFilterPanel);
+    if (elBtnFilterClose) elBtnFilterClose.addEventListener('click', closeFilterPanel);
 
-    doQuery(); // defaults to heat mode → queryHeatmapOnly() (instant)
+    doQuery(); // defaults to point mode → queryProgressive()
   }
 
   if (document.readyState === 'loading') {

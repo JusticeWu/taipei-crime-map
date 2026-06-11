@@ -90,6 +90,18 @@ section {
   flex-shrink: 0;
 }
 
+.filter-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Mobile-only controls — hidden on desktop */
+#btn-filter-toggle,
+#btn-filter-close {
+  display: none;
+}
+
 .form-group {
   margin-bottom: 12px;
 }
@@ -149,6 +161,10 @@ select option {
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   opacity: 0.4;
+}
+
+input[type="number"]::placeholder {
+  color: #EEEEEE;
 }
 
 /* Toggle Mode */
@@ -341,6 +357,24 @@ input[type="number"]::-webkit-outer-spin-button {
   background-color: var(--bg-accent) !important;
 }
 
+/* 縮小屬性宣告列高度，使其緊貼地圖底部（須加 !important 覆蓋 Leaflet 預設樣式） */
+.leaflet-control-attribution {
+  margin-bottom: 0 !important;
+  padding: 2px 4px !important;
+  font-size: 10px;
+  line-height: 1 !important;
+}
+
+/* 桌面版：縮放按鈕固定於地圖左下角，距底部 80px、距左側 10px */
+@media (min-width: 768px) {
+  .leaflet-control-zoom {
+    position: absolute;
+    bottom: 80px;
+    left: 10px;
+    top: auto;
+  }
+}
+
 /* ===========================
    Loading Overlay
    =========================== */
@@ -383,23 +417,92 @@ input[type="number"]::-webkit-outer-spin-button {
     overflow: auto;
   }
 
+  /* attribution 控制項與圖例/圖層按鈕同屬 .leaflet-bottom.leaflet-right，
+     將其 bottom 固定為 0，使 attribution 緊貼地圖底部，
+     不受縮放按鈕側 70px 偏移影響 */
+  .leaflet-bottom.leaflet-right {
+    bottom: 0 !important;
+  }
+
   #app {
     flex-direction: column;
     height: auto;
     min-height: 100vh;
+    /* 為固定在頂部的篩選列（48px）預留空間，避免內容被遮擋 */
+    padding-top: 48px;
   }
 
+  /* #left-panel 改為 display:contents，子區塊變成 #app 的直接 flex
+     items，可用 order 排列在地圖上下方；樣式（背景色等）改套用到各子區塊 */
   #left-panel {
+    display: contents;
+  }
+
+  /* 手機版頂部固定篩選列 — 點擊整列（含箭頭）皆可切換開收。
+     position:fixed 讓此列永遠固定於視窗頂部，不隨頁面捲動，
+     z-index 高於篩選面板，避免捲動時出現殘影或被面板蓋住 */
+  #btn-filter-toggle {
+    display: block;
+    order: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1001;
     width: 100%;
-    min-width: unset;
-    border-right: none;
+    height: 48px;
+    padding: 12px 16px;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: none;
     border-bottom: 1px solid var(--border-color);
-    overflow: visible;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* 篩選條件面板：從篩選列下方滑出。
+     收合時 padding 設為 0，避免 section 預設的上下 padding
+     讓「篩選條件」標題列在 max-height:0 時仍露出一截 */
+  #filter-panel {
+    order: 1;
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    max-height: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 1000;
+    transition: max-height var(--transition);
+  }
+
+  #filter-panel.open {
+    max-height: calc(100vh - 48px);
+    padding: 16px;
+    overflow-y: auto;
+  }
+
+  #btn-filter-close {
+    display: block;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
   }
 
   #map-container {
+    order: 1;
+    flex: none;
     width: 100%;
-    height: 60vw;
+    /* 多扣 120px，讓下方統計圖露出更多，提示使用者可往下滑動 */
+    height: calc(100vh - 48px - 120px);
     min-height: 300px;
   }
 
@@ -407,9 +510,22 @@ input[type="number"]::-webkit-outer-spin-button {
     height: 100%;
   }
 
-  /* Hide chart section on mobile */
+  /* 統計圖表區塊 — 直接顯示於地圖下方，背景稍微提亮以利辨識 */
   #chart-container {
-    display: none;
+    order: 2;
+    flex: none;
+    height: 480px;
+    background-color: #2A3F5F;
+  }
+
+  #stats-panel {
+    order: 3;
+    background-color: var(--bg-secondary);
+  }
+
+  #top-district-panel {
+    order: 4;
+    background-color: var(--bg-secondary);
   }
 
   .stat-value {

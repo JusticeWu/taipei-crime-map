@@ -2,10 +2,12 @@ using FluentAssertions;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using System.Text.Json;
 using TaipeiCrimeMap.Application.DTOs;
 using TaipeiCrimeMap.Application.Handlers;
+using TaipeiCrimeMap.Application.Interfaces;
 using TaipeiCrimeMap.Application.Queries;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Exceptions;
@@ -16,30 +18,34 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 
 public class GetCrimesByFilterQueryHandlerTests
 {
-    private readonly Mock<ICrimeRepository> _repositoryMock;
-    private readonly Mock<IDistributedCache> _cacheMock;
+    private readonly ICrimeRepository _repository;
+    private readonly IDistributedCache _cache;
     private readonly IMemoryCache _memoryCache;
+    private readonly ITimingTracker _timing;
     private readonly GetCrimesByFilterQueryHandler _handler;
 
     public GetCrimesByFilterQueryHandlerTests()
     {
-        _repositoryMock = new Mock<ICrimeRepository>();
-        _cacheMock = new Mock<IDistributedCache>();
+        _repository = Substitute.For<ICrimeRepository>();
+        _cache = Substitute.For<IDistributedCache>();
         _memoryCache = new MemoryCache(new MemoryCacheOptions());
+        _timing = Substitute.For<ITimingTracker>();
+        _timing.Track(Arg.Any<string>()).Returns(Substitute.For<IDisposable>());
 
-        _cacheMock
-            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((byte[]?)null);
-        _cacheMock
-            .Setup(c => c.SetAsync(
-                It.IsAny<string>(), It.IsAny<byte[]>(),
-                It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+        _cache
+            .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((byte[]?)null);
+        _cache
+            .SetAsync(
+                Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         _handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object,
-            _cacheMock.Object,
+            _repository,
+            _cache,
             _memoryCache,
+            _timing,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
     }
 
@@ -58,9 +64,9 @@ public class GetCrimesByFilterQueryHandlerTests
                 rawLocation: "臺北市內湖區成功路五段31號")
         };
 
-        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)cases, cases.Count));
+        _repository.GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)cases, cases.Count));
 
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Residential);
 
@@ -95,9 +101,9 @@ public class GetCrimesByFilterQueryHandlerTests
     public async Task HandleAsync_WithNoFilter_ShouldCallGetPagedByFilterAsync()
     {
         // Arrange
-        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository.GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery();
 
@@ -105,18 +111,17 @@ public class GetCrimesByFilterQueryHandlerTests
         await _handler.HandleAsync(query);
 
         // Assert
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_WithDistrictFilter_ShouldPassCorrectFilterToRepository()
     {
         // Arrange
-        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository.GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery(DistrictName: "大安區");
 
@@ -124,10 +129,9 @@ public class GetCrimesByFilterQueryHandlerTests
         await _handler.HandleAsync(query);
 
         // Assert
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.Is<CrimeFilter>(f => f.District != null && f.District.Name == "大安區"),
-                It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Is<CrimeFilter>(f => f.District != null && f.District.Name == "大安區"),
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -145,9 +149,9 @@ public class GetCrimesByFilterQueryHandlerTests
                 rawLocation: "臺北市內湖區成功路五段31號")
         };
 
-        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)cases, cases.Count));
+        _repository.GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)cases, cases.Count));
 
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Residential);
 
@@ -157,18 +161,17 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         secondResult.Should().BeEquivalentTo(firstResult);
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_DifferentQueries_ShouldCallRepositoryTwice()
     {
         // Arrange
-        _repositoryMock.Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository.GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query1 = new GetCrimesByFilterQuery(DistrictName: "大安區");
         var query2 = new GetCrimesByFilterQuery(DistrictName: "內湖區");
@@ -178,9 +181,8 @@ public class GetCrimesByFilterQueryHandlerTests
         await _handler.HandleAsync(query2);
 
         // Assert
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Exactly(2));
+        await _repository.Received(2).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -190,14 +192,14 @@ public class GetCrimesByFilterQueryHandlerTests
     public async Task HandleAsync_WhenCacheThrows_ShouldFallbackToRepository()
     {
         // Arrange
-        _cacheMock
-            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _cache
+            .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("Redis 連線失敗"));
 
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery();
 
@@ -207,9 +209,8 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         result.Subject.Should().NotBeNull();
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -224,9 +225,9 @@ public class GetCrimesByFilterQueryHandlerTests
             Total: 1, Page: 1, PageSize: 200, TotalPages: 1);
         var preloadedBytes = JsonSerializer.SerializeToUtf8Bytes(preloaded);
 
-        _cacheMock
-            .Setup(c => c.GetAsync(cacheKey, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(preloadedBytes);
+        _cache
+            .GetAsync(cacheKey, Arg.Any<CancellationToken>())
+            .Returns(preloadedBytes);
 
         // Act
         var result = await _handler.HandleAsync(query);
@@ -234,9 +235,8 @@ public class GetCrimesByFilterQueryHandlerTests
         // Assert
         result.Data.Should().HaveCount(1);
         result.Data[0].CaseNumber.Should().Be("cached-001");
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _repository.DidNotReceive().GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     // ──────────────────────────────────────────────
@@ -260,23 +260,22 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         result.Should().BeEquivalentTo(preloaded);
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Never);
+        await _repository.DidNotReceive().GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_WhenL1MissAndGarnetFails_SecondCallShouldHitL1AndCallRepositoryOnce()
     {
         // Arrange - L1 空、Garnet 拋出例外
-        _cacheMock
-            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _cache
+            .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("Garnet 連線失敗"));
 
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery();
 
@@ -286,36 +285,35 @@ public class GetCrimesByFilterQueryHandlerTests
         await _handler.HandleAsync(query);
 
         // Assert - Repository 只被呼叫一次
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_WhenBothL1AndGarnetFail_ShouldFallbackToRepository()
     {
-        // Arrange - L1 mock 拋出例外、Garnet mock 拋出例外
-        var memoryCacheMock = new Mock<IMemoryCache>();
-        object? outVal = null;
-        memoryCacheMock
-            .Setup(m => m.TryGetValue(It.IsAny<object>(), out outVal))
-            .Throws(new Exception("MemoryCache 故障"));
-        var cacheEntryMock = new Mock<ICacheEntry>();
-        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+        // Arrange - L1 substitute 拋出例外、Garnet substitute 拋出例外
+        var memoryCache = Substitute.For<IMemoryCache>();
+        memoryCache
+            .TryGetValue(Arg.Any<object>(), out Arg.Any<object?>())
+            .Returns(x => throw new Exception("MemoryCache 故障"));
+        var cacheEntry = Substitute.For<ICacheEntry>();
+        memoryCache.CreateEntry(Arg.Any<object>()).Returns(cacheEntry);
 
-        _cacheMock
-            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _cache
+            .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("Garnet 連線失敗"));
 
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object,
-            _cacheMock.Object,
-            memoryCacheMock.Object,
+            _repository,
+            _cache,
+            memoryCache,
+            _timing,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         // Act
@@ -323,9 +321,8 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         result.Should().NotBeNull();
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     // ──────────────────────────────────────────────
@@ -339,39 +336,44 @@ public class GetCrimesByFilterQueryHandlerTests
     public async Task HandleAsync_WhenL1MissL2Miss_SecondCallShouldHitL1AndCallDbOnce()
     {
         // Arrange
-        var memoryCacheMock = new Mock<IMemoryCache>();
-        var cacheEntryMock = new Mock<ICacheEntry>();
+        var memoryCache = Substitute.For<IMemoryCache>();
+        var cacheEntry = Substitute.For<ICacheEntry>();
 
-        // L1: 第一次 miss；Set 後 callback 重新 setup 為 hit
-        object? l1OutVal = null;
-        memoryCacheMock
-            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
-            .Returns(false);
-        cacheEntryMock
-            .SetupSet(e => e.Value = It.IsAny<object?>())
-            .Callback<object?>(v => {
-                object? captured = v;
-                memoryCacheMock
-                    .Setup(m => m.TryGetValue(It.IsAny<object>(), out captured))
-                    .Returns(true);
+        // L1: 第一次 miss；Set 後變為 hit
+        bool l1Hit = false;
+        object? l1Value = null;
+        memoryCache
+            .TryGetValue(Arg.Any<object>(), out Arg.Any<object?>())
+            .Returns(x =>
+            {
+                x[1] = l1Value;
+                return l1Hit;
             });
-        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+        cacheEntry
+            .When(e => e.Value = Arg.Any<object?>())
+            .Do(callInfo =>
+            {
+                l1Value = callInfo.Arg<object?>();
+                l1Hit = true;
+            });
+        memoryCache.CreateEntry(Arg.Any<object>()).Returns(cacheEntry);
 
         // L2: 永遠 miss
-        var l2Mock = new Mock<IDistributedCache>();
-        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync((byte[]?)null);
-        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
-                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
-              .Returns(Task.CompletedTask);
+        var l2 = Substitute.For<IDistributedCache>();
+        l2.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+          .Returns((byte[]?)null);
+        l2.SetAsync(Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
+          .Returns(Task.CompletedTask);
 
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _repository, l2, memoryCache,
+            _timing,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();
@@ -381,9 +383,8 @@ public class GetCrimesByFilterQueryHandlerTests
         await handler.HandleAsync(query); // L1 hit
 
         // Assert
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -393,39 +394,44 @@ public class GetCrimesByFilterQueryHandlerTests
     public async Task HandleAsync_WhenL1MissL2Fault_SecondCallShouldHitL1AndCallDbOnce()
     {
         // Arrange
-        var memoryCacheMock = new Mock<IMemoryCache>();
-        var cacheEntryMock = new Mock<ICacheEntry>();
+        var memoryCache = Substitute.For<IMemoryCache>();
+        var cacheEntry = Substitute.For<ICacheEntry>();
 
-        // L1: 第一次 miss；Set 後 callback 重新 setup 為 hit
-        object? l1OutVal = null;
-        memoryCacheMock
-            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
-            .Returns(false);
-        cacheEntryMock
-            .SetupSet(e => e.Value = It.IsAny<object?>())
-            .Callback<object?>(v => {
-                object? captured = v;
-                memoryCacheMock
-                    .Setup(m => m.TryGetValue(It.IsAny<object>(), out captured))
-                    .Returns(true);
+        // L1: 第一次 miss；Set 後變為 hit
+        bool l1Hit = false;
+        object? l1Value = null;
+        memoryCache
+            .TryGetValue(Arg.Any<object>(), out Arg.Any<object?>())
+            .Returns(x =>
+            {
+                x[1] = l1Value;
+                return l1Hit;
             });
-        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+        cacheEntry
+            .When(e => e.Value = Arg.Any<object?>())
+            .Do(callInfo =>
+            {
+                l1Value = callInfo.Arg<object?>();
+                l1Hit = true;
+            });
+        memoryCache.CreateEntry(Arg.Any<object>()).Returns(cacheEntry);
 
         // L2: 永遠故障（GetAsync 和 SetAsync 都拋出例外）
-        var l2Mock = new Mock<IDistributedCache>();
-        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-              .ThrowsAsync(new Exception("Garnet 故障"));
-        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
-                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
-              .ThrowsAsync(new Exception("Garnet 故障"));
+        var l2 = Substitute.For<IDistributedCache>();
+        l2.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+          .ThrowsAsync(new Exception("Garnet 故障"));
+        l2.SetAsync(Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
+          .ThrowsAsync(new Exception("Garnet 故障"));
 
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _repository, l2, memoryCache,
+            _timing,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();
@@ -435,9 +441,8 @@ public class GetCrimesByFilterQueryHandlerTests
         await handler.HandleAsync(query); // L1 hit（L2 故障不影響）
 
         // Assert
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -447,32 +452,31 @@ public class GetCrimesByFilterQueryHandlerTests
     public async Task HandleAsync_WhenL1FaultL2Miss_SecondCallL1FaultL2ShouldHit()
     {
         // Arrange - L1 永遠拋出例外
-        var memoryCacheMock = new Mock<IMemoryCache>();
-        object? l1OutVal = null;
-        memoryCacheMock
-            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
-            .Throws(new Exception("L1 故障"));
-        var cacheEntryMock = new Mock<ICacheEntry>();
-        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+        var memoryCache = Substitute.For<IMemoryCache>();
+        memoryCache
+            .TryGetValue(Arg.Any<object>(), out Arg.Any<object?>())
+            .Returns(x => throw new Exception("L1 故障"));
+        var cacheEntry = Substitute.For<ICacheEntry>();
+        memoryCache.CreateEntry(Arg.Any<object>()).Returns(cacheEntry);
 
         // L2: 第一次 miss，SetAsync 擷取 bytes，第二次改為回傳 bytes（hit）
-        var l2Mock = new Mock<IDistributedCache>();
+        var l2 = Substitute.For<IDistributedCache>();
         byte[]? capturedBytes = null;
-        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync((byte[]?)null);
-        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
-                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
-              .Callback<string, byte[], DistributedCacheEntryOptions, CancellationToken>(
-                  (_, bytes, _, _) => capturedBytes = bytes)
-              .Returns(Task.CompletedTask);
+        l2.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+          .Returns((byte[]?)null);
+        l2.SetAsync(Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
+          .Returns(Task.CompletedTask)
+          .AndDoes(callInfo => capturedBytes = callInfo.Arg<byte[]>());
 
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _repository, l2, memoryCache,
+            _timing,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();
@@ -481,16 +485,15 @@ public class GetCrimesByFilterQueryHandlerTests
         await handler.HandleAsync(query);
 
         // 重新 setup L2 GetAsync 回傳已存的 bytes
-        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-              .ReturnsAsync(capturedBytes);
+        l2.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+          .Returns(_ => capturedBytes);
 
         // Act - 第二次：L1 仍故障，L2 hit
         await handler.HandleAsync(query);
 
         // Assert
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _repository.Received(1).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -500,29 +503,29 @@ public class GetCrimesByFilterQueryHandlerTests
     public async Task HandleAsync_WhenBothL1AndL2AlwaysFault_ShouldCallDbTwice()
     {
         // Arrange - L1 永遠拋出例外
-        var memoryCacheMock = new Mock<IMemoryCache>();
-        object? l1OutVal = null;
-        memoryCacheMock
-            .Setup(m => m.TryGetValue(It.IsAny<object>(), out l1OutVal))
-            .Throws(new Exception("L1 故障"));
-        var cacheEntryMock = new Mock<ICacheEntry>();
-        memoryCacheMock.Setup(m => m.CreateEntry(It.IsAny<object>())).Returns(cacheEntryMock.Object);
+        var memoryCache = Substitute.For<IMemoryCache>();
+        memoryCache
+            .TryGetValue(Arg.Any<object>(), out Arg.Any<object?>())
+            .Returns(x => throw new Exception("L1 故障"));
+        var cacheEntry = Substitute.For<ICacheEntry>();
+        memoryCache.CreateEntry(Arg.Any<object>()).Returns(cacheEntry);
 
         // L2 永遠拋出例外
-        var l2Mock = new Mock<IDistributedCache>();
-        l2Mock.Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-              .ThrowsAsync(new Exception("Garnet 故障"));
-        l2Mock.Setup(c => c.SetAsync(It.IsAny<string>(), It.IsAny<byte[]>(),
-                  It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
-              .ThrowsAsync(new Exception("Garnet 故障"));
+        var l2 = Substitute.For<IDistributedCache>();
+        l2.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+          .ThrowsAsync(new Exception("Garnet 故障"));
+        l2.SetAsync(Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
+          .ThrowsAsync(new Exception("Garnet 故障"));
 
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
-            _repositoryMock.Object, l2Mock.Object, memoryCacheMock.Object,
+            _repository, l2, memoryCache,
+            _timing,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
 
         var query = new GetCrimesByFilterQuery();
@@ -532,8 +535,7 @@ public class GetCrimesByFilterQueryHandlerTests
         await handler.HandleAsync(query);
 
         // Assert
-        _repositoryMock.Verify(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.Exactly(2));
+        await _repository.Received(2).GetPagedByFilterAsync(
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 }

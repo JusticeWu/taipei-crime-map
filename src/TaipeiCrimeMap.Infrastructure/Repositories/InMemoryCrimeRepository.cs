@@ -154,6 +154,37 @@ public class InMemoryCrimeRepository : ICrimeRepository
     /// <returns>對應的弧度值</returns>
     private static double ToRad(double deg) => deg * Math.PI / 180.0;
 
+    public Task<IReadOnlyList<TheftCase>> GetCasesWithMissingCoordinatesAsync(int batchSize, CancellationToken cancellationToken = default)
+    {
+        var result = _cases
+            .Where(c => c.Coordinate is null)
+            .OrderBy(c => c.CaseNumber, StringComparer.Ordinal)
+            .Take(batchSize)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<TheftCase>>(result);
+    }
+
+    public Task<GeoCoordinate?> FindCoordinateByRawLocationAsync(string rawLocation, CancellationToken cancellationToken = default)
+    {
+        var match = _cases.FirstOrDefault(c => c.RawLocation == rawLocation && c.Coordinate is not null);
+
+        return Task.FromResult(match?.Coordinate);
+    }
+
+    public Task UpdateCoordinateAsync(Guid id, GeoCoordinate coordinate, CancellationToken cancellationToken = default)
+    {
+        var theftCase = _cases.FirstOrDefault(c => c.Id == id);
+        theftCase?.UpdateCoordinate(coordinate);
+
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(_cases.Count(c => c.Coordinate is null));
+    }
+
     public Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
         CrimeFilter filter, CancellationToken cancellationToken = default)
     {
@@ -168,5 +199,31 @@ public class InMemoryCrimeRepository : ICrimeRepository
             .ToList();
 
         return Task.FromResult<IReadOnlyList<(string District, int Count)>>(counts);
+    }
+
+    public Task<(IReadOnlyList<(string District, int Count)> DistrictCounts, IReadOnlyList<(string TimeSlot, int Count)> TimeSlotCounts)> GetStatsByFilterAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default)
+    {
+        var filtered = _cases
+            .Where(c => !filter.CaseType.HasValue || c.CaseType == filter.CaseType)
+            .Where(c => filter.District is null || c.District?.Name == filter.District.Name)
+            .Where(c => !filter.YearFrom.HasValue || c.OccurredDate.Year >= filter.YearFrom)
+            .Where(c => !filter.YearTo.HasValue   || c.OccurredDate.Year <= filter.YearTo)
+            .ToList();
+
+        var districtCounts = filtered
+            .Where(c => c.District?.Name is not null)
+            .GroupBy(c => c.District!.Name)
+            .Select(g => (District: g.Key, Count: g.Count()))
+            .ToList();
+
+        var timeSlotCounts = filtered
+            .Where(c => c.TimeSlot?.StartHour is not null && c.TimeSlot?.EndHour is not null)
+            .GroupBy(c => c.TimeSlot!.Normalize())
+            .Select(g => (TimeSlot: g.Key, Count: g.Count()))
+            .ToList();
+
+        return Task.FromResult<(IReadOnlyList<(string District, int Count)>, IReadOnlyList<(string TimeSlot, int Count)>)>(
+            (districtCounts, timeSlotCounts));
     }
 }

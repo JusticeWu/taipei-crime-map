@@ -63,6 +63,10 @@ UAT 驗證通過後，從 uat 開 PR merge 進 main 觸發 Prod 部署。
 | uat  | UAT  | taipei-crime-map-uat  | push to uat    |
 | main | Prod | taipei-crime-map-prod | push to main   |
 
+## PR Merge 規範
+- feature/xxx → uat：`gh pr merge --squash --delete-branch`（可刪）
+- uat → main：`gh pr merge --merge`（禁止 `--delete-branch`）
+
 ## Commit 規範（Conventional Commits）
 - feat：新功能
 - fix：修 bug

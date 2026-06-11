@@ -38,3 +38,10 @@
 **連線字串**：`ConnectionStrings__Redis`，預設 `localhost:6379`
 
 **Azure 手動設定**：Container App Secret + Env Var 參照
+
+**⚠️ UAT 連線字串格式（2026-06-08 修正，見 [[L016]]）**：
+必須使用同 Container Apps Environment 內的「短名稱」`taipei-crime-map-garnet:6379`，
+**不可**使用完整內部 FQDN（`taipei-crime-map-garnet.internal.<env-domain>.azurecontainerapps.io:6379`）。
+實測完整 FQDN 會導致 DNS 解析異常、連線永遠 `ConnectTimeout`（等 16~21 秒才 fallback 到 DB）；
+改用短名稱後 L2-Cache 耗時降到 100~600ms 且無任何連線例外。
+此設定為手動修改、不在 IaC/CI 內，重建 Container App 時務必沿用短名稱格式。

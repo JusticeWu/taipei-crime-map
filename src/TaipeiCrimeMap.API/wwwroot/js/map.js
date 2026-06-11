@@ -51,15 +51,16 @@
   const TAIPEI_CENTER = [25.0478, 121.5318];
   const DEFAULT_ZOOM  = 13;
 
-  const CASE_TYPE_COLORS = {
-    '住宅竊盜':   '#e74c3c',
-    '汽車竊盜':   '#e67e22',
-    '機車竊盜':   '#f1c40f',
-    '自行車竊盜': '#2ecc71',
-    '搶奪':      '#9b59b6',
-    '強盜':      '#1abc9c',
+  const CASE_TYPE_EMOJIS = {
+    '住宅竊盜':   '🏠',
+    '汽車竊盜':   '🚗',
+    '機車竊盜':   '🏍️',
+    '自行車竊盜': '🚲',
+    '搶奪':      '👜',
+    '強盜':      '⚡',
   };
-  const DEFAULT_COLOR = '#95a5a6';
+  const DEFAULT_EMOJI = '📍';
+  const MARKER_BG_COLOR = '#FFFFFF';
 
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
@@ -92,6 +93,8 @@
   let _districtLabelLayer = null;
   let _progressCtrl     = null;
   let _baseLayers       = {};
+  let _currentBaseLabel = null;
+  let _layerPickerCtrl  = null;
 
   // Render queue: ensures one page of markers is added per animation frame
   let _renderQueue      = [];
@@ -108,8 +111,18 @@
            typeof item.longitude === 'number' && !isNaN(item.longitude);
   }
 
-  function colorForType(caseType) {
-    return CASE_TYPE_COLORS[caseType] || DEFAULT_COLOR;
+  function emojiForType(caseType) {
+    return CASE_TYPE_EMOJIS[caseType] || DEFAULT_EMOJI;
+  }
+
+  function buildEmojiIcon(caseType) {
+    const emoji = emojiForType(caseType);
+    return L.divIcon({
+      className: '',
+      html: `<div class="emoji-marker" style="background:${MARKER_BG_COLOR};">${emoji}</div>`,
+      iconSize:   [32, 32],
+      iconAnchor: [16, 16],
+    });
   }
 
   function escapeHtml(str) {
@@ -118,18 +131,44 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function buildPopupHtml(item) {
+  function buildPopupHtml(item, loading) {
+    const placeholder = loading ? '載入中…' : '—';
     return [
       '<div class="crime-popup">',
       `  <strong>${escapeHtml(item.caseType || '未知')}</strong>`,
       '  <table>',
-      `    <tr><th>行政區</th><td>${escapeHtml(item.district || '—')}</td></tr>`,
+      `    <tr><th>行政區</th><td>${escapeHtml(item.district || placeholder)}</td></tr>`,
       `    <tr><th>日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
-      `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || '—')}</td></tr>`,
-      `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || '—')}</td></tr>`,
+      `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || placeholder)}</td></tr>`,
+      `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || placeholder)}</td></tr>`,
       '  </table>',
       '</div>',
     ].join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Popup detail — fetched on demand when a point-mode marker popup is opened
+  // ---------------------------------------------------------------------------
+
+  const _detailCache = new Map();
+
+  function attachDetailFetch(marker, item) {
+    if (!item.id) return;
+    marker.on('popupopen', async () => {
+      let detail = _detailCache.get(item.id);
+      if (!detail) {
+        try {
+          const resp = await fetch(`/api/crime/points/${item.id}`, { headers: { Accept: 'application/json' } });
+          if (!resp.ok) throw new Error(`API ${resp.status}`);
+          detail = await resp.json();
+          _detailCache.set(item.id, detail);
+        } catch (err) {
+          console.error('Popup detail fetch failed:', err);
+          detail = { district: '載入失敗', timeSlot: '載入失敗', rawLocation: '載入失敗' };
+        }
+      }
+      marker.setPopupContent(buildPopupHtml(Object.assign({}, item, detail)));
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -144,11 +183,11 @@
   function buildMarkerLayer(data) {
     _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
     data.filter(hasCoords).forEach(item => {
-      const color  = colorForType(item.caseType);
-      const marker = L.circleMarker([item.latitude, item.longitude], {
-        radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+      const marker = L.marker([item.latitude, item.longitude], {
+        icon: buildEmojiIcon(item.caseType),
       });
-      marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
+      marker.bindPopup(buildPopupHtml(item, true), { maxWidth: 260 });
+      attachDetailFetch(marker, item);
       _markerLayer.addLayer(marker);
     });
     _markerLayer.addTo(_map);
@@ -198,16 +237,16 @@
 
   function addLegend() {
     if (_legendCtrl) return;
-    const entries = [...Object.entries(CASE_TYPE_COLORS), ['其他', DEFAULT_COLOR]];
+    const entries = [...Object.entries(CASE_TYPE_EMOJIS), ['其他', DEFAULT_EMOJI]];
     const LegendControl = L.Control.extend({
       options: { position: 'bottomright' },
       onAdd() {
         const el = L.DomUtil.create('div', 'crime-legend');
         el.innerHTML =
           '<div class="legend-title">案件類型</div>' +
-          entries.map(([label, color]) =>
+          entries.map(([label, emoji]) =>
             `<div class="legend-item">` +
-            `<span class="legend-dot" style="background:${color};"></span>` +
+            `<span class="legend-emoji" style="background:${MARKER_BG_COLOR};">${emoji}</span>` +
             `<span class="legend-label">${escapeHtml(label)}</span>` +
             `</div>`
           ).join('');
@@ -216,10 +255,90 @@
     });
     _legendCtrl = new LegendControl();
     _legendCtrl.addTo(_map);
+    positionLayerPicker();
   }
 
   function removeLegend() {
     if (_legendCtrl) { _legendCtrl.remove(); _legendCtrl = null; }
+    positionLayerPicker();
+  }
+
+  // 讓 .layer-picker 永遠位於 .crime-legend 正上方：
+  // bottom = 圖例實際高度 + 12px（圖例不存在時視為高度 0）
+  function positionLayerPicker() {
+    if (!_layerPickerCtrl) return;
+    const pickerEl = _layerPickerCtrl.getContainer();
+    if (!pickerEl) return;
+    const legendEl = _legendCtrl ? _legendCtrl.getContainer() : null;
+    const legendHeight = legendEl ? legendEl.getBoundingClientRect().height : 0;
+    pickerEl.style.bottom = (legendHeight + 12) + 'px';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Layer picker — icon button (bottom-right, above legend) with flyout basemap menu
+  // ---------------------------------------------------------------------------
+
+  function switchBaseLayer(label) {
+    if (!_baseLayers[label] || label === _currentBaseLabel) return;
+    if (_currentBaseLabel && _baseLayers[_currentBaseLabel]) {
+      _map.removeLayer(_baseLayers[_currentBaseLabel]);
+    }
+    _baseLayers[label].addTo(_map);
+    _currentBaseLabel = label;
+  }
+
+  function addLayerPicker() {
+    if (_layerPickerCtrl) return;
+
+    const LayerPickerControl = L.Control.extend({
+      options: { position: 'bottomright' },
+      onAdd() {
+        const container = L.DomUtil.create('div', 'layer-picker');
+
+        const button = L.DomUtil.create('button', 'layer-picker-btn', container);
+        button.type = 'button';
+        button.setAttribute('aria-label', '切換底圖');
+        button.innerHTML =
+          '<svg width="20" height="16" viewBox="0 0 20 16">' +
+          '<rect x="0" y="0" width="20" height="3" rx="1.5" fill="white"/>' +
+          '<rect x="2" y="6" width="16" height="3" rx="1.5" fill="white"/>' +
+          '<rect x="4" y="12" width="12" height="3" rx="1.5" fill="white"/>' +
+          '</svg>';
+
+        const menu = L.DomUtil.create('div', 'layer-picker-menu', container);
+        Object.keys(_baseLayers).forEach(label => {
+          const item = L.DomUtil.create('div', 'layer-picker-item', menu);
+          item.textContent = label;
+          if (label === _currentBaseLabel) item.classList.add('selected');
+          L.DomEvent.on(item, 'click', () => {
+            switchBaseLayer(label);
+            menu.querySelectorAll('.layer-picker-item').forEach(el => {
+              el.classList.toggle('selected', el.textContent === label);
+            });
+            menu.classList.remove('open');
+          });
+        });
+
+        L.DomEvent.on(button, 'click', (e) => {
+          L.DomEvent.stop(e);
+          menu.classList.toggle('open');
+        });
+
+        // 點擊控制項本身不應觸發地圖點擊或拖曳
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+
+        // 點擊地圖或頁面其他地方時收合選單
+        _map.on('click', () => menu.classList.remove('open'));
+        document.addEventListener('click', () => menu.classList.remove('open'));
+
+        return container;
+      },
+    });
+
+    _layerPickerCtrl = new LayerPickerControl();
+    _layerPickerCtrl.addTo(_map);
+    positionLayerPicker();
   }
 
   // ---------------------------------------------------------------------------
@@ -263,11 +382,11 @@
     const { data } = _renderQueue.shift();
     if (_markerLayer) {
       data.filter(hasCoords).forEach(item => {
-        const color  = colorForType(item.caseType);
-        const marker = L.circleMarker([item.latitude, item.longitude], {
-          radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
+        const marker = L.marker([item.latitude, item.longitude], {
+          icon: buildEmojiIcon(item.caseType),
         });
-        marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
+        marker.bindPopup(buildPopupHtml(item, true), { maxWidth: 260 });
+        attachDetailFetch(marker, item);
         _markerLayer.addLayer(marker);
       });
     }
@@ -316,10 +435,10 @@
       .crime-popup th     { text-align:left; padding:2px 6px 2px 0; color:#888; white-space:nowrap; }
       .crime-popup td     { padding:2px 0; }
 
-      .crime-legend { background:rgba(30,30,30,.85); color:#ddd; padding:10px 14px; border-radius:6px; font-size:12px; line-height:1.6; box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:110px; }
+      .crime-legend { position:absolute; right:8px; bottom:10px; background:rgba(30,30,30,.85); color:#ddd; padding:10px 14px; border-radius:6px; font-size:12px; line-height:1.6; box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:110px; }
       .legend-title { font-weight:bold; margin-bottom:6px; font-size:13px; border-bottom:1px solid #555; padding-bottom:4px; }
       .legend-item  { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
-      .legend-dot   { display:inline-block; width:12px; height:12px; border-radius:50%; flex-shrink:0; border:1px solid rgba(255,255,255,.25); }
+      .legend-emoji { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; flex-shrink:0; font-size:16px; line-height:1; }
       .legend-label { white-space:nowrap; }
 
       .district-bubble { width:56px; height:56px; border-radius:50%; background:rgba(44,62,80,.88); border:2px solid rgba(255,255,255,.75); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s; }
@@ -328,6 +447,78 @@
       .db-name  { font-size:9px; color:rgba(255,255,255,.9); line-height:1.2; text-align:center; }
 
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+
+      .emoji-marker { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.5); }
+
+      /* 手機版：縮放按鈕（左下）與圖例（右下）距離底部 80px（10px 預設邊距 + 70px） */
+      @media (max-width: 768px) {
+        .leaflet-bottom.leaflet-left,
+        .leaflet-bottom.leaflet-right {
+          bottom: 70px;
+        }
+      }
+
+      /* 底圖切換 — 深色圓角按鈕 + 自訂 SVG 疊層圖示，點擊後在按鈕上方浮出選單。
+         固定於右下角；bottom 由 positionLayerPicker() 依 .crime-legend 的
+         實際高度動態計算（圖例高度 + 12px），此處的 bottom 僅為 JS 執行前的
+         初始值。 */
+      .layer-picker {
+        position: absolute;
+        right: 8px;
+        bottom: 12px;
+      }
+      .layer-picker-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background: rgba(30,30,30,.85);
+        border: none;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.5);
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+      }
+      .layer-picker-menu {
+        display: none;
+        position: absolute;
+        bottom: 42px;
+        right: 0;
+        width: 140px;
+        background: rgba(30,30,30,.92);
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.5);
+        overflow: hidden;
+        z-index: 1000;
+      }
+      .layer-picker-menu.open {
+        display: block;
+      }
+      .layer-picker-item {
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #ddd;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .layer-picker-item:hover {
+        background: rgba(255,255,255,.1);
+      }
+      .layer-picker-item.selected {
+        background: var(--highlight, #e94560);
+        color: #fff;
+        font-weight: bold;
+      }
+
+      /* 手機版：圖例縮小字體，固定於地圖右下角 */
+      @media (max-width: 768px) {
+        .crime-legend { font-size:11px; padding:4px 8px; min-width:80px; line-height:1.3; }
+        .legend-title { font-size:11px; margin-bottom:2px; padding-bottom:2px; }
+        .legend-item  { margin-bottom:1px; gap:4px; }
+        .legend-emoji { width:14px; height:14px; font-size:10px; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -342,7 +533,7 @@
       if (_map) return;
       injectStyles();
 
-      _map = L.map(containerId, { center: TAIPEI_CENTER, zoom: DEFAULT_ZOOM });
+      _map = L.map(containerId, { center: TAIPEI_CENTER, zoom: DEFAULT_ZOOM, zoomControl: false });
 
       // Build base layers and add default
       const tileLayers = {};
@@ -354,12 +545,19 @@
           maxZoom:     19,
         });
         tileLayers[label] = layer;
-        if (first) { layer.addTo(_map); first = false; }
+        if (first) { layer.addTo(_map); _currentBaseLabel = label; first = false; }
       }
-
-      // Basemap switcher (top-right)
-      L.control.layers(tileLayers, {}, { position: 'topright', collapsed: false }).addTo(_map);
       _baseLayers = tileLayers;
+
+      // Zoom control — 桌面版與手機版統一放在地圖左下角
+      // （CSS 將桌面版位置固定為距底部 80px、距左側 10px）
+      L.control.zoom({ position: 'bottomleft' }).addTo(_map);
+
+      // Basemap switcher — icon button + flyout menu (bottom-right, above legend)
+      addLayerPicker();
+
+      // 視窗尺寸改變時重新計算圖層切換按鈕的位置
+      window.addEventListener('resize', positionLayerPicker);
     },
 
     // Full re-render (used by mode-toggle after all data is loaded)
@@ -390,6 +588,7 @@
     startProgressiveLoad(mode) {
       if (!_map) return;
       clearLayers();
+      if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
       removeDistrictLabels();
 
       if (mode === 'point') {

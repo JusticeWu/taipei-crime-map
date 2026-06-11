@@ -176,6 +176,68 @@ describe('computeStats', () => {
   });
 });
 
+// ── Mobile filter panel toggle ──────────────────────────────────────────────
+
+/**
+ * Replicates the mobile filter-toggle state machine from app.js
+ * (openFilterPanel / closeFilterPanel / toggleFilterPanel /
+ * updateFilterToggleLabel) plus the CSS height contract from style.css:
+ *  - #btn-filter-toggle is fixed at height 48px (collapsed total height)
+ *  - #filter-panel.open adds extra height on top of the 48px bar
+ * Any change to that logic/CSS must be reflected here.
+ */
+const FILTER_BAR_HEIGHT     = 48;  // px — #btn-filter-toggle height
+const FILTER_PANEL_OPEN_ADD = 400; // px — representative #filter-panel.open extra height
+
+function createFilterPanelState() {
+  let open = false;
+  return {
+    get open() { return open; },
+    get label() { return open ? '篩選條件  ▲' : '篩選條件  ▼'; },
+    get totalHeight() { return open ? FILTER_BAR_HEIGHT + FILTER_PANEL_OPEN_ADD : FILTER_BAR_HEIGHT; },
+    openPanel()  { open = true; },
+    closePanel() { open = false; },
+    toggle()     { open = !open; },
+  };
+}
+
+describe('mobile filter panel toggle', () => {
+  test('collapsed by default with height 48px and ▼ label', () => {
+    const state = createFilterPanelState();
+    expect(state.open).toBe(false);
+    expect(state.totalHeight).toBe(48);
+    expect(state.label).toBe('篩選條件  ▼');
+  });
+
+  test('expanded height is greater than 48px with ▲ label', () => {
+    const state = createFilterPanelState();
+    state.openPanel();
+    expect(state.open).toBe(true);
+    expect(state.totalHeight).toBeGreaterThan(48);
+    expect(state.label).toBe('篩選條件  ▲');
+  });
+
+  test('clicking the row toggles open → closed regardless of state', () => {
+    const state = createFilterPanelState();
+
+    state.toggle(); // closed → open
+    expect(state.open).toBe(true);
+    expect(state.totalHeight).toBeGreaterThan(48);
+
+    state.toggle(); // open → closed
+    expect(state.open).toBe(false);
+    expect(state.totalHeight).toBe(48);
+  });
+
+  test('toggle from open state collapses back to 48px', () => {
+    const state = createFilterPanelState();
+    state.openPanel();
+    state.toggle();
+    expect(state.open).toBe(false);
+    expect(state.totalHeight).toBe(48);
+  });
+});
+
 // ── computeStatsFromHeatmap ─────────────────────────────────────────────────
 
 describe('computeStatsFromHeatmap', () => {

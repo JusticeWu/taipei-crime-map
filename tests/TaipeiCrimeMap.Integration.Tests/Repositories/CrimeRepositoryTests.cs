@@ -132,8 +132,39 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     [Fact]
     public async Task GetByFilterAsync_WithYearRange_ShouldReturnMatchingCases()
     {
-        // Arrange
-        var case113 = TheftCase.Create(
+        // Arrange - occurred_year 欄位儲存民國年，但 CrimeFilter 的 YearFrom/YearTo 是西元年
+        var case2024 = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"), // 民國113年 = 西元2024年
+            timeSlot: null,
+            rawLocation: "臺北市內湖區成功路五段31號");
+
+        var case2023 = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1120101"), // 民國112年 = 西元2023年
+            timeSlot: null,
+            rawLocation: "臺北市內湖區成功路五段31號");
+
+        await _repository.AddRangeAsync([case2024, case2023]);
+
+        // Act - 西元年範圍 2024~2024，應只命中 case2024
+        var filter = new CrimeFilter(yearFrom: 2024, yearTo: 2024);
+        var results = await _repository.GetByFilterAsync(filter);
+
+        // Assert
+        results.Should().Contain(c => c.Id == case2024.Id);
+        results.Should().NotContain(c => c.Id == case2023.Id);
+    }
+
+    [Fact]
+    public async Task GetByFilterAsync_WithYearFrom2018_ShouldReturnMatchingCases()
+    {
+        // Arrange - 民國113年 = 西元2024年，晚於西元2018年
+        var case2024 = TheftCase.Create(
             caseNumber: Guid.NewGuid().ToString(),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
@@ -141,23 +172,36 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
             timeSlot: null,
             rawLocation: "臺北市內湖區成功路五段31號");
 
-        var case112 = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
-            caseType: CaseType.Residential,
-            district: District.ParseFrom("內湖區"),
-            occurredDate: TaiwanDate.Parse("1120101"),
-            timeSlot: null,
-            rawLocation: "臺北市內湖區成功路五段31號");
+        await _repository.AddAsync(case2024);
 
-        await _repository.AddRangeAsync([case113, case112]);
-
-        // Act
-        var filter = new CrimeFilter(yearFrom: 113, yearTo: 113);
+        // Act - 西元起始年份 2018，應該回傳有資料
+        var filter = new CrimeFilter(yearFrom: 2018);
         var results = await _repository.GetByFilterAsync(filter);
 
         // Assert
-        results.Should().Contain(c => c.Id == case113.Id);
-        results.Should().NotContain(c => c.Id == case112.Id);
+        results.Should().Contain(c => c.Id == case2024.Id);
+    }
+
+    [Fact]
+    public async Task GetByFilterAsync_WithYearFrom2030_ShouldReturnEmptyResult()
+    {
+        // Arrange - 民國113年 = 西元2024年，早於西元2030年
+        var case2024 = TheftCase.Create(
+            caseNumber: Guid.NewGuid().ToString(),
+            caseType: CaseType.Residential,
+            district: District.ParseFrom("內湖區"),
+            occurredDate: TaiwanDate.Parse("1130101"),
+            timeSlot: null,
+            rawLocation: "臺北市內湖區成功路五段31號");
+
+        await _repository.AddAsync(case2024);
+
+        // Act - 西元起始年份 2030，應該回傳空資料
+        var filter = new CrimeFilter(yearFrom: 2030);
+        var results = await _repository.GetByFilterAsync(filter);
+
+        // Assert
+        results.Should().NotContain(c => c.Id == case2024.Id);
     }
 
     [Fact]

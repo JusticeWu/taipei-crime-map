@@ -196,6 +196,60 @@ public class GoogleGeocodingServiceTests
         result.Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task GeocodeAsync_MonthlyQuotaExceeded_ReturnsNull()
+    {
+        // Arrange
+        var responseJson = """
+            {
+                "status": "OK",
+                "results": [{ "geometry": { "location": { "lat": 25.0339, "lng": 121.5654 } } }]
+            }
+            """;
+        var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
+        });
+        var httpClient = new HttpClient(handler);
+        var options = Options.Create(new GoogleMapsOptions { ApiKey = "test-key", MonthlyQuotaLimit = 1 });
+        var logger = NullLogger<GoogleGeocodingService>.Instance;
+        var geoService = new GoogleGeocodingService(httpClient, options, logger);
+
+        // Act — first call consumes the monthly quota, second call should be blocked
+        var first = await geoService.GeocodeAsync("臺北市中正區測試路1號");
+        var second = await geoService.GeocodeAsync("臺北市中正區測試路2號");
+
+        // Assert
+        first.Should().NotBeNull();
+        second.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GeocodeAsync_ZeroMonthlyQuotaLimit_NoRestriction()
+    {
+        // MonthlyQuotaLimit = 0 代表不限制，呼叫多次仍應成功
+        var responseJson = """
+            {
+                "status": "OK",
+                "results": [{ "geometry": { "location": { "lat": 25.0339, "lng": 121.5654 } } }]
+            }
+            """;
+        var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
+        });
+        var httpClient = new HttpClient(handler);
+        var options = Options.Create(new GoogleMapsOptions { ApiKey = "test-key", MonthlyQuotaLimit = 0 });
+        var logger = NullLogger<GoogleGeocodingService>.Instance;
+        var geoService = new GoogleGeocodingService(httpClient, options, logger);
+
+        // Act
+        var result = await geoService.GeocodeAsync("臺北市內湖區測試路");
+
+        // Assert
+        result.Should().NotBeNull();
+    }
+
     private static GoogleGeocodingService CreateService(HttpResponseMessage response)
     {
         var httpMessageHandler = new MockHttpMessageHandler(response);

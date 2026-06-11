@@ -1,7 +1,10 @@
 using TaipeiCrimeMap.API.Middleware;
 using TaipeiCrimeMap.Application.Handlers;
+using TaipeiCrimeMap.Application.Interfaces;
+using TaipeiCrimeMap.Application.Options;
 using TaipeiCrimeMap.Infrastructure.Extensions;
 using TaipeiCrimeMap.Infrastructure.Persistence;
+using TaipeiCrimeMap.Infrastructure.Timing;
 
 Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
 Dapper.SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
@@ -23,6 +26,26 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<ImportCsvCommandHandler>();
 builder.Services.AddScoped<GetCrimesByFilterQueryHandler>();
 builder.Services.AddScoped<GetHeatmapQueryHandler>();
+builder.Services.AddScoped<GeocodeBatchCommandHandler>();
+builder.Services.AddScoped<GetCrimeStatsQueryHandler>();
+builder.Services.AddScoped<GetCrimeByIdQueryHandler>();
+
+// Timing
+builder.Services.Configure<TimingOptions>(
+    builder.Configuration.GetSection(TimingOptions.SectionName));
+
+var timingEnabled = builder.Configuration
+    .GetSection(TimingOptions.SectionName)
+    .GetValue<bool>("Enabled");
+
+if (timingEnabled)
+{
+    builder.Services.AddScoped<ITimingTracker, TimingTracker>();
+}
+else
+{
+    builder.Services.AddScoped<ITimingTracker>(_ => NullTimingTracker.Instance);
+}
 
 var app = builder.Build();
 
@@ -59,6 +82,7 @@ if (!app.Environment.IsEnvironment("Testing"))
 }
 
 app.UseExceptionHandler();
+app.UseMiddleware<TimingMiddleware>();
 app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();

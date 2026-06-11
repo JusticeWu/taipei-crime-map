@@ -11,4 +11,9 @@ public class GoogleMapsOptions
     /// 每日 API 呼叫上限；0 表示不限制
     /// </summary>
     public int DailyQuotaLimit { get; init; } = 0;
+
+    /// <summary>
+    /// 每月 API 呼叫上限；0 表示不限制
+    /// </summary>
+    public int MonthlyQuotaLimit { get; init; } = 0;
 }

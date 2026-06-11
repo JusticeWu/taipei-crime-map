@@ -8,15 +8,36 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+  .leaflet-control-attribution {
+    line-height: 1 !important;
+    padding: 1px 4px !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+  }
+  /* 桌面版：強制貼齊地圖底部。手機版維持 style.css 中的 70px 偏移，
+     避免覆蓋縮放按鈕與圖例的 80px 底部留白設計 */
+  @media (min-width: 769px) {
+    .leaflet-bottom {
+      bottom: 0 !important;
+    }
+  }
+  </style>
 </head>
 <body>
   <div id="app">
+    <!-- Mobile filter bar (mobile only) -->
+    <button id="btn-filter-toggle" type="button">篩選條件  ▼</button>
+
     <!-- Left Panel -->
     <aside id="left-panel">
 
       <!-- Filter Panel -->
       <section id="filter-panel">
-        <h2 class="panel-title">篩選條件</h2>
+        <div class="filter-panel-header">
+          <h2 class="panel-title">篩選條件</h2>
+          <button id="btn-filter-close" type="button" aria-label="關閉篩選條件">✕</button>
+        </div>
 
         <div class="form-group">
           <label for="select-case-type">案類</label>
@@ -56,8 +77,8 @@
             <input
               type="number"
               id="input-year-from"
-              min="2018"
-              placeholder="2018"
+              min="2015"
+              placeholder="2015"
             />
           </div>
           <div class="form-group half">
@@ -65,7 +86,7 @@
             <input
               type="number"
               id="input-year-to"
-              min="2018"
+              min="2015"
               placeholder="2024"
             />
           </div>
@@ -75,11 +96,11 @@
           <label class="label-block">顯示模式</label>
           <div class="toggle-group" id="toggle-mode">
             <label class="toggle-option">
-              <input type="radio" name="display-mode" value="heat" checked />
+              <input type="radio" name="display-mode" value="heat" />
               <span>熱力圖</span>
             </label>
             <label class="toggle-option">
-              <input type="radio" name="display-mode" value="point" />
+              <input type="radio" name="display-mode" value="point" checked />
               <span>點位圖</span>
             </label>
           </div>
@@ -100,6 +121,12 @@
             <span class="stat-label">有座標筆數</span>
             <span class="stat-value" id="stat-with-coords">—</span>
           </div>
+        </div>
+      </section>
+
+      <!-- Top District Panel -->
+      <section id="top-district-panel">
+        <div class="stat-grid">
           <div class="stat-item stat-item--full">
             <span class="stat-label">最多案件行政區</span>
             <span class="stat-value" id="stat-top-district">—</span>
@@ -110,12 +137,12 @@
       <!-- Chart Container (desktop only) -->
       <section id="chart-container">
         <div class="chart-wrapper">
-          <h3 class="chart-title">年度趨勢</h3>
-          <canvas id="chart-trend"></canvas>
+          <h3 class="chart-title">時段分布</h3>
+          <canvas id="chart-timeslot"></canvas>
         </div>
         <div class="chart-wrapper">
-          <h3 class="chart-title">案類分佈</h3>
-          <canvas id="chart-type-bar"></canvas>
+          <h3 class="chart-title">行政區分布</h3>
+          <canvas id="chart-district"></canvas>
         </div>
       </section>
 

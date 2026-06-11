@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
 using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.Services;
 using TaipeiCrimeMap.Infrastructure.Csv;
@@ -35,9 +36,14 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<ICsvParser, CsvParser>();
 
         // 分散式快取（Garnet / Redis）
+        // ConnectTimeout/SyncTimeout 設為 2000ms：Garnet 失敗時快速 fallback 到 DB，
+        // 不要讓單一請求被卡住 16~21 秒（cache-aside 模式下快取應為非強依賴）
         services.AddStackExchangeRedisCache(options =>
         {
-            options.Configuration = configuration.GetConnectionString("Redis");
+            var redisConfigOptions = ConfigurationOptions.Parse(configuration.GetConnectionString("Redis")!);
+            redisConfigOptions.ConnectTimeout = 2000;
+            redisConfigOptions.SyncTimeout = 2000;
+            options.ConfigurationOptions = redisConfigOptions;
         });
 
         return services;
