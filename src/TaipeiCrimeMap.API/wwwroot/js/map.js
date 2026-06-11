@@ -370,6 +370,13 @@
 
       .emoji-marker { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.5); }
 
+      /* 手機版：縮放按鈕移到左下角，距離底部 80px（10px 預設邊距 + 70px） */
+      @media (max-width: 768px) {
+        .leaflet-bottom.leaflet-left {
+          bottom: 70px;
+        }
+      }
+
       /* 手機版：底圖切換控制項縮小，避免占用過多畫面 */
       @media (max-width: 768px) {
         .leaflet-control-layers {
@@ -412,7 +419,7 @@
       if (_map) return;
       injectStyles();
 
-      _map = L.map(containerId, { center: TAIPEI_CENTER, zoom: DEFAULT_ZOOM });
+      _map = L.map(containerId, { center: TAIPEI_CENTER, zoom: DEFAULT_ZOOM, zoomControl: false });
 
       // Build base layers and add default
       const tileLayers = {};
@@ -426,10 +433,14 @@
         tileLayers[label] = layer;
         if (first) { layer.addTo(_map); first = false; }
       }
+      _baseLayers = tileLayers;
+
+      // Zoom control — 手機版移到地圖左下角，避免遮擋頂部篩選列
+      const isMobile = window.innerWidth < 768;
+      L.control.zoom({ position: isMobile ? 'bottomleft' : 'topleft' }).addTo(_map);
 
       // Basemap switcher (top-right)
       L.control.layers(tileLayers, {}, { position: 'topright', collapsed: false }).addTo(_map);
-      _baseLayers = tileLayers;
     },
 
     // Full re-render (used by mode-toggle after all data is loaded)
