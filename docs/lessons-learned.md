@@ -209,3 +209,22 @@
   逐項實作並驗證」，而不是持續在已知有問題的程式碼基礎上疊加修正；
   CI script 用 `git diff --name-only` 取檔案清單時，
   若後續會 `cat`/讀取檔案內容，務必加上 `--diff-filter` 排除刪除的檔案
+
+## L027：setHeatmap() 切換熱力圖時未清除殘留的點位群聚圖層 _markerLayer
+
+- 問題：使用者用 Chrome DevTools 確認，從點位圖切換到熱力圖時，
+  舊的點位群聚圖層（_markerLayer）仍留在地圖上，與熱力圖混在一起
+- 根本原因：`clearLayers()` 會同時清除 `_heatLayer`、`_markerLayer`、
+  `_fallbackLayer`，但 `setHeatmap()` 是獨立的 public API
+  （由 app.js 在熱力圖查詢/模式切換時呼叫，不經過 `clearLayers()`），
+  其內部只清除 `_heatLayer` 與 `_fallbackLayer`，遺漏了 `_markerLayer`，
+  造成兩條清除邏輯不對稱
+- 正確做法：在 `setHeatmap()` 清除 `_heatLayer` 之前，
+  加入 `if (_markerLayer) { _map.removeLayer(_markerLayer); _markerLayer = null; }`
+  （map.js setHeatmap()）；`startProgressiveLoad('point')` 已經透過
+  `clearLayers()` 正確清除舊圖層，不需修改
+- 相關模式：[[L026]]；模組內若有多個「清除圖層」的進入點
+  （`clearLayers()` 與獨立的 `setHeatmap()`），務必確認每個進入點
+  涵蓋的圖層集合一致，否則會出現圖層殘留／混層的問題；
+  診斷時應先列出所有 `_xxxLayer` 的讀寫位置再決定怎麼修，
+  而不是逐個症狀盲目加 `removeLayer`
