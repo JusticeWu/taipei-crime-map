@@ -8,6 +8,21 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
   <link rel="stylesheet" href="css/style.css" />
+  <style>
+  .leaflet-control-attribution {
+    line-height: 1 !important;
+    padding: 1px 4px !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+  }
+  /* 桌面版：強制貼齊地圖底部。手機版維持 style.css 中的 70px 偏移，
+     避免覆蓋縮放按鈕與圖例的 80px 底部留白設計 */
+  @media (min-width: 769px) {
+    .leaflet-bottom {
+      bottom: 0 !important;
+    }
+  }
+  </style>
 </head>
 <body>
   <div id="app">
