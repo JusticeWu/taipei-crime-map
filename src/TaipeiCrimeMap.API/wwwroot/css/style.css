@@ -364,6 +364,15 @@ input[type="number"]::placeholder {
   font-size: 10px;
 }
 
+/* 桌面版：縮放按鈕位置下移，避免太貼近左上角邊緣 */
+@media (min-width: 768px) {
+  .leaflet-control-zoom {
+    position: absolute;
+    top: 80px;
+    left: 10px;
+  }
+}
+
 /* ===========================
    Loading Overlay
    =========================== */
