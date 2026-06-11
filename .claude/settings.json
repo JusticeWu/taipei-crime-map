@@ -14,6 +14,8 @@
       "Bash(Select-Object *)",
       "Bash(Write-Host *)",
       "Bash(az *)",
+      "Bash(az containerapp show --name taipei-crime-map-uat*)",
+      "Bash(az group list*)",
       "Bash(curl *)",
       "Bash(npm *)",
       "Bash(pip *)",
