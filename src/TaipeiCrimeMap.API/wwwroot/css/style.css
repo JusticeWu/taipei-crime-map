@@ -476,7 +476,8 @@ input[type="number"]::placeholder {
     order: 1;
     flex: none;
     width: 100%;
-    height: calc(100vh - 48px);
+    /* 多扣 80px，讓下方統計圖露出一小段，提示使用者可往下滑動 */
+    height: calc(100vh - 48px - 80px);
     min-height: 300px;
   }
 

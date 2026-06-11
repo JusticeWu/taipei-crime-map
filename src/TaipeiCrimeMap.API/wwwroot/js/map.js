@@ -262,7 +262,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Layer picker — icon button (top-right) with flyout basemap menu
+  // Layer picker — icon button (bottom-right, above legend) with flyout basemap menu
   // ---------------------------------------------------------------------------
 
   function switchBaseLayer(label) {
@@ -278,14 +278,13 @@
     if (_layerPickerCtrl) return;
 
     const LayerPickerControl = L.Control.extend({
-      options: { position: 'topright' },
+      options: { position: 'bottomright' },
       onAdd() {
-        const container = L.DomUtil.create('div', 'layer-picker');
+        const container = L.DomUtil.create('div', 'layer-picker leaflet-control-layers');
 
-        const button = L.DomUtil.create('button', 'layer-picker-btn', container);
+        const button = L.DomUtil.create('button', 'layer-picker-btn leaflet-control-layers-toggle', container);
         button.type = 'button';
         button.setAttribute('aria-label', '切換底圖');
-        button.textContent = '🗺️';
 
         const menu = L.DomUtil.create('div', 'layer-picker-menu', container);
         Object.keys(_baseLayers).forEach(label => {
@@ -439,27 +438,25 @@
         }
       }
 
-      /* 底圖切換 — 圖示按鈕（右上角），點擊後浮出選單 */
-      .layer-picker { position: relative; }
+      /* 底圖切換 — 沿用 Leaflet 內建 .leaflet-control-layers 樣式
+         （白底、圓角、淡陰影）與 .leaflet-control-layers-toggle 圖示，
+         點擊後在按鈕上方浮出選單。位於右下角，緊貼案件類型圖例上方
+         （margin-bottom: 4px 為兩者間距） */
+      .layer-picker {
+        position: relative;
+        margin-bottom: 4px;
+      }
       .layer-picker-btn {
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        line-height: 1;
-        background: rgba(30,30,30,.85);
-        color: #fff;
-        border: 2px solid rgba(255,255,255,.5);
-        border-radius: 6px;
-        cursor: pointer;
+        display: block;
+        border: none;
         padding: 0;
+        margin: 0;
+        cursor: pointer;
       }
       .layer-picker-menu {
         display: none;
         position: absolute;
-        top: 42px;
+        bottom: 42px;
         right: 0;
         width: 140px;
         background: rgba(30,30,30,.92);
@@ -527,7 +524,7 @@
       // Zoom control — 桌面版與手機版統一放在地圖左下角
       L.control.zoom({ position: 'bottomleft' }).addTo(_map);
 
-      // Basemap switcher — icon button + flyout menu (top-right)
+      // Basemap switcher — icon button + flyout menu (bottom-right, above legend)
       addLayerPicker();
     },
 
