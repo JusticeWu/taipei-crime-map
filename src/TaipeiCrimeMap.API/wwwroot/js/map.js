@@ -524,9 +524,8 @@
       }
       _baseLayers = tileLayers;
 
-      // Zoom control — 手機版移到地圖左下角，避免遮擋頂部篩選列
-      const isMobile = window.innerWidth < 768;
-      L.control.zoom({ position: isMobile ? 'bottomleft' : 'topleft' }).addTo(_map);
+      // Zoom control — 桌面版與手機版統一放在地圖左下角
+      L.control.zoom({ position: 'bottomleft' }).addTo(_map);
 
       // Basemap switcher — icon button + flyout menu (top-right)
       addLayerPicker();
