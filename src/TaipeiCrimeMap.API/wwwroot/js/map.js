@@ -236,10 +236,8 @@
   function addLegend() {
     if (_legendCtrl) return;
     const entries = [...Object.entries(CASE_TYPE_EMOJIS), ['其他', DEFAULT_EMOJI]];
-    // 手機版：圖例移到右上角（底圖切換控制項正下方），避免遮擋底圖選擇
-    const isMobile = window.innerWidth < 768;
     const LegendControl = L.Control.extend({
-      options: { position: isMobile ? 'topright' : 'bottomright' },
+      options: { position: 'bottomright' },
       onAdd() {
         const el = L.DomUtil.create('div', 'crime-legend');
         el.innerHTML =
@@ -370,9 +368,10 @@
 
       .emoji-marker { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.5); }
 
-      /* 手機版：縮放按鈕移到左下角，距離底部 80px（10px 預設邊距 + 70px） */
+      /* 手機版：縮放按鈕（左下）與圖例（右下）距離底部 80px（10px 預設邊距 + 70px） */
       @media (max-width: 768px) {
-        .leaflet-bottom.leaflet-left {
+        .leaflet-bottom.leaflet-left,
+        .leaflet-bottom.leaflet-right {
           bottom: 70px;
         }
       }
@@ -398,7 +397,7 @@
         }
       }
 
-      /* 手機版：圖例縮小字體，緊接在底圖切換控制項下方 */
+      /* 手機版：圖例縮小字體，固定於地圖右下角 */
       @media (max-width: 768px) {
         .crime-legend { font-size:11px; padding:4px 8px; min-width:80px; margin-top:4px; line-height:1.3; }
         .legend-title { font-size:11px; margin-bottom:2px; padding-bottom:2px; }
