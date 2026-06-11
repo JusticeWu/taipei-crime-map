@@ -159,3 +159,69 @@ describe('map layer state — onMap set never retains stale layers', () => {
     expect(state.onMap.has(state.markerLayer)).toBe(true);
   });
 });
+
+// ── Layer picker (basemap icon button + flyout menu) ────────────────────────
+
+/**
+ * Replicates the layer-picker control state machine from map.js
+ * (addLayerPicker / switchBaseLayer): clicking the icon button toggles
+ * the flyout menu, clicking the map or selecting a layer closes it,
+ * and the selected layer label is tracked.
+ * Any change to that logic in map.js must be reflected here.
+ */
+const BASE_LAYER_LABELS = ['Voyager（預設）', 'Dark（深色）', 'Light（淡色）', '街道圖（OSM）'];
+
+function createLayerPickerState() {
+  let menuOpen = false;
+  let currentLabel = BASE_LAYER_LABELS[0];
+
+  return {
+    get menuOpen() { return menuOpen; },
+    get currentLabel() { return currentLabel; },
+    clickButton() { menuOpen = !menuOpen; },
+    clickMap()    { menuOpen = false; },
+    clickOutside() { menuOpen = false; },
+    selectLayer(label) {
+      if (BASE_LAYER_LABELS.includes(label)) currentLabel = label;
+      menuOpen = false;
+    },
+  };
+}
+
+describe('layer picker control', () => {
+  test('menu is closed by default with Voyager selected', () => {
+    const state = createLayerPickerState();
+    expect(state.menuOpen).toBe(false);
+    expect(state.currentLabel).toBe('Voyager（預設）');
+  });
+
+  test('clicking the icon button opens the menu', () => {
+    const state = createLayerPickerState();
+    state.clickButton();
+    expect(state.menuOpen).toBe(true);
+  });
+
+  test('clicking the map closes the menu', () => {
+    const state = createLayerPickerState();
+    state.clickButton();
+    expect(state.menuOpen).toBe(true);
+
+    state.clickMap();
+    expect(state.menuOpen).toBe(false);
+  });
+
+  test('clicking outside the control closes the menu', () => {
+    const state = createLayerPickerState();
+    state.clickButton();
+    state.clickOutside();
+    expect(state.menuOpen).toBe(false);
+  });
+
+  test('selecting a layer updates the current label and closes the menu', () => {
+    const state = createLayerPickerState();
+    state.clickButton();
+    state.selectLayer('Dark（深色）');
+    expect(state.currentLabel).toBe('Dark（深色）');
+    expect(state.menuOpen).toBe(false);
+  });
+});

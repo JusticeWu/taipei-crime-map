@@ -93,6 +93,8 @@
   let _districtLabelLayer = null;
   let _progressCtrl     = null;
   let _baseLayers       = {};
+  let _currentBaseLabel = null;
+  let _layerPickerCtrl  = null;
 
   // Render queue: ensures one page of markers is added per animation frame
   let _renderQueue      = [];
@@ -260,6 +262,67 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Layer picker — icon button (top-right) with flyout basemap menu
+  // ---------------------------------------------------------------------------
+
+  function switchBaseLayer(label) {
+    if (!_baseLayers[label] || label === _currentBaseLabel) return;
+    if (_currentBaseLabel && _baseLayers[_currentBaseLabel]) {
+      _map.removeLayer(_baseLayers[_currentBaseLabel]);
+    }
+    _baseLayers[label].addTo(_map);
+    _currentBaseLabel = label;
+  }
+
+  function addLayerPicker() {
+    if (_layerPickerCtrl) return;
+
+    const LayerPickerControl = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd() {
+        const container = L.DomUtil.create('div', 'layer-picker');
+
+        const button = L.DomUtil.create('button', 'layer-picker-btn', container);
+        button.type = 'button';
+        button.setAttribute('aria-label', '切換底圖');
+        button.textContent = '🗺️';
+
+        const menu = L.DomUtil.create('div', 'layer-picker-menu', container);
+        Object.keys(_baseLayers).forEach(label => {
+          const item = L.DomUtil.create('div', 'layer-picker-item', menu);
+          item.textContent = label;
+          if (label === _currentBaseLabel) item.classList.add('selected');
+          L.DomEvent.on(item, 'click', () => {
+            switchBaseLayer(label);
+            menu.querySelectorAll('.layer-picker-item').forEach(el => {
+              el.classList.toggle('selected', el.textContent === label);
+            });
+            menu.classList.remove('open');
+          });
+        });
+
+        L.DomEvent.on(button, 'click', (e) => {
+          L.DomEvent.stop(e);
+          menu.classList.toggle('open');
+        });
+
+        // 點擊控制項本身不應觸發地圖點擊或拖曳
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+
+        // 點擊地圖或頁面其他地方時收合選單
+        _map.on('click', () => menu.classList.remove('open'));
+        document.addEventListener('click', () => menu.classList.remove('open'));
+
+        return container;
+      },
+    });
+
+    _layerPickerCtrl = new LayerPickerControl();
+    _layerPickerCtrl.addTo(_map);
+  }
+
+  // ---------------------------------------------------------------------------
   // District labels (legacy text — kept for cleanup; replaced by bubble markers)
   // ---------------------------------------------------------------------------
 
@@ -376,25 +439,52 @@
         }
       }
 
-      /* 手機版：底圖切換控制項縮小，避免占用過多畫面 */
-      @media (max-width: 768px) {
-        .leaflet-control-layers {
-          font-size: 11px;
-          max-width: 130px;
-          padding: 4px 6px;
-        }
-        .leaflet-control-layers-list label {
-          margin-bottom: 2px;
-        }
-        .leaflet-control-layers-base label,
-        .leaflet-control-layers-overlays label {
-          font-size: 11px;
-          line-height: 1.3;
-        }
-        .leaflet-control-layers-base span,
-        .leaflet-control-layers-overlays span {
-          font-size: 11px;
-        }
+      /* 底圖切換 — 圖示按鈕（右上角），點擊後浮出選單 */
+      .layer-picker { position: relative; }
+      .layer-picker-btn {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        line-height: 1;
+        background: rgba(30,30,30,.85);
+        color: #fff;
+        border: 2px solid rgba(255,255,255,.5);
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 0;
+      }
+      .layer-picker-menu {
+        display: none;
+        position: absolute;
+        top: 42px;
+        right: 0;
+        width: 140px;
+        background: rgba(30,30,30,.92);
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.5);
+        overflow: hidden;
+        z-index: 1000;
+      }
+      .layer-picker-menu.open {
+        display: block;
+      }
+      .layer-picker-item {
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #ddd;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .layer-picker-item:hover {
+        background: rgba(255,255,255,.1);
+      }
+      .layer-picker-item.selected {
+        background: var(--highlight, #e94560);
+        color: #fff;
+        font-weight: bold;
       }
 
       /* 手機版：圖例縮小字體，固定於地圖右下角 */
@@ -430,7 +520,7 @@
           maxZoom:     19,
         });
         tileLayers[label] = layer;
-        if (first) { layer.addTo(_map); first = false; }
+        if (first) { layer.addTo(_map); _currentBaseLabel = label; first = false; }
       }
       _baseLayers = tileLayers;
 
@@ -438,8 +528,8 @@
       const isMobile = window.innerWidth < 768;
       L.control.zoom({ position: isMobile ? 'bottomleft' : 'topleft' }).addTo(_map);
 
-      // Basemap switcher (top-right)
-      L.control.layers(tileLayers, {}, { position: 'topright', collapsed: false }).addTo(_map);
+      // Basemap switcher — icon button + flyout menu (top-right)
+      addLayerPicker();
     },
 
     // Full re-render (used by mode-toggle after all data is loaded)
