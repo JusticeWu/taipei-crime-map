@@ -167,7 +167,7 @@
      sessionStorage cache for point-mode data
      key: crimes:{caseType}:{districtName}:{yearFrom}:{yearTo}
   ----------------------------------------------------------------------- */
-  const CACHE_PREFIX = 'crimes:points:v2:'; // v2: PointCrimeDto 加入 district/timeSlot/rawLocation
+  const CACHE_PREFIX = 'crimes:points:'; // versioned to avoid collision with old full-DTO cache
 
   function buildCacheKey() {
     const p = buildQueryParams();
@@ -384,6 +384,9 @@
       if (_lastHeatmapData) {
         // Have cached heatmap — re-render without fetching
         if (window.mapModule) {
+          if (typeof window.mapModule.update === 'function') {
+            window.mapModule.update(_lastData, 'heat');
+          }
           if (typeof window.mapModule.setHeatmap === 'function') {
             window.mapModule.setHeatmap(_lastHeatmapData);
           }

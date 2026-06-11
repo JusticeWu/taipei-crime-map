@@ -124,9 +124,9 @@
       `  <strong>${escapeHtml(item.caseType || '未知')}</strong>`,
       '  <table>',
       `    <tr><th>行政區</th><td>${escapeHtml(item.district || '—')}</td></tr>`,
+      `    <tr><th>日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || '—')}</td></tr>`,
       `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || '—')}</td></tr>`,
-      `    <tr><th>發生日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
       '  </table>',
       '</div>',
     ].join('\n');
@@ -420,9 +420,6 @@
     // Replaces any existing heat layer and fallback bubbles.
     setHeatmap(points) {
       if (!_map || !Array.isArray(points) || points.length === 0) return;
-
-      // Remove leftover point-mode marker layer
-      if (_markerLayer) { _map.removeLayer(_markerLayer); _markerLayer = null; }
 
       // Heat layer
       if (_heatLayer) { _map.removeLayer(_heatLayer); _heatLayer = null; }

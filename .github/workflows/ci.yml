@@ -212,7 +212,7 @@ jobs:
         run: |
           # 找本次 push 新增或修改的報告（fetch-depth: 2 確保 HEAD~1 可用）
           # sort -r：日期前綴檔名倒序 → 第一個 = 最新日期的報告
-          REPORT=$(git diff --diff-filter=ACMR HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
+          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
             | sort -r | head -1)
 
           # Fallback：本次沒有報告變動，取整個目錄最新的
@@ -344,7 +344,7 @@ jobs:
       - name: Find latest report
         id: find_report
         run: |
-          REPORT=$(git diff --diff-filter=ACMR HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
+          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
             | sort -r | head -1)
 
           if [ -z "$REPORT" ]; then
