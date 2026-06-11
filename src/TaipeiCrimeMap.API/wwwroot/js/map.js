@@ -390,6 +390,7 @@
     startProgressiveLoad(mode) {
       if (!_map) return;
       clearLayers();
+      if (_fallbackLayer) { _map.removeLayer(_fallbackLayer); _fallbackLayer = null; }
       removeDistrictLabels();
 
       if (mode === 'point') {
