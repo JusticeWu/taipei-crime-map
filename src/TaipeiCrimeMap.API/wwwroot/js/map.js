@@ -421,6 +421,9 @@
     setHeatmap(points) {
       if (!_map || !Array.isArray(points) || points.length === 0) return;
 
+      // Remove leftover point-mode marker layer
+      if (_markerLayer) { _map.removeLayer(_markerLayer); _markerLayer = null; }
+
       // Heat layer
       if (_heatLayer) { _map.removeLayer(_heatLayer); _heatLayer = null; }
       const maxWeight = points.reduce((m, p) => Math.max(m, p.weight || 0), 1);
