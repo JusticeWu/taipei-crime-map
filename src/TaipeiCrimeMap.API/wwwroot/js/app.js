@@ -24,6 +24,9 @@
   let elBtnQuery, elToggleMode;
   let elStatTotal, elStatWithCoords, elStatTopDistrict;
   let elLoadingOverlay;
+  let elFilterPanel, elBtnFilterToggle, elBtnFilterClose;
+
+  const MOBILE_BREAKPOINT = 768;
 
   /* -----------------------------------------------------------------------
      State
@@ -342,6 +345,25 @@
   }
 
   /* -----------------------------------------------------------------------
+     Mobile filter panel — slide down/up from top, auto-collapse after query
+  ----------------------------------------------------------------------- */
+  function openFilterPanel() {
+    if (elFilterPanel) elFilterPanel.classList.add('open');
+  }
+
+  function closeFilterPanel() {
+    if (elFilterPanel) elFilterPanel.classList.remove('open');
+  }
+
+  function toggleFilterPanel() {
+    if (elFilterPanel) elFilterPanel.classList.toggle('open');
+  }
+
+  function closeFilterPanelOnMobile() {
+    if (window.innerWidth < MOBILE_BREAKPOINT) closeFilterPanel();
+  }
+
+  /* -----------------------------------------------------------------------
      Dispatch query based on current mode
   ----------------------------------------------------------------------- */
   function doQuery() {
@@ -350,6 +372,7 @@
     } else {
       queryProgressive();
     }
+    closeFilterPanelOnMobile();
   }
 
   function appendToMap(data, mode) {
@@ -427,6 +450,9 @@
     elStatWithCoords  = document.getElementById('stat-with-coords');
     elStatTopDistrict = document.getElementById('stat-top-district');
     elLoadingOverlay  = document.getElementById('loading-overlay');
+    elFilterPanel     = document.getElementById('filter-panel');
+    elBtnFilterToggle = document.getElementById('btn-filter-toggle');
+    elBtnFilterClose  = document.getElementById('btn-filter-close');
 
     if (window.mapModule && typeof window.mapModule.init === 'function') {
       window.mapModule.init('map');
@@ -439,6 +465,8 @@
 
     if (elBtnQuery) elBtnQuery.addEventListener('click', doQuery);
     if (elToggleMode) elToggleMode.addEventListener('change', onModeChange);
+    if (elBtnFilterToggle) elBtnFilterToggle.addEventListener('click', toggleFilterPanel);
+    if (elBtnFilterClose) elBtnFilterClose.addEventListener('click', closeFilterPanel);
 
     doQuery(); // defaults to point mode → queryProgressive()
   }

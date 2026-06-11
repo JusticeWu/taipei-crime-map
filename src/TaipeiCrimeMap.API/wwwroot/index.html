@@ -11,12 +11,18 @@
 </head>
 <body>
   <div id="app">
+    <!-- Mobile filter bar (mobile only) -->
+    <button id="btn-filter-toggle" type="button">篩選條件 ▼</button>
+
     <!-- Left Panel -->
     <aside id="left-panel">
 
       <!-- Filter Panel -->
       <section id="filter-panel">
-        <h2 class="panel-title">篩選條件</h2>
+        <div class="filter-panel-header">
+          <h2 class="panel-title">篩選條件</h2>
+          <button id="btn-filter-close" type="button" aria-label="關閉篩選條件">✕</button>
+        </div>
 
         <div class="form-group">
           <label for="select-case-type">案類</label>

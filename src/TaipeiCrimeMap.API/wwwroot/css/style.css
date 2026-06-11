@@ -90,6 +90,18 @@ section {
   flex-shrink: 0;
 }
 
+.filter-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Mobile-only controls — hidden on desktop */
+#btn-filter-toggle,
+#btn-filter-close {
+  display: none;
+}
+
 .form-group {
   margin-bottom: 12px;
 }
@@ -393,15 +405,66 @@ input[type="number"]::placeholder {
     min-height: 100vh;
   }
 
+  /* #left-panel 改為 display:contents，子區塊變成 #app 的直接 flex
+     items，可用 order 排列在地圖上下方；樣式（背景色等）改套用到各子區塊 */
   #left-panel {
+    display: contents;
+  }
+
+  /* 手機版頂部固定篩選列 */
+  #btn-filter-toggle {
+    display: block;
+    order: 0;
     width: 100%;
-    min-width: unset;
-    border-right: none;
+    padding: 12px 16px;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: none;
     border-bottom: 1px solid var(--border-color);
-    overflow: visible;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* 篩選條件面板：點擊篩選列後從上方滑出 */
+  #filter-panel {
+    order: 1;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    max-height: 0;
+    overflow: hidden;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    z-index: 1000;
+    transition: max-height var(--transition);
+  }
+
+  #filter-panel.open {
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  #btn-filter-close {
+    display: block;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px;
+  }
+
+  #stats-panel {
+    order: 2;
+    background-color: var(--bg-secondary);
   }
 
   #map-container {
+    order: 3;
     flex: none;
     width: 100%;
     height: 60vh;
@@ -414,8 +477,10 @@ input[type="number"]::placeholder {
 
   /* 手機版也顯示圖表，需給定明確高度，否則 Chart.js 無法計算尺寸 */
   #chart-container {
+    order: 4;
     flex: none;
     height: 480px;
+    background-color: var(--bg-secondary);
   }
 
   .stat-value {
