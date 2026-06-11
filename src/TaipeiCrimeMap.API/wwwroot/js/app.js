@@ -118,6 +118,23 @@
     if (elStatTopDistrict) elStatTopDistrict.textContent = stats.topDistrict;
   }
 
+  /**
+   * 點位圖模式（/api/crime/points）的精簡 DTO 不含 district 欄位，
+   * 因此「最多案件行政區」改以 /api/crime/stats 的 districtDistribution
+   * 為準（涵蓋完整篩選結果，且兩種模式皆適用）
+   */
+  function renderTopDistrictFromStats(stats) {
+    if (!elStatTopDistrict) return;
+    const distribution = (stats && stats.districtDistribution) || [];
+    if (distribution.length === 0) return;
+
+    let top = distribution[0];
+    for (const d of distribution) {
+      if ((d.count || 0) > (top.count || 0)) top = d;
+    }
+    elStatTopDistrict.textContent = top.district || '—';
+  }
+
   /* -----------------------------------------------------------------------
      Distribution charts — fetch pre-aggregated stats from /api/crime/stats
   ----------------------------------------------------------------------- */
@@ -131,6 +148,7 @@
 
       const stats = await resp.json();
       window.chartModule.update(stats);
+      renderTopDistrictFromStats(stats);
     } catch (err) {
       console.error('Stats query failed:', err);
       window.chartModule.update({ districtDistribution: [], timeSlotDistribution: [] });
