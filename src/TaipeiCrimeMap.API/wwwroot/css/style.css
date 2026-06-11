@@ -492,8 +492,8 @@ input[type="number"]::placeholder {
     order: 1;
     flex: none;
     width: 100%;
-    /* 多扣 80px，讓下方統計圖露出一小段，提示使用者可往下滑動 */
-    height: calc(100vh - 48px - 80px);
+    /* 多扣 120px，讓下方統計圖露出更多，提示使用者可往下滑動 */
+    height: calc(100vh - 48px - 120px);
     min-height: 300px;
   }
 
@@ -501,12 +501,12 @@ input[type="number"]::placeholder {
     height: 100%;
   }
 
-  /* 統計圖表區塊 — 直接顯示於地圖下方 */
+  /* 統計圖表區塊 — 直接顯示於地圖下方，背景稍微提亮以利辨識 */
   #chart-container {
     order: 2;
     flex: none;
     height: 480px;
-    background-color: var(--bg-secondary);
+    background-color: #2A3F5F;
   }
 
   #stats-panel {
