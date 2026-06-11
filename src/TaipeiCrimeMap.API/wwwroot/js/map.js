@@ -236,8 +236,10 @@
   function addLegend() {
     if (_legendCtrl) return;
     const entries = [...Object.entries(CASE_TYPE_EMOJIS), ['其他', DEFAULT_EMOJI]];
+    // 手機版：圖例移到右上角（底圖切換控制項正下方），避免遮擋底圖選擇
+    const isMobile = window.innerWidth < 768;
     const LegendControl = L.Control.extend({
-      options: { position: 'bottomright' },
+      options: { position: isMobile ? 'topright' : 'bottomright' },
       onAdd() {
         const el = L.DomUtil.create('div', 'crime-legend');
         el.innerHTML =
@@ -367,6 +369,13 @@
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
 
       .emoji-marker { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.5); }
+
+      /* 手機版：圖例縮小字體，緊接在底圖切換控制項下方 */
+      @media (max-width: 768px) {
+        .crime-legend { font-size:12px; padding:6px 10px; min-width:90px; margin-top:6px; }
+        .legend-title { font-size:12px; margin-bottom:4px; padding-bottom:3px; }
+        .legend-emoji { width:18px; height:18px; font-size:12px; }
+      }
     `;
     document.head.appendChild(style);
   }
