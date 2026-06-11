@@ -255,10 +255,23 @@
     });
     _legendCtrl = new LegendControl();
     _legendCtrl.addTo(_map);
+    positionLayerPicker();
   }
 
   function removeLegend() {
     if (_legendCtrl) { _legendCtrl.remove(); _legendCtrl = null; }
+    positionLayerPicker();
+  }
+
+  // 讓 .layer-picker 永遠位於 .crime-legend 正上方：
+  // bottom = 圖例實際高度 + 12px（圖例不存在時視為高度 0）
+  function positionLayerPicker() {
+    if (!_layerPickerCtrl) return;
+    const pickerEl = _layerPickerCtrl.getContainer();
+    if (!pickerEl) return;
+    const legendEl = _legendCtrl ? _legendCtrl.getContainer() : null;
+    const legendHeight = legendEl ? legendEl.getBoundingClientRect().height : 0;
+    pickerEl.style.bottom = (legendHeight + 12) + 'px';
   }
 
   // ---------------------------------------------------------------------------
@@ -325,6 +338,7 @@
 
     _layerPickerCtrl = new LayerPickerControl();
     _layerPickerCtrl.addTo(_map);
+    positionLayerPicker();
   }
 
   // ---------------------------------------------------------------------------
@@ -445,14 +459,13 @@
       }
 
       /* 底圖切換 — 深色圓角按鈕 + 自訂 SVG 疊層圖示，點擊後在按鈕上方浮出選單。
-         固定於右下角，正好在案件類型圖例正上方，間距 4px：
-         bottom = 圖例 bottom(10px) + 圖例高度 + 4px。
-         圖例高度依目前固定 7 個項目（6 類案件 + 其他）估算，
-         桌面版約 241px、手機版約 132px；若圖例項目數或樣式變動需一併調整。 */
+         固定於右下角；bottom 由 positionLayerPicker() 依 .crime-legend 的
+         實際高度動態計算（圖例高度 + 12px），此處的 bottom 僅為 JS 執行前的
+         初始值。 */
       .layer-picker {
         position: absolute;
         right: 8px;
-        bottom: 255px;
+        bottom: 12px;
       }
       .layer-picker-btn {
         display: flex;
@@ -505,9 +518,6 @@
         .legend-title { font-size:11px; margin-bottom:2px; padding-bottom:2px; }
         .legend-item  { margin-bottom:1px; gap:4px; }
         .legend-emoji { width:14px; height:14px; font-size:10px; }
-
-        /* 圖例縮小後高度約 132px，圖層 icon bottom = 10 + 132 + 4 */
-        .layer-picker { bottom: 146px; }
       }
     `;
     document.head.appendChild(style);
@@ -545,6 +555,9 @@
 
       // Basemap switcher — icon button + flyout menu (bottom-right, above legend)
       addLayerPicker();
+
+      // 視窗尺寸改變時重新計算圖層切換按鈕的位置
+      window.addEventListener('resize', positionLayerPicker);
     },
 
     // Full re-render (used by mode-toggle after all data is loaded)
