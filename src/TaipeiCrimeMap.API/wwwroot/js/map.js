@@ -421,7 +421,7 @@
       .crime-popup th     { text-align:left; padding:2px 6px 2px 0; color:#888; white-space:nowrap; }
       .crime-popup td     { padding:2px 0; }
 
-      .crime-legend { position:absolute; right:10px; bottom:10px; background:rgba(30,30,30,.85); color:#ddd; padding:10px 14px; border-radius:6px; font-size:12px; line-height:1.6; box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:110px; }
+      .crime-legend { position:absolute; right:8px; bottom:10px; background:rgba(30,30,30,.85); color:#ddd; padding:10px 14px; border-radius:6px; font-size:12px; line-height:1.6; box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:110px; }
       .legend-title { font-weight:bold; margin-bottom:6px; font-size:13px; border-bottom:1px solid #555; padding-bottom:4px; }
       .legend-item  { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
       .legend-emoji { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; flex-shrink:0; font-size:16px; line-height:1; }
@@ -451,7 +451,7 @@
          桌面版約 241px、手機版約 132px；若圖例項目數或樣式變動需一併調整。 */
       .layer-picker {
         position: absolute;
-        right: 10px;
+        right: 8px;
         bottom: 255px;
       }
       .layer-picker-btn {
