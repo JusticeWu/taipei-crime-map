@@ -9,7 +9,8 @@
   },
   "scripts": {
     "test": "jest tests/frontend/",
-    "test:frontend": "jest tests/frontend/ --verbose"
+    "test:frontend": "jest tests/frontend/ --verbose",
+    "test:e2e": "npm --prefix tests/TaipeiCrimeMap.E2E test:e2e"
   },
   "repository": {
     "type": "git",
