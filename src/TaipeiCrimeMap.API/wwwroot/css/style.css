@@ -365,12 +365,13 @@ input[type="number"]::placeholder {
   line-height: 1 !important;
 }
 
-/* 桌面版：縮放按鈕位置下移，避免太貼近左上角邊緣 */
+/* 桌面版：縮放按鈕固定於地圖左下角，距底部 80px、距左側 10px */
 @media (min-width: 768px) {
   .leaflet-control-zoom {
     position: absolute;
-    top: 80px;
+    bottom: 80px;
     left: 10px;
+    top: auto;
   }
 }
 

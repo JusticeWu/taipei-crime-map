@@ -539,10 +539,9 @@
       }
       _baseLayers = tileLayers;
 
-      // Zoom control — 手機版放在地圖左下角，桌面版放在左上角
-      // （CSS 另外將桌面版位置下移至 top:80px，避免太貼近邊緣）
-      const isMobile = window.innerWidth < 768;
-      L.control.zoom({ position: isMobile ? 'bottomleft' : 'topleft' }).addTo(_map);
+      // Zoom control — 桌面版與手機版統一放在地圖左下角
+      // （CSS 將桌面版位置固定為距底部 80px、距左側 10px）
+      L.control.zoom({ position: 'bottomleft' }).addTo(_map);
 
       // Basemap switcher — icon button + flyout menu (bottom-right, above legend)
       addLayerPicker();
