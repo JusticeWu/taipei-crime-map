@@ -417,6 +417,13 @@ input[type="number"]::placeholder {
     overflow: auto;
   }
 
+  /* attribution 控制項與圖例/圖層按鈕同屬 .leaflet-bottom.leaflet-right，
+     將其 bottom 固定為 0，使 attribution 緊貼地圖底部，
+     不受縮放按鈕側 70px 偏移影響 */
+  .leaflet-bottom.leaflet-right {
+    bottom: 0 !important;
+  }
+
   #app {
     flex-direction: column;
     height: auto;
