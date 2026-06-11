@@ -151,6 +151,10 @@ input[type="number"]::-webkit-outer-spin-button {
   opacity: 0.4;
 }
 
+input[type="number"]::placeholder {
+  color: #EEEEEE;
+}
+
 /* Toggle Mode */
 .toggle-group {
   display: flex;
