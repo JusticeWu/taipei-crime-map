@@ -9,7 +9,7 @@
 
 // ── Functions under test ────────────────────────────────────────────────────
 
-const CACHE_PREFIX = 'crimes:points:';
+const CACHE_PREFIX = 'crimes:points:v2:';
 
 function buildCacheKey(caseType, district, yearFrom, yearTo) {
   return CACHE_PREFIX +
@@ -59,25 +59,51 @@ function computeStatsFromHeatmap(data) {
   return { total, withCoords: 0, topDistrict: (top && top.district) || '—' };
 }
 
+// Replicates onModeChange's heat-mode-with-cache branch (app.js).
+// setHeatmap() already rebuilds the heat layer + district fallback markers,
+// so update(lastData, 'heat') must NOT also be called — calling both
+// stacks a leftover marker/fallback layer on top of the heatmap.
+function onModeChange(mode, lastData, lastHeatmapData, mapModule, queryProgressive, queryHeatmapOnly) {
+  if (mode === 'point') {
+    if (lastData.length > 0) {
+      if (mapModule && typeof mapModule.update === 'function') {
+        mapModule.update(lastData, 'point');
+      }
+    } else {
+      queryProgressive();
+    }
+  } else { // 'heat'
+    if (lastHeatmapData) {
+      if (mapModule) {
+        if (typeof mapModule.setHeatmap === 'function') {
+          mapModule.setHeatmap(lastHeatmapData);
+        }
+      }
+    } else {
+      queryHeatmapOnly();
+    }
+  }
+}
+
 // ── buildCacheKey ───────────────────────────────────────────────────────────
 
 describe('buildCacheKey', () => {
   test('no filter → all segments empty', () => {
-    expect(buildCacheKey('', '', '', '')).toBe('crimes:points::::');
+    expect(buildCacheKey('', '', '', '')).toBe('crimes:points:v2::::');
   });
 
   test('caseType only', () => {
-    expect(buildCacheKey('1', '', '', '')).toBe('crimes:points:1:::');
+    expect(buildCacheKey('1', '', '', '')).toBe('crimes:points:v2:1:::');
   });
 
   test('all filters set', () => {
     expect(buildCacheKey('2', '大安區', '2020', '2024'))
-      .toBe('crimes:points:2:大安區:2020:2024');
+      .toBe('crimes:points:v2:2:大安區:2020:2024');
   });
 
   test('null / undefined treated as empty string', () => {
     expect(buildCacheKey(null, undefined, null, undefined))
-      .toBe('crimes:points::::');
+      .toBe('crimes:points:v2::::');
   });
 
   test('different filters produce different keys', () => {
@@ -209,5 +235,34 @@ describe('computeStatsFromHeatmap', () => {
   test('missing weight treated as 0', () => {
     const data = [{ district: '大安區' }, { weight: 10, district: '中山區' }];
     expect(computeStatsFromHeatmap(data).topDistrict).toBe('中山區');
+  });
+});
+
+// ── onModeChange ────────────────────────────────────────────────────────────
+
+describe('onModeChange', () => {
+  test('switching to heat mode with cached data calls setHeatmap only, not update', () => {
+    const mapModule = {
+      update:     jest.fn(),
+      setHeatmap: jest.fn(),
+    };
+    const lastHeatmapData = [{ district: '大安區', weight: 10, lat: 25, lng: 121.5 }];
+
+    onModeChange('heat', [], lastHeatmapData, mapModule, jest.fn(), jest.fn());
+
+    expect(mapModule.setHeatmap).toHaveBeenCalledTimes(1);
+    expect(mapModule.setHeatmap).toHaveBeenCalledWith(lastHeatmapData);
+    expect(mapModule.update).not.toHaveBeenCalled();
+  });
+
+  test('switching to heat mode without cached data fetches via queryHeatmapOnly', () => {
+    const mapModule = { update: jest.fn(), setHeatmap: jest.fn() };
+    const queryHeatmapOnly = jest.fn();
+
+    onModeChange('heat', [], null, mapModule, jest.fn(), queryHeatmapOnly);
+
+    expect(queryHeatmapOnly).toHaveBeenCalledTimes(1);
+    expect(mapModule.setHeatmap).not.toHaveBeenCalled();
+    expect(mapModule.update).not.toHaveBeenCalled();
   });
 });
