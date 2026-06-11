@@ -357,6 +357,13 @@ input[type="number"]::placeholder {
   background-color: var(--bg-accent) !important;
 }
 
+/* 縮小屬性宣告列高度，使其緊貼地圖底部 */
+.leaflet-control-attribution {
+  margin-bottom: 0;
+  padding: 2px 4px;
+  font-size: 10px;
+}
+
 /* ===========================
    Loading Overlay
    =========================== */
