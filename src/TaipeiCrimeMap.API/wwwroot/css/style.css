@@ -402,6 +402,7 @@ input[type="number"]::placeholder {
   }
 
   #map-container {
+    flex: none;
     width: 100%;
     height: 60vw;
     min-height: 300px;
@@ -411,9 +412,10 @@ input[type="number"]::placeholder {
     height: 100%;
   }
 
-  /* Hide chart section on mobile */
+  /* 手機版也顯示圖表，需給定明確高度，否則 Chart.js 無法計算尺寸 */
   #chart-container {
-    display: none;
+    flex: none;
+    height: 480px;
   }
 
   .stat-value {

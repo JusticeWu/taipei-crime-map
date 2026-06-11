@@ -371,7 +371,7 @@
     const currentYear = new Date().getFullYear();
     if (elYearFrom) {
       elYearFrom.max         = String(currentYear);
-      elYearFrom.placeholder = '2018';
+      elYearFrom.placeholder = '2015';
     }
     if (elYearTo) {
       elYearTo.max         = String(currentYear);
