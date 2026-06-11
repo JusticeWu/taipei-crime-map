@@ -98,8 +98,7 @@ section {
 
 /* Mobile-only controls — hidden on desktop */
 #btn-filter-toggle,
-#btn-filter-close,
-#btn-toggle-charts {
+#btn-filter-close {
   display: none;
 }
 
@@ -491,11 +490,6 @@ input[type="number"]::placeholder {
   #top-district-panel {
     order: 4;
     background-color: var(--bg-secondary);
-  }
-
-  /* 「📊 統計圖」按鈕已停用，統計圖直接顯示 */
-  #btn-toggle-charts {
-    display: none;
   }
 
   .stat-value {
