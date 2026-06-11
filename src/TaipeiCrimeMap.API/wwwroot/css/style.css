@@ -437,7 +437,9 @@ input[type="number"]::placeholder {
     cursor: pointer;
   }
 
-  /* 篩選條件面板：從篩選列下方滑出 */
+  /* 篩選條件面板：從篩選列下方滑出。
+     收合時 padding 設為 0，避免 section 預設的上下 padding
+     讓「篩選條件」標題列在 max-height:0 時仍露出一截 */
   #filter-panel {
     order: 1;
     position: fixed;
@@ -445,6 +447,7 @@ input[type="number"]::placeholder {
     left: 0;
     right: 0;
     max-height: 0;
+    padding: 0;
     overflow: hidden;
     background-color: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
@@ -454,6 +457,7 @@ input[type="number"]::placeholder {
 
   #filter-panel.open {
     max-height: calc(100vh - 48px);
+    padding: 16px;
     overflow-y: auto;
   }
 
