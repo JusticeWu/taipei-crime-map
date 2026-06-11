@@ -280,11 +280,17 @@
     const LayerPickerControl = L.Control.extend({
       options: { position: 'bottomright' },
       onAdd() {
-        const container = L.DomUtil.create('div', 'layer-picker leaflet-control-layers');
+        const container = L.DomUtil.create('div', 'layer-picker');
 
-        const button = L.DomUtil.create('button', 'layer-picker-btn leaflet-control-layers-toggle', container);
+        const button = L.DomUtil.create('button', 'layer-picker-btn', container);
         button.type = 'button';
         button.setAttribute('aria-label', '切換底圖');
+        button.innerHTML =
+          '<svg width="20" height="16" viewBox="0 0 20 16">' +
+          '<rect x="0" y="0" width="20" height="3" rx="1.5" fill="white"/>' +
+          '<rect x="2" y="6" width="16" height="3" rx="1.5" fill="white"/>' +
+          '<rect x="4" y="12" width="12" height="3" rx="1.5" fill="white"/>' +
+          '</svg>';
 
         const menu = L.DomUtil.create('div', 'layer-picker-menu', container);
         Object.keys(_baseLayers).forEach(label => {
@@ -415,7 +421,7 @@
       .crime-popup th     { text-align:left; padding:2px 6px 2px 0; color:#888; white-space:nowrap; }
       .crime-popup td     { padding:2px 0; }
 
-      .crime-legend { background:rgba(30,30,30,.85); color:#ddd; padding:10px 14px; border-radius:6px; font-size:12px; line-height:1.6; box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:110px; }
+      .crime-legend { position:absolute; right:10px; bottom:10px; background:rgba(30,30,30,.85); color:#ddd; padding:10px 14px; border-radius:6px; font-size:12px; line-height:1.6; box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:110px; }
       .legend-title { font-weight:bold; margin-bottom:6px; font-size:13px; border-bottom:1px solid #555; padding-bottom:4px; }
       .legend-item  { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
       .legend-emoji { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; flex-shrink:0; font-size:16px; line-height:1; }
@@ -438,17 +444,26 @@
         }
       }
 
-      /* 底圖切換 — 沿用 Leaflet 內建 .leaflet-control-layers 樣式
-         （白底、圓角、淡陰影）與 .leaflet-control-layers-toggle 圖示，
-         點擊後在按鈕上方浮出選單。位於右下角，緊貼案件類型圖例上方
-         （margin-bottom: 4px 為兩者間距） */
+      /* 底圖切換 — 深色圓角按鈕 + 自訂 SVG 疊層圖示，點擊後在按鈕上方浮出選單。
+         固定於右下角，正好在案件類型圖例正上方，間距 4px：
+         bottom = 圖例 bottom(10px) + 圖例高度 + 4px。
+         圖例高度依目前固定 7 個項目（6 類案件 + 其他）估算，
+         桌面版約 241px、手機版約 132px；若圖例項目數或樣式變動需一併調整。 */
       .layer-picker {
-        position: relative;
-        margin-bottom: 4px;
+        position: absolute;
+        right: 10px;
+        bottom: 255px;
       }
       .layer-picker-btn {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background: rgba(30,30,30,.85);
         border: none;
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.5);
         padding: 0;
         margin: 0;
         cursor: pointer;
@@ -486,10 +501,13 @@
 
       /* 手機版：圖例縮小字體，固定於地圖右下角 */
       @media (max-width: 768px) {
-        .crime-legend { font-size:11px; padding:4px 8px; min-width:80px; margin-top:4px; line-height:1.3; }
+        .crime-legend { font-size:11px; padding:4px 8px; min-width:80px; line-height:1.3; }
         .legend-title { font-size:11px; margin-bottom:2px; padding-bottom:2px; }
         .legend-item  { margin-bottom:1px; gap:4px; }
         .legend-emoji { width:14px; height:14px; font-size:10px; }
+
+        /* 圖例縮小後高度約 132px，圖層 icon bottom = 10 + 132 + 4 */
+        .layer-picker { bottom: 146px; }
       }
     `;
     document.head.appendChild(style);
