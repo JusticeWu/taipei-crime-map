@@ -249,3 +249,19 @@
   集中在單一、明確的層級
 - 相關模式：跨層資料格式轉換要有明確的單一負責層（single source of truth
   for unit conversion）
+
+## L023：手機版 RWD 用 flex:1 在 height:auto 父層下會被壓縮為 0
+- 問題：`#map-container` 與 `#chart-container` 在桌面版透過 `flex: 1`
+  自動撐滿剩餘高度，但手機版 `#app` 改為 `flex-direction: column;
+  height: auto`；此時 `flex: 1`（即 `flex-basis: 0%`）會讓兩個區塊的
+  起始主軸尺寸為 0，且父層沒有固定高度可供 `flex-grow` 分配，導致
+  地圖容器高度趨近於 0（地圖看不到），而 `#chart-container` 原本直接
+  `display: none` 整個隱藏，造成圖表「無資料」
+- 根本原因：`flex: 1`（flex-basis: 0%）會覆蓋明確設定的 `height`，
+  在 `height: auto` 的 column 容器中沒有可分配空間，子元素因此塌陷為 0
+- 正確做法：手機版媒體查詢中，將 `#map-container`、`#chart-container`
+  改為 `flex: none` 並給予明確高度（如 `height: 60vw; min-height: 300px`
+  與 `height: 480px`），讓 `height` 設定生效；圖表容器需有非零高度，
+  Chart.js 才能正確計算 canvas 尺寸並繪製
+- 相關模式：flexbox 子元素若需要明確高度生效，必須搭配 `flex: none`
+  （或將 `flex-basis` 設為 `auto`），否則 `flex-basis: 0%` 會優先生效
