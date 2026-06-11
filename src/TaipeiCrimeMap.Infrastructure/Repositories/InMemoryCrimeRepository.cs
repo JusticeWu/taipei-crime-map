@@ -200,4 +200,30 @@ public class InMemoryCrimeRepository : ICrimeRepository
 
         return Task.FromResult<IReadOnlyList<(string District, int Count)>>(counts);
     }
+
+    public Task<(IReadOnlyList<(string District, int Count)> DistrictCounts, IReadOnlyList<(string TimeSlot, int Count)> TimeSlotCounts)> GetStatsByFilterAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default)
+    {
+        var filtered = _cases
+            .Where(c => !filter.CaseType.HasValue || c.CaseType == filter.CaseType)
+            .Where(c => filter.District is null || c.District?.Name == filter.District.Name)
+            .Where(c => !filter.YearFrom.HasValue || c.OccurredDate.Year >= filter.YearFrom)
+            .Where(c => !filter.YearTo.HasValue   || c.OccurredDate.Year <= filter.YearTo)
+            .ToList();
+
+        var districtCounts = filtered
+            .Where(c => c.District?.Name is not null)
+            .GroupBy(c => c.District!.Name)
+            .Select(g => (District: g.Key, Count: g.Count()))
+            .ToList();
+
+        var timeSlotCounts = filtered
+            .Where(c => c.TimeSlot?.StartHour is not null && c.TimeSlot?.EndHour is not null)
+            .GroupBy(c => c.TimeSlot!.Normalize())
+            .Select(g => (TimeSlot: g.Key, Count: g.Count()))
+            .ToList();
+
+        return Task.FromResult<(IReadOnlyList<(string District, int Count)>, IReadOnlyList<(string TimeSlot, int Count)>)>(
+            (districtCounts, timeSlotCounts));
+    }
 }

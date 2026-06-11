@@ -27,6 +27,8 @@ builder.Services.AddScoped<ImportCsvCommandHandler>();
 builder.Services.AddScoped<GetCrimesByFilterQueryHandler>();
 builder.Services.AddScoped<GetHeatmapQueryHandler>();
 builder.Services.AddScoped<GeocodeBatchCommandHandler>();
+builder.Services.AddScoped<GetCrimeStatsQueryHandler>();
+builder.Services.AddScoped<GetCrimeByIdQueryHandler>();
 
 // Timing
 builder.Services.Configure<TimingOptions>(

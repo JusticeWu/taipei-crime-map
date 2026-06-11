@@ -191,6 +191,51 @@ public class SqlServerCrimeRepository : ICrimeRepository
         return rows.Select(r => (r.District, r.Weight)).ToList();
     }
 
+    public async Task<(IReadOnlyList<(string District, int Count)> DistrictCounts, IReadOnlyList<(string TimeSlot, int Count)> TimeSlotCounts)> GetStatsByFilterAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default)
+    {
+        const string districtSql = """
+            SELECT district, COUNT(*) AS count
+            FROM theft_cases WITH (NOLOCK)
+            WHERE district IS NOT NULL
+              AND (@CaseType IS NULL OR case_type = @CaseType)
+              AND (@District IS NULL OR district  = @District)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo)
+            GROUP BY district
+            """;
+
+        const string timeSlotSql = """
+            SELECT
+                RIGHT('0' + CAST(time_slot_start AS VARCHAR(2)), 2) + '~' +
+                RIGHT('0' + CAST(time_slot_end   AS VARCHAR(2)), 2) AS time_slot,
+                COUNT(*) AS count
+            FROM theft_cases WITH (NOLOCK)
+            WHERE time_slot_start IS NOT NULL AND time_slot_end IS NOT NULL
+              AND (@CaseType IS NULL OR case_type = @CaseType)
+              AND (@District IS NULL OR district  = @District)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo)
+            GROUP BY time_slot_start, time_slot_end
+            """;
+
+        var parameters = new
+        {
+            CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
+            District = filter.District?.Name,
+            YearFrom = filter.YearFrom,
+            YearTo   = filter.YearTo,
+        };
+
+        await using var conn = CreateConnection();
+        var districtRows = await conn.QueryAsync<StatsDistrictRow>(districtSql, parameters);
+        var timeSlotRows = await conn.QueryAsync<StatsTimeSlotRow>(timeSlotSql, parameters);
+
+        return (
+            districtRows.Select(r => (r.District, r.Count)).ToList(),
+            timeSlotRows.Select(r => (r.TimeSlot, r.Count)).ToList());
+    }
+
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
     private const string InsertSql = """
@@ -278,6 +323,18 @@ public class SqlServerCrimeRepository : ICrimeRepository
     {
         public string District { get; init; } = string.Empty;
         public int Weight { get; init; }
+    }
+
+    private sealed record StatsDistrictRow
+    {
+        public string District { get; init; } = string.Empty;
+        public int Count { get; init; }
+    }
+
+    private sealed record StatsTimeSlotRow
+    {
+        public string TimeSlot { get; init; } = string.Empty;
+        public int Count { get; init; }
     }
 
     private sealed record CoordinateRow

@@ -15,17 +15,23 @@ public class CrimeController : ControllerBase
     private readonly GetCrimesByFilterQueryHandler _queryHandler;
     private readonly GetHeatmapQueryHandler _heatmapHandler;
     private readonly GeocodeBatchCommandHandler _geocodeHandler;
+    private readonly GetCrimeStatsQueryHandler _statsHandler;
+    private readonly GetCrimeByIdQueryHandler _byIdHandler;
 
     public CrimeController(
         ImportCsvCommandHandler importHandler,
         GetCrimesByFilterQueryHandler queryHandler,
         GetHeatmapQueryHandler heatmapHandler,
-        GeocodeBatchCommandHandler geocodeHandler)
+        GeocodeBatchCommandHandler geocodeHandler,
+        GetCrimeStatsQueryHandler statsHandler,
+        GetCrimeByIdQueryHandler byIdHandler)
     {
         _importHandler = importHandler;
         _queryHandler = queryHandler;
         _heatmapHandler = heatmapHandler;
         _geocodeHandler = geocodeHandler;
+        _statsHandler = statsHandler;
+        _byIdHandler = byIdHandler;
     }
 
     /// <summary>
@@ -96,9 +102,38 @@ public class CrimeController : ControllerBase
 
         var full = await _queryHandler.HandleAsync(query, cancellationToken);
         var points = full.Data
-            .Select(d => new PointCrimeDto(d.Latitude, d.Longitude, d.CaseType, d.OccurredDate))
+            .Select(d => new PointCrimeDto(d.Id, d.Latitude, d.Longitude, d.CaseType, d.OccurredDate))
             .ToList();
         return Ok(new PagedResult<PointCrimeDto>(points, full.Total, full.Page, full.PageSize, full.TotalPages));
+    }
+
+    /// <summary>
+    /// 點位圖 popup 點擊後查詢單筆案件詳細資料（行政區、時段、地點）
+    /// </summary>
+    [HttpGet("points/{id:guid}")]
+    [ProducesResponseType(typeof(CrimeDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCrimePointDetail(Guid id, CancellationToken cancellationToken = default)
+    {
+        var detail = await _byIdHandler.HandleAsync(new GetCrimeByIdQuery(id), cancellationToken);
+        return detail is null ? NotFound() : Ok(detail);
+    }
+
+    /// <summary>
+    /// 統計圖表資料：行政區分布、時段分布彙總計數
+    /// </summary>
+    [HttpGet("stats")]
+    [ProducesResponseType(typeof(CrimeStatsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetCrimeStats(
+        [FromQuery] CaseType? caseType,
+        [FromQuery] string? districtName,
+        [FromQuery] int? yearFrom,
+        [FromQuery] int? yearTo,
+        CancellationToken cancellationToken = default)
+    {
+        var query = new GetCrimeStatsQuery(caseType, districtName, yearFrom, yearTo);
+        var result = await _statsHandler.HandleAsync(query, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>
