@@ -403,6 +403,8 @@ input[type="number"]::placeholder {
     flex-direction: column;
     height: auto;
     min-height: 100vh;
+    /* 為固定在頂部的篩選列（48px）預留空間，避免內容被遮擋 */
+    padding-top: 48px;
   }
 
   /* #left-panel 改為 display:contents，子區塊變成 #app 的直接 flex
@@ -411,12 +413,16 @@ input[type="number"]::placeholder {
     display: contents;
   }
 
-  /* 手機版頂部固定篩選列 — 點擊整列（含箭頭）皆可切換開收，
-     position:relative + z-index 確保此列永遠在篩選面板之上，不會被覆蓋 */
+  /* 手機版頂部固定篩選列 — 點擊整列（含箭頭）皆可切換開收。
+     position:fixed 讓此列永遠固定於視窗頂部，不隨頁面捲動，
+     z-index 高於篩選面板，避免捲動時出現殘影或被面板蓋住 */
   #btn-filter-toggle {
     display: block;
     order: 0;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: 1001;
     width: 100%;
     height: 48px;
