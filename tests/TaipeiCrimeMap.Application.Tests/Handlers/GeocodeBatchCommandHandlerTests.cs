@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
 using TaipeiCrimeMap.Application.Commands;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Domain.Aggregates;
@@ -12,18 +12,18 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 
 public class GeocodeBatchCommandHandlerTests
 {
-    private readonly Mock<ICrimeRepository> _repositoryMock;
-    private readonly Mock<IGeocodingService> _geocodingServiceMock;
+    private readonly ICrimeRepository _repository;
+    private readonly IGeocodingService _geocodingService;
     private readonly GeocodeBatchCommandHandler _handler;
 
     public GeocodeBatchCommandHandlerTests()
     {
-        _repositoryMock = new Mock<ICrimeRepository>();
-        _geocodingServiceMock = new Mock<IGeocodingService>();
+        _repository = Substitute.For<ICrimeRepository>();
+        _geocodingService = Substitute.For<IGeocodingService>();
 
         _handler = new GeocodeBatchCommandHandler(
-            _repositoryMock.Object,
-            _geocodingServiceMock.Object,
+            _repository,
+            _geocodingService,
             NullLogger<GeocodeBatchCommandHandler>.Instance);
     }
 
@@ -45,14 +45,14 @@ public class GeocodeBatchCommandHandlerTests
         var theftCase = CreateCase("CASE-001", "臺北市內湖區成功路五段31號");
         var existingCoordinate = GeoCoordinate.Create(25.07, 121.57);
 
-        _repositoryMock.Setup(r => r.GetCasesWithMissingCoordinatesAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<TheftCase> { theftCase });
+        _repository.GetCasesWithMissingCoordinatesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<TheftCase> { theftCase });
 
-        _repositoryMock.Setup(r => r.FindCoordinateByRawLocationAsync(theftCase.RawLocation, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existingCoordinate);
+        _repository.FindCoordinateByRawLocationAsync(theftCase.RawLocation, Arg.Any<CancellationToken>())
+            .Returns(existingCoordinate);
 
-        _repositoryMock.Setup(r => r.CountMissingCoordinatesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(0);
+        _repository.CountMissingCoordinatesAsync(Arg.Any<CancellationToken>())
+            .Returns(0);
 
         var command = new GeocodeBatchCommand(10);
 
@@ -68,11 +68,11 @@ public class GeocodeBatchCommandHandlerTests
 
         theftCase.Coordinate.Should().Be(existingCoordinate);
 
-        _geocodingServiceMock.Verify(
-            g => g.GeocodeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _geocodingService.DidNotReceive()
+            .GeocodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
 
-        _repositoryMock.Verify(
-            r => r.UpdateCoordinateAsync(theftCase.Id, existingCoordinate, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1)
+            .UpdateCoordinateAsync(theftCase.Id, existingCoordinate, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -85,17 +85,17 @@ public class GeocodeBatchCommandHandlerTests
         var theftCase = CreateCase("CASE-002", "臺北市信義區市府路1號");
         var apiCoordinate = GeoCoordinate.Create(25.03, 121.56);
 
-        _repositoryMock.Setup(r => r.GetCasesWithMissingCoordinatesAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<TheftCase> { theftCase });
+        _repository.GetCasesWithMissingCoordinatesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<TheftCase> { theftCase });
 
-        _repositoryMock.Setup(r => r.FindCoordinateByRawLocationAsync(theftCase.RawLocation, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeoCoordinate?)null);
+        _repository.FindCoordinateByRawLocationAsync(theftCase.RawLocation, Arg.Any<CancellationToken>())
+            .Returns((GeoCoordinate?)null);
 
-        _geocodingServiceMock.Setup(g => g.GeocodeAsync(theftCase.RawLocation, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(apiCoordinate);
+        _geocodingService.GeocodeAsync(theftCase.RawLocation, Arg.Any<CancellationToken>())
+            .Returns(apiCoordinate);
 
-        _repositoryMock.Setup(r => r.CountMissingCoordinatesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(0);
+        _repository.CountMissingCoordinatesAsync(Arg.Any<CancellationToken>())
+            .Returns(0);
 
         var command = new GeocodeBatchCommand(10);
 
@@ -111,8 +111,8 @@ public class GeocodeBatchCommandHandlerTests
 
         theftCase.Coordinate.Should().Be(apiCoordinate);
 
-        _repositoryMock.Verify(
-            r => r.UpdateCoordinateAsync(theftCase.Id, apiCoordinate, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1)
+            .UpdateCoordinateAsync(theftCase.Id, apiCoordinate, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -126,20 +126,20 @@ public class GeocodeBatchCommandHandlerTests
         var successCase = CreateCase("CASE-004", "臺北市信義區市府路1號");
         var apiCoordinate = GeoCoordinate.Create(25.03, 121.56);
 
-        _repositoryMock.Setup(r => r.GetCasesWithMissingCoordinatesAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<TheftCase> { failedCase, successCase });
+        _repository.GetCasesWithMissingCoordinatesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<TheftCase> { failedCase, successCase });
 
-        _repositoryMock.Setup(r => r.FindCoordinateByRawLocationAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeoCoordinate?)null);
+        _repository.FindCoordinateByRawLocationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((GeoCoordinate?)null);
 
-        _geocodingServiceMock.Setup(g => g.GeocodeAsync(failedCase.RawLocation, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((GeoCoordinate?)null);
+        _geocodingService.GeocodeAsync(failedCase.RawLocation, Arg.Any<CancellationToken>())
+            .Returns((GeoCoordinate?)null);
 
-        _geocodingServiceMock.Setup(g => g.GeocodeAsync(successCase.RawLocation, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(apiCoordinate);
+        _geocodingService.GeocodeAsync(successCase.RawLocation, Arg.Any<CancellationToken>())
+            .Returns(apiCoordinate);
 
-        _repositoryMock.Setup(r => r.CountMissingCoordinatesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(1);
+        _repository.CountMissingCoordinatesAsync(Arg.Any<CancellationToken>())
+            .Returns(1);
 
         var command = new GeocodeBatchCommand(10);
 
@@ -156,11 +156,11 @@ public class GeocodeBatchCommandHandlerTests
         failedCase.Coordinate.Should().BeNull();
         successCase.Coordinate.Should().Be(apiCoordinate);
 
-        _repositoryMock.Verify(
-            r => r.UpdateCoordinateAsync(failedCase.Id, It.IsAny<GeoCoordinate>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _repository.DidNotReceive()
+            .UpdateCoordinateAsync(failedCase.Id, Arg.Any<GeoCoordinate>(), Arg.Any<CancellationToken>());
 
-        _repositoryMock.Verify(
-            r => r.UpdateCoordinateAsync(successCase.Id, apiCoordinate, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1)
+            .UpdateCoordinateAsync(successCase.Id, apiCoordinate, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -172,11 +172,11 @@ public class GeocodeBatchCommandHandlerTests
     public async Task HandleAsync_WhenBatchSizeNotPositive_ShouldUseDefaultBatchSize(int batchSize)
     {
         // Arrange
-        _repositoryMock.Setup(r => r.GetCasesWithMissingCoordinatesAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<TheftCase>());
+        _repository.GetCasesWithMissingCoordinatesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new List<TheftCase>());
 
-        _repositoryMock.Setup(r => r.CountMissingCoordinatesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(0);
+        _repository.CountMissingCoordinatesAsync(Arg.Any<CancellationToken>())
+            .Returns(0);
 
         var command = new GeocodeBatchCommand(batchSize);
 
@@ -184,7 +184,7 @@ public class GeocodeBatchCommandHandlerTests
         await _handler.HandleAsync(command);
 
         // Assert
-        _repositoryMock.Verify(
-            r => r.GetCasesWithMissingCoordinatesAsync(10, It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1)
+            .GetCasesWithMissingCoordinatesAsync(10, Arg.Any<CancellationToken>());
     }
 }

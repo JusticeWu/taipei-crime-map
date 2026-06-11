@@ -2,7 +2,8 @@ using FluentAssertions;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using System.Text.Json;
 using TaipeiCrimeMap.Application.DTOs;
 using TaipeiCrimeMap.Application.Handlers;
@@ -15,29 +16,29 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 
 public class GetCrimeStatsQueryHandlerTests
 {
-    private readonly Mock<ICrimeRepository> _repositoryMock;
-    private readonly Mock<IDistributedCache> _cacheMock;
+    private readonly ICrimeRepository _repository;
+    private readonly IDistributedCache _cache;
     private readonly IMemoryCache _memoryCache;
     private readonly GetCrimeStatsQueryHandler _handler;
 
     public GetCrimeStatsQueryHandlerTests()
     {
-        _repositoryMock = new Mock<ICrimeRepository>();
-        _cacheMock = new Mock<IDistributedCache>();
+        _repository = Substitute.For<ICrimeRepository>();
+        _cache = Substitute.For<IDistributedCache>();
         _memoryCache = new MemoryCache(new MemoryCacheOptions());
 
-        _cacheMock
-            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((byte[]?)null);
-        _cacheMock
-            .Setup(c => c.SetAsync(
-                It.IsAny<string>(), It.IsAny<byte[]>(),
-                It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+        _cache
+            .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((byte[]?)null);
+        _cache
+            .SetAsync(
+                Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         _handler = new GetCrimeStatsQueryHandler(
-            _repositoryMock.Object,
-            _cacheMock.Object,
+            _repository,
+            _cache,
             _memoryCache,
             NullLogger<GetCrimeStatsQueryHandler>.Instance);
     }
@@ -46,9 +47,9 @@ public class GetCrimeStatsQueryHandlerTests
     public async Task HandleAsync_ShouldReturnDistrictAndTimeSlotDistribution_SortedCorrectly()
     {
         // Arrange
-        _repositoryMock
-            .Setup(r => r.GetStatsByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((
+        _repository
+            .GetStatsByFilterAsync(Arg.Any<CrimeFilter>(), Arg.Any<CancellationToken>())
+            .Returns((
                 (IReadOnlyList<(string District, int Count)>)new List<(string, int)>
                 {
                     ("大安區", 5),
@@ -76,9 +77,9 @@ public class GetCrimeStatsQueryHandlerTests
     public async Task HandleAsync_SecondCallWithSameQuery_ShouldReturnCachedResultWithoutCallingRepository()
     {
         // Arrange
-        _repositoryMock
-            .Setup(r => r.GetStatsByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((
+        _repository
+            .GetStatsByFilterAsync(Arg.Any<CrimeFilter>(), Arg.Any<CancellationToken>())
+            .Returns((
                 (IReadOnlyList<(string District, int Count)>)new List<(string, int)> { ("大安區", 1) },
                 (IReadOnlyList<(string TimeSlot, int Count)>)new List<(string, int)>()));
 
@@ -90,7 +91,7 @@ public class GetCrimeStatsQueryHandlerTests
 
         // Assert
         second.Should().BeEquivalentTo(first);
-        _repositoryMock.Verify(r => r.GetStatsByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).GetStatsByFilterAsync(Arg.Any<CrimeFilter>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -105,29 +106,29 @@ public class GetCrimeStatsQueryHandlerTests
             new List<TimeSlotDistributionDto>());
         var preloadedBytes = JsonSerializer.SerializeToUtf8Bytes(preloaded);
 
-        _cacheMock
-            .Setup(c => c.GetAsync(cacheKey, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(preloadedBytes);
+        _cache
+            .GetAsync(cacheKey, Arg.Any<CancellationToken>())
+            .Returns(preloadedBytes);
 
         // Act
         var result = await _handler.HandleAsync(query);
 
         // Assert
         result.DistrictDistribution.Should().ContainSingle(d => d.District == "信義區" && d.Count == 99);
-        _repositoryMock.Verify(r => r.GetStatsByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _repository.DidNotReceive().GetStatsByFilterAsync(Arg.Any<CrimeFilter>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task HandleAsync_WhenCacheThrows_ShouldFallbackToRepository()
     {
         // Arrange
-        _cacheMock
-            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _cache
+            .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("Garnet 連線失敗"));
 
-        _repositoryMock
-            .Setup(r => r.GetStatsByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((
+        _repository
+            .GetStatsByFilterAsync(Arg.Any<CrimeFilter>(), Arg.Any<CancellationToken>())
+            .Returns((
                 (IReadOnlyList<(string District, int Count)>)new List<(string, int)>(),
                 (IReadOnlyList<(string TimeSlot, int Count)>)new List<(string, int)>()));
 
@@ -136,6 +137,6 @@ public class GetCrimeStatsQueryHandlerTests
 
         // Assert
         await act.Should().NotThrowAsync();
-        _repositoryMock.Verify(r => r.GetStatsByFilterAsync(It.IsAny<CrimeFilter>(), It.IsAny<CancellationToken>()), Times.Once);
+        await _repository.Received(1).GetStatsByFilterAsync(Arg.Any<CrimeFilter>(), Arg.Any<CancellationToken>());
     }
 }

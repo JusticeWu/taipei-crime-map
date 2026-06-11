@@ -2,7 +2,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
 using TaipeiCrimeMap.Application.DTOs;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Interfaces;
@@ -15,34 +15,34 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 
 public class GetCrimesByFilterQueryHandlerTimingTests
 {
-    private readonly Mock<ICrimeRepository> _repositoryMock;
-    private readonly Mock<IDistributedCache> _cacheMock;
+    private readonly ICrimeRepository _repository;
+    private readonly IDistributedCache _cache;
     private readonly IMemoryCache _memoryCache;
 
     public GetCrimesByFilterQueryHandlerTimingTests()
     {
-        _repositoryMock = new Mock<ICrimeRepository>();
-        _repositoryMock
-            .Setup(r => r.GetPagedByFilterAsync(
-                It.IsAny<CrimeFilter>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
+        _repository = Substitute.For<ICrimeRepository>();
+        _repository
+            .GetPagedByFilterAsync(
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
-        _cacheMock = new Mock<IDistributedCache>();
-        _cacheMock
-            .Setup(c => c.GetAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((byte[]?)null);
-        _cacheMock
-            .Setup(c => c.SetAsync(
-                It.IsAny<string>(), It.IsAny<byte[]>(),
-                It.IsAny<DistributedCacheEntryOptions>(), It.IsAny<CancellationToken>()))
+        _cache = Substitute.For<IDistributedCache>();
+        _cache
+            .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((byte[]?)null);
+        _cache
+            .SetAsync(
+                Arg.Any<string>(), Arg.Any<byte[]>(),
+                Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         _memoryCache = new MemoryCache(new MemoryCacheOptions());
     }
 
     private GetCrimesByFilterQueryHandler CreateHandler(ITimingTracker timing) =>
-        new(_repositoryMock.Object,
-            _cacheMock.Object,
+        new(_repository,
+            _cache,
             _memoryCache,
             timing,
             NullLogger<GetCrimesByFilterQueryHandler>.Instance);
@@ -51,32 +51,32 @@ public class GetCrimesByFilterQueryHandlerTimingTests
     public async Task HandleAsync_WhenTimingEnabled_ShouldCallLogSummary()
     {
         // Arrange
-        var mockTiming = new Mock<ITimingTracker>();
-        mockTiming.Setup(t => t.Track(It.IsAny<string>()))
-                  .Returns(new Mock<IDisposable>().Object);
-        var handler = CreateHandler(mockTiming.Object);
+        var mockTiming = Substitute.For<ITimingTracker>();
+        mockTiming.Track(Arg.Any<string>())
+                  .Returns(Substitute.For<IDisposable>());
+        var handler = CreateHandler(mockTiming);
 
         // Act
         await handler.HandleAsync(new GetCrimesByFilterQuery());
 
         // Assert
-        mockTiming.Verify(t => t.LogSummary(), Times.Once);
+        mockTiming.Received(1).LogSummary();
     }
 
     [Fact]
     public async Task HandleAsync_WhenTimingEnabled_ShouldTrackL1CacheStage()
     {
         // Arrange
-        var mockTiming = new Mock<ITimingTracker>();
-        mockTiming.Setup(t => t.Track(It.IsAny<string>()))
-                  .Returns(new Mock<IDisposable>().Object);
-        var handler = CreateHandler(mockTiming.Object);
+        var mockTiming = Substitute.For<ITimingTracker>();
+        mockTiming.Track(Arg.Any<string>())
+                  .Returns(Substitute.For<IDisposable>());
+        var handler = CreateHandler(mockTiming);
 
         // Act
         await handler.HandleAsync(new GetCrimesByFilterQuery());
 
         // Assert
-        mockTiming.Verify(t => t.Track("L1-Cache"), Times.Once);
+        mockTiming.Received(1).Track("L1-Cache");
     }
 
     [Fact]
@@ -136,10 +136,10 @@ public class GetCrimesByFilterQueryHandlerTimingTests
     public async Task HandleAsync_WhenTimingDisabled_NullTracker_ShouldNotThrow()
     {
         // Arrange — 模擬 Timing:Enabled = false 時注入的空追蹤器行為
-        var nullTracker = new Mock<ITimingTracker>();
-        nullTracker.Setup(t => t.Track(It.IsAny<string>()))
-                   .Returns(new Mock<IDisposable>().Object);
-        var handler = CreateHandler(nullTracker.Object);
+        var nullTracker = Substitute.For<ITimingTracker>();
+        nullTracker.Track(Arg.Any<string>())
+                   .Returns(Substitute.For<IDisposable>());
+        var handler = CreateHandler(nullTracker);
 
         // Act
         var act = async () => await handler.HandleAsync(new GetCrimesByFilterQuery());

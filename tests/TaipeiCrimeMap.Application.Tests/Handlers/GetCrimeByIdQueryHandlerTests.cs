@@ -1,5 +1,5 @@
 using FluentAssertions;
-using Moq;
+using NSubstitute;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Queries;
 using TaipeiCrimeMap.Domain.Aggregates;
@@ -10,13 +10,13 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 
 public class GetCrimeByIdQueryHandlerTests
 {
-    private readonly Mock<ICrimeRepository> _repositoryMock;
+    private readonly ICrimeRepository _repository;
     private readonly GetCrimeByIdQueryHandler _handler;
 
     public GetCrimeByIdQueryHandlerTests()
     {
-        _repositoryMock = new Mock<ICrimeRepository>();
-        _handler = new GetCrimeByIdQueryHandler(_repositoryMock.Object);
+        _repository = Substitute.For<ICrimeRepository>();
+        _handler = new GetCrimeByIdQueryHandler(_repository);
     }
 
     [Fact]
@@ -31,9 +31,9 @@ public class GetCrimeByIdQueryHandlerTests
             timeSlot: TimeSlot.Parse("18-20"),
             rawLocation: "臺北市內湖區成功路五段31號");
 
-        _repositoryMock
-            .Setup(r => r.GetByIdAsync(theftCase.Id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(theftCase);
+        _repository
+            .GetByIdAsync(theftCase.Id, Arg.Any<CancellationToken>())
+            .Returns(theftCase);
 
         // Act
         var result = await _handler.HandleAsync(new GetCrimeByIdQuery(theftCase.Id));
@@ -53,9 +53,9 @@ public class GetCrimeByIdQueryHandlerTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        _repositoryMock
-            .Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((TheftCase?)null);
+        _repository
+            .GetByIdAsync(id, Arg.Any<CancellationToken>())
+            .Returns((TheftCase?)null);
 
         // Act
         var result = await _handler.HandleAsync(new GetCrimeByIdQuery(id));

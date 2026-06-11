@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
+using NSubstitute;
 using TaipeiCrimeMap.Application.Commands;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Domain.Aggregates;
@@ -13,16 +13,16 @@ namespace TaipeiCrimeMap.Application.Tests.Handlers;
 
 public class ImportCsvCommandHandlerTests
 {
-    private readonly Mock<ICsvParser> _csvParserMock;
-    private readonly Mock<ICrimeRepository> _respositoryMock;
+    private readonly ICsvParser _csvParser;
+    private readonly ICrimeRepository _respository;
     private readonly ImportCsvCommandHandler _handler;
 
     public ImportCsvCommandHandlerTests()
     {
-        _csvParserMock = new Mock<ICsvParser>();
-        _respositoryMock = new Mock<ICrimeRepository>();
+        _csvParser = Substitute.For<ICsvParser>();
+        _respository = Substitute.For<ICrimeRepository>();
 
-        _handler = new ImportCsvCommandHandler(_csvParserMock.Object, _respositoryMock.Object,
+        _handler = new ImportCsvCommandHandler(_csvParser, _respository,
             NullLogger<ImportCsvCommandHandler>.Instance);
     }
 
@@ -48,10 +48,10 @@ public class ImportCsvCommandHandlerTests
 
         var parseResult = new CsvParseResult(cases, SkippedCount: 2);
 
-        _csvParserMock.Setup(p => p.Parse(It.IsAny<string>(), It.IsAny<CaseType>()))
+        _csvParser.Parse(Arg.Any<string>(), Arg.Any<CaseType>())
             .Returns(parseResult);
 
-        _respositoryMock.Setup(r => r.AddRangeAsync(It.IsAny<IEnumerable<TheftCase>>(), It.IsAny<CancellationToken>()))
+        _respository.AddRangeAsync(Arg.Any<IEnumerable<TheftCase>>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         var command = new ImportCsvCommand("data/raw/test.csv", CaseType.Residential);
@@ -75,10 +75,10 @@ public class ImportCsvCommandHandlerTests
         // Arrange
         var parseResult = new CsvParseResult(new List<TheftCase>(), SkippedCount: 0);
 
-        _csvParserMock.Setup(p => p.Parse(It.IsAny<string>(), It.IsAny<CaseType>()))
+        _csvParser.Parse(Arg.Any<string>(), Arg.Any<CaseType>())
             .Returns(parseResult);
 
-        _respositoryMock.Setup(r => r.AddRangeAsync(It.IsAny<IEnumerable<TheftCase>>(), It.IsAny<CancellationToken>()))
+        _respository.AddRangeAsync(Arg.Any<IEnumerable<TheftCase>>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         var command = new ImportCsvCommand("data/raw/test.csv", CaseType.Car);
@@ -87,9 +87,7 @@ public class ImportCsvCommandHandlerTests
         await _handler.HandleAsync(command);
 
         // Assert
-        _csvParserMock.Verify(
-            p => p.Parse("data/raw/test.csv", CaseType.Car), 
-            Times.Once);
+        _csvParser.Received(1).Parse("data/raw/test.csv", CaseType.Car);
     }
 
     /// <summary>
@@ -114,10 +112,10 @@ public class ImportCsvCommandHandlerTests
 
         var parseResult = new CsvParseResult(cases, SkippedCount: 0);
 
-        _csvParserMock.Setup(p => p.Parse(It.IsAny<string>(), It.IsAny<CaseType>()))
+        _csvParser.Parse(Arg.Any<string>(), Arg.Any<CaseType>())
             .Returns(parseResult);
 
-        _respositoryMock.Setup(r => r.AddRangeAsync(It.IsAny<IEnumerable<TheftCase>>(), It.IsAny<CancellationToken>()))
+        _respository.AddRangeAsync(Arg.Any<IEnumerable<TheftCase>>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         var command = new ImportCsvCommand("data/raw/test.csv", CaseType.Residential);
@@ -126,11 +124,9 @@ public class ImportCsvCommandHandlerTests
         await _handler.HandleAsync(command);
 
         // Assert
-        _respositoryMock.Verify(
-            r => r.AddRangeAsync(
-                It.Is<IEnumerable<TheftCase>>(c => c.SequenceEqual(cases)),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
+        await _respository.Received(1).AddRangeAsync(
+            Arg.Is<IEnumerable<TheftCase>>(c => c.SequenceEqual(cases)),
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -142,10 +138,10 @@ public class ImportCsvCommandHandlerTests
         // Arrange
         var parseResult = new CsvParseResult(new List<TheftCase>(), SkippedCount: 5);
 
-        _csvParserMock.Setup(p => p.Parse(It.IsAny<string>(), It.IsAny<CaseType>()))
+        _csvParser.Parse(Arg.Any<string>(), Arg.Any<CaseType>())
             .Returns(parseResult);
 
-        _respositoryMock.Setup(r => r.AddRangeAsync(It.IsAny<IEnumerable<TheftCase>>(), It.IsAny<CancellationToken>()))
+        _respository.AddRangeAsync(Arg.Any<IEnumerable<TheftCase>>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
         var command = new ImportCsvCommand("data/raw/test.csv", CaseType.Residential);
