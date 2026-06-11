@@ -368,8 +368,8 @@
   function updateFilterToggleLabel() {
     if (!elBtnFilterToggle || !elFilterPanel) return;
     elBtnFilterToggle.textContent = elFilterPanel.classList.contains('open')
-      ? '篩選條件 ▲'
-      : '篩選條件 ▼';
+      ? '篩選條件  ▲'
+      : '篩選條件  ▼';
   }
 
   function openFilterPanel() {

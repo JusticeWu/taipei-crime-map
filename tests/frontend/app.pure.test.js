@@ -193,7 +193,7 @@ function createFilterPanelState() {
   let open = false;
   return {
     get open() { return open; },
-    get label() { return open ? '篩選條件 ▲' : '篩選條件 ▼'; },
+    get label() { return open ? '篩選條件  ▲' : '篩選條件  ▼'; },
     get totalHeight() { return open ? FILTER_BAR_HEIGHT + FILTER_PANEL_OPEN_ADD : FILTER_BAR_HEIGHT; },
     openPanel()  { open = true; },
     closePanel() { open = false; },
@@ -206,7 +206,7 @@ describe('mobile filter panel toggle', () => {
     const state = createFilterPanelState();
     expect(state.open).toBe(false);
     expect(state.totalHeight).toBe(48);
-    expect(state.label).toBe('篩選條件 ▼');
+    expect(state.label).toBe('篩選條件  ▼');
   });
 
   test('expanded height is greater than 48px with ▲ label', () => {
@@ -214,7 +214,7 @@ describe('mobile filter panel toggle', () => {
     state.openPanel();
     expect(state.open).toBe(true);
     expect(state.totalHeight).toBeGreaterThan(48);
-    expect(state.label).toBe('篩選條件 ▲');
+    expect(state.label).toBe('篩選條件  ▲');
   });
 
   test('clicking the row toggles open → closed regardless of state', () => {
