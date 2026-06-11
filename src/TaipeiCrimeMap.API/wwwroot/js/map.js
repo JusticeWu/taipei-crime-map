@@ -393,9 +393,10 @@
 
       /* 手機版：圖例縮小字體，緊接在底圖切換控制項下方 */
       @media (max-width: 768px) {
-        .crime-legend { font-size:12px; padding:6px 10px; min-width:90px; margin-top:6px; }
-        .legend-title { font-size:12px; margin-bottom:4px; padding-bottom:3px; }
-        .legend-emoji { width:18px; height:18px; font-size:12px; }
+        .crime-legend { font-size:11px; padding:4px 8px; min-width:80px; margin-top:4px; line-height:1.3; }
+        .legend-title { font-size:11px; margin-bottom:2px; padding-bottom:2px; }
+        .legend-item  { margin-bottom:1px; gap:4px; }
+        .legend-emoji { width:14px; height:14px; font-size:10px; }
       }
     `;
     document.head.appendChild(style);
