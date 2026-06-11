@@ -61,16 +61,6 @@
   };
   const DEFAULT_COLOR = '#95a5a6';
 
-  const CASE_TYPE_EMOJIS = {
-    '住宅竊盜':   '🏠',
-    '汽車竊盜':   '🚗',
-    '機車竊盜':   '🏍️',
-    '自行車竊盜': '🚲',
-    '搶奪':      '👜',
-    '強盜':      '🏏',
-  };
-  const DEFAULT_EMOJI = '📍';
-
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
 
@@ -120,21 +110,6 @@
 
   function colorForType(caseType) {
     return CASE_TYPE_COLORS[caseType] || DEFAULT_COLOR;
-  }
-
-  function emojiForType(caseType) {
-    return CASE_TYPE_EMOJIS[caseType] || DEFAULT_EMOJI;
-  }
-
-  function buildEmojiIcon(caseType) {
-    const color = colorForType(caseType);
-    const emoji = emojiForType(caseType);
-    return L.divIcon({
-      className: '',
-      html: `<div class="emoji-marker" style="background:${color};">${emoji}</div>`,
-      iconSize:   [24, 24],
-      iconAnchor: [12, 12],
-    });
   }
 
   function escapeHtml(str) {
@@ -195,8 +170,9 @@
   function buildMarkerLayer(data) {
     _markerLayer = L.markerClusterGroup({ chunkedLoading: true });
     data.filter(hasCoords).forEach(item => {
-      const marker = L.marker([item.latitude, item.longitude], {
-        icon: buildEmojiIcon(item.caseType),
+      const color  = colorForType(item.caseType);
+      const marker = L.circleMarker([item.latitude, item.longitude], {
+        radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
       });
       marker.bindPopup(buildPopupHtml(item, true), { maxWidth: 260 });
       attachDetailFetch(marker, item);
@@ -314,8 +290,9 @@
     const { data } = _renderQueue.shift();
     if (_markerLayer) {
       data.filter(hasCoords).forEach(item => {
-        const marker = L.marker([item.latitude, item.longitude], {
-          icon: buildEmojiIcon(item.caseType),
+        const color  = colorForType(item.caseType);
+        const marker = L.circleMarker([item.latitude, item.longitude], {
+          radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
         });
         marker.bindPopup(buildPopupHtml(item, true), { maxWidth: 260 });
         attachDetailFetch(marker, item);
@@ -379,8 +356,6 @@
       .db-name  { font-size:9px; color:rgba(255,255,255,.9); line-height:1.2; text-align:center; }
 
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
-
-      .emoji-marker { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.6); }
     `;
     document.head.appendChild(style);
   }
