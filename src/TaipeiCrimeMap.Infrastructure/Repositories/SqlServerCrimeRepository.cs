@@ -174,8 +174,8 @@ public class SqlServerCrimeRepository : ICrimeRepository
             WHERE district IS NOT NULL
               AND (@CaseType IS NULL OR case_type = @CaseType)
               AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom)
-              AND (@YearTo   IS NULL OR occurred_year <= @YearTo)
+              AND (@YearFrom IS NULL OR occurred_year + 1911 >= @YearFrom)
+              AND (@YearTo   IS NULL OR occurred_year + 1911 <= @YearTo)
             GROUP BY district
             """;
 
@@ -200,8 +200,8 @@ public class SqlServerCrimeRepository : ICrimeRepository
             WHERE district IS NOT NULL
               AND (@CaseType IS NULL OR case_type = @CaseType)
               AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom)
-              AND (@YearTo   IS NULL OR occurred_year <= @YearTo)
+              AND (@YearFrom IS NULL OR occurred_year + 1911 >= @YearFrom)
+              AND (@YearTo   IS NULL OR occurred_year + 1911 <= @YearTo)
             GROUP BY district
             """;
 
@@ -214,8 +214,8 @@ public class SqlServerCrimeRepository : ICrimeRepository
             WHERE time_slot_start IS NOT NULL AND time_slot_end IS NOT NULL
               AND (@CaseType IS NULL OR case_type = @CaseType)
               AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom)
-              AND (@YearTo   IS NULL OR occurred_year <= @YearTo)
+              AND (@YearFrom IS NULL OR occurred_year + 1911 >= @YearFrom)
+              AND (@YearTo   IS NULL OR occurred_year + 1911 <= @YearTo)
             GROUP BY time_slot_start, time_slot_end
             """;
 
