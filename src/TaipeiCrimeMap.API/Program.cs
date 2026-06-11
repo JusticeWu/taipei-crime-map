@@ -1,3 +1,4 @@
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using TaipeiCrimeMap.API.Middleware;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Interfaces;
@@ -29,6 +30,21 @@ builder.Services.AddScoped<GetHeatmapQueryHandler>();
 builder.Services.AddScoped<GeocodeBatchCommandHandler>();
 builder.Services.AddScoped<GetCrimeStatsQueryHandler>();
 builder.Services.AddScoped<GetCrimeByIdQueryHandler>();
+
+// OpenTelemetry + Application Insights
+// 連線字串不存在時不啟用（graceful degradation），避免本機/測試環境噴錯
+var appInsightsConnectionString = builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]
+    ?? Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CONNECTION_STRING");
+
+if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
+{
+    // UseAzureMonitor 會同時設定 Traces、Metrics、Logs 三層的 exporter
+    builder.Services.AddOpenTelemetry()
+        .UseAzureMonitor(options =>
+        {
+            options.ConnectionString = appInsightsConnectionString;
+        });
+}
 
 // Timing
 builder.Services.Configure<TimingOptions>(
@@ -82,6 +98,7 @@ if (!app.Environment.IsEnvironment("Testing"))
 }
 
 app.UseExceptionHandler();
+app.UseMiddleware<ObservabilityMiddleware>();
 app.UseMiddleware<TimingMiddleware>();
 app.UseHttpsRedirection();
 app.UseDefaultFiles();
