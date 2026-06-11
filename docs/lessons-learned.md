@@ -179,3 +179,23 @@
 - 相關模式：任何「修改雲端資源設定後立即驗證」的場景，
   都應預留設定傳播時間並用小規模重試確認，
   避免把「設定剛生效中」誤判為「設定錯誤」
+
+## L018：scripts/ask_claude.py 因缺少 ANTHROPIC_API_KEY 而無法使用，CLAUDE.md 強制諮詢步驟被略過
+- 問題：依 CLAUDE.md 規定，遇到 API/資料結構等架構決策時必須先呼叫
+  `python scripts/ask_claude.py "..."` 取得建議，但執行時拋出
+  `TypeError: Could not resolve authentication method...`，
+  確認 `ANTHROPIC_API_KEY` 在使用者環境變數（User scope）中為空，
+  導致此次新增 `/api/crime/stats`、`/api/crime/points/{id}` 等 API
+  設計決策無法照規定先諮詢，最後改由使用者直接提供完整規格才得以繼續
+- 根本原因：本機環境未設定 `ANTHROPIC_API_KEY`，與 L010 的
+  `SLACK_WEBHOOK_URL` 跨 shell 環境變數問題屬同一類型——
+  腳本依賴的環境變數只在某些 shell/session 中存在或根本未設定
+- 正確做法：在執行任何依賴環境變數的輔助腳本前，
+  先用 `[Environment]::GetEnvironmentVariable('VAR_NAME','User')`
+  （或對應 shell 的指令）確認變數確實存在；
+  若確認缺少，且使用者已親自提供等同規格的決策內容，
+  可視為已完成「諮詢」步驟的替代方案，但應在 lessons-learned 記錄，
+  避免下次再次卡在同一個缺口
+- 相關模式：CLAUDE.md 中所有「呼叫腳本/工具」的強制步驟，
+  都應假設該腳本可能因環境變數缺失而失敗，
+  遇到失敗時要先確認是環境問題還是邏輯問題，並紀錄根因
