@@ -25,6 +25,7 @@
   let elStatTotal, elStatWithCoords, elStatTopDistrict;
   let elLoadingOverlay;
   let elFilterPanel, elBtnFilterToggle, elBtnFilterClose;
+  let elChartContainer, elBtnToggleCharts;
 
   const MOBILE_BREAKPOINT = 768;
 
@@ -382,6 +383,15 @@
   }
 
   /* -----------------------------------------------------------------------
+     Mobile stats charts toggle — hidden by default, shown below the map
+  ----------------------------------------------------------------------- */
+  function toggleChartContainer() {
+    if (!elChartContainer || !elBtnToggleCharts) return;
+    const expanded = elChartContainer.classList.toggle('expanded');
+    elBtnToggleCharts.textContent = expanded ? '📊 收合統計圖' : '📊 統計圖';
+  }
+
+  /* -----------------------------------------------------------------------
      Dispatch query based on current mode
   ----------------------------------------------------------------------- */
   function doQuery() {
@@ -471,6 +481,8 @@
     elFilterPanel     = document.getElementById('filter-panel');
     elBtnFilterToggle = document.getElementById('btn-filter-toggle');
     elBtnFilterClose  = document.getElementById('btn-filter-close');
+    elChartContainer  = document.getElementById('chart-container');
+    elBtnToggleCharts = document.getElementById('btn-toggle-charts');
 
     if (window.mapModule && typeof window.mapModule.init === 'function') {
       window.mapModule.init('map');
@@ -485,6 +497,7 @@
     if (elToggleMode) elToggleMode.addEventListener('change', onModeChange);
     if (elBtnFilterToggle) elBtnFilterToggle.addEventListener('click', toggleFilterPanel);
     if (elBtnFilterClose) elBtnFilterClose.addEventListener('click', closeFilterPanel);
+    if (elBtnToggleCharts) elBtnToggleCharts.addEventListener('click', toggleChartContainer);
 
     doQuery(); // defaults to point mode → queryProgressive()
   }

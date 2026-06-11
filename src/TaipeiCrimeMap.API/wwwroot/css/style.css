@@ -98,7 +98,8 @@ section {
 
 /* Mobile-only controls — hidden on desktop */
 #btn-filter-toggle,
-#btn-filter-close {
+#btn-filter-close,
+#btn-toggle-charts {
   display: none;
 }
 
@@ -475,12 +476,32 @@ input[type="number"]::placeholder {
     height: 100%;
   }
 
-  /* 手機版也顯示圖表，需給定明確高度，否則 Chart.js 無法計算尺寸 */
-  #chart-container {
+  /* 「📊 統計圖」按鈕 — 顯示於地圖下方，切換統計圖區塊展開/收合 */
+  #btn-toggle-charts {
+    display: block;
     order: 4;
+    width: 100%;
+    padding: 12px 0;
+    background-color: var(--bg-accent);
+    color: var(--text-primary);
+    border: none;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* 統計圖表區塊 — 預設收合，點擊「📊 統計圖」按鈕後展開 */
+  #chart-container {
+    order: 5;
     flex: none;
-    height: 480px;
+    height: 0;
+    overflow: hidden;
     background-color: var(--bg-secondary);
+  }
+
+  #chart-container.expanded {
+    height: 480px;
   }
 
   .stat-value {
