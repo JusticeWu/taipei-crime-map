@@ -265,3 +265,18 @@
   Chart.js 才能正確計算 canvas 尺寸並繪製
 - 相關模式：flexbox 子元素若需要明確高度生效，必須搭配 `flex: none`
   （或將 `flex-basis` 設為 `auto`），否則 `flex-basis: 0%` 會優先生效
+
+## L024：點位圖模式精簡 DTO 缺少欄位導致統計值恆為預設值
+- 問題：「最多案件行政區」欄位在點位圖模式（預設模式）下永遠顯示「—」。
+  `computeStats()` 從 `_lastData`（來自 `/api/crime/points`）取
+  `item.districtName || item.district` 計算最大值，但 `PointCrimeDto`
+  為了縮小回應體積，刻意省略了 `district` 欄位，導致該值永遠是
+  `undefined`，分組永遠為空
+- 根本原因：前端統計邏輯假設來源資料包含完整欄位，但實際串接的是
+  「精簡 DTO」，欄位裁減發生在後端、卻未同步檢查前端所有消費端
+- 正確做法：「最多案件行政區」改用 `/api/crime/stats` 回傳的
+  `districtDistribution`（涵蓋完整篩選結果且包含 district 欄位）取最大值，
+  與圖表共用同一份資料來源，不再依賴點位圖精簡 DTO
+- 相關模式：當後端為效能而提供「精簡 DTO」時，需盤點前端所有讀取該
+  資料的欄位，避免裁減掉仍被使用的欄位（或像本次一樣改用其他既有的
+  完整資料來源）
