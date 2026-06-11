@@ -116,6 +116,25 @@
   }
 
   /* -----------------------------------------------------------------------
+     Distribution charts — fetch pre-aggregated stats from /api/crime/stats
+  ----------------------------------------------------------------------- */
+  async function fetchAndRenderCharts() {
+    if (!window.chartModule || typeof window.chartModule.update !== 'function') return;
+
+    try {
+      const resp = await fetch(`${API_BASE}/stats?${buildQueryParams()}`,
+        { headers: { Accept: 'application/json' } });
+      if (!resp.ok) throw new Error(`API ${resp.status}`);
+
+      const stats = await resp.json();
+      window.chartModule.update(stats);
+    } catch (err) {
+      console.error('Stats query failed:', err);
+      window.chartModule.update({ districtDistribution: [], timeSlotDistribution: [] });
+    }
+  }
+
+  /* -----------------------------------------------------------------------
      Heat mode query — calls /api/crime/heatmap only (12 district points)
   ----------------------------------------------------------------------- */
   async function queryHeatmapOnly() {
@@ -150,6 +169,7 @@
       }
 
       renderStats(computeStatsFromHeatmap(data));
+      fetchAndRenderCharts();
 
     } catch (err) {
       console.error('Heatmap query failed:', err);
@@ -240,9 +260,7 @@
         window.mapModule.clearProgress();
       }
       renderStats(computeStats(_lastData));
-      if (window.chartModule && typeof window.chartModule.update === 'function') {
-        window.chartModule.update(_lastData);
-      }
+      fetchAndRenderCharts();
       setLoading(false);
       if (elBtnQuery) elBtnQuery.disabled = false;
       setToggleDisabled(false);
@@ -309,10 +327,7 @@
       }
 
       renderStats(computeStats(_lastData));
-
-      if (window.chartModule && typeof window.chartModule.update === 'function') {
-        window.chartModule.update(_lastData);
-      }
+      fetchAndRenderCharts();
 
     } catch (err) {
       console.error('Query failed:', err);

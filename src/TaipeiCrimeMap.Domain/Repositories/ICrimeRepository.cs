@@ -16,6 +16,12 @@ public interface ICrimeRepository
     Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(CrimeFilter filter, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 統計圖表用：依篩選條件分別計算「行政區分布」與「時段分布」彙總計數
+    /// </summary>
+    Task<(IReadOnlyList<(string District, int Count)> DistrictCounts, IReadOnlyList<(string TimeSlot, int Count)> TimeSlotCounts)> GetStatsByFilterAsync(
+        CrimeFilter filter, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 取得座標尚未補齊（Latitude 或 Longitude 為 NULL）的案件，依案件編號排序，最多 batchSize 筆
     /// </summary>
     Task<IReadOnlyList<TheftCase>> GetCasesWithMissingCoordinatesAsync(int batchSize, CancellationToken cancellationToken = default);

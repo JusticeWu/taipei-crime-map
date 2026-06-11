@@ -118,18 +118,44 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  function buildPopupHtml(item) {
+  function buildPopupHtml(item, loading) {
+    const placeholder = loading ? '載入中…' : '—';
     return [
       '<div class="crime-popup">',
       `  <strong>${escapeHtml(item.caseType || '未知')}</strong>`,
       '  <table>',
-      `    <tr><th>行政區</th><td>${escapeHtml(item.district || '—')}</td></tr>`,
+      `    <tr><th>行政區</th><td>${escapeHtml(item.district || placeholder)}</td></tr>`,
       `    <tr><th>日期</th><td>${escapeHtml(item.occurredDate || '—')}</td></tr>`,
-      `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || '—')}</td></tr>`,
-      `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || '—')}</td></tr>`,
+      `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || placeholder)}</td></tr>`,
+      `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || placeholder)}</td></tr>`,
       '  </table>',
       '</div>',
     ].join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Popup detail — fetched on demand when a point-mode marker popup is opened
+  // ---------------------------------------------------------------------------
+
+  const _detailCache = new Map();
+
+  function attachDetailFetch(marker, item) {
+    if (!item.id) return;
+    marker.on('popupopen', async () => {
+      let detail = _detailCache.get(item.id);
+      if (!detail) {
+        try {
+          const resp = await fetch(`/api/crime/points/${item.id}`, { headers: { Accept: 'application/json' } });
+          if (!resp.ok) throw new Error(`API ${resp.status}`);
+          detail = await resp.json();
+          _detailCache.set(item.id, detail);
+        } catch (err) {
+          console.error('Popup detail fetch failed:', err);
+          detail = { district: '載入失敗', timeSlot: '載入失敗', rawLocation: '載入失敗' };
+        }
+      }
+      marker.setPopupContent(buildPopupHtml(Object.assign({}, item, detail)));
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -148,7 +174,8 @@
       const marker = L.circleMarker([item.latitude, item.longitude], {
         radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
       });
-      marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
+      marker.bindPopup(buildPopupHtml(item, true), { maxWidth: 260 });
+      attachDetailFetch(marker, item);
       _markerLayer.addLayer(marker);
     });
     _markerLayer.addTo(_map);
@@ -267,7 +294,8 @@
         const marker = L.circleMarker([item.latitude, item.longitude], {
           radius: 6, color, fillColor: color, fillOpacity: 0.7, weight: 1,
         });
-        marker.bindPopup(buildPopupHtml(item), { maxWidth: 260 });
+        marker.bindPopup(buildPopupHtml(item, true), { maxWidth: 260 });
+        attachDetailFetch(marker, item);
         _markerLayer.addLayer(marker);
       });
     }
