@@ -315,3 +315,20 @@
   × `.leaflet-left/.leaflet-right`）可能同時承載「框架內建控制項
   （如 attribution、zoom）」與「自訂控制項（如圖例、圖層按鈕）」，
   對整個容器套用版面偏移前，需先確認容器內還有哪些控制項會被一併影響
+
+## L027：dotnet build 找錯 solution 檔名稱、UseAzureMonitor 擴充方法找不到
+- 問題：(1) `dotnet build TaipeiCrimeMap.sln` 報錯「專案檔不存在」；
+  (2) 加入 `Azure.Monitor.OpenTelemetry.AspNetCore` 套件後，
+  `builder.Services.AddOpenTelemetry().UseAzureMonitor(...)` 編譯錯誤
+  CS1061，找不到 `UseAzureMonitor` 擴充方法
+- 根本原因：(1) 此專案的方案檔是 `TaipeiCrimeMap.slnx`（新版 .slnx 格式），
+  不是傳統的 `.sln`；(2) `UseAzureMonitor` 是
+  `Azure.Monitor.OpenTelemetry.AspNetCore` 命名空間底下的擴充方法，
+  僅安裝套件不會自動加入對應的 `using`，編譯器找不到擴充方法所在的命名空間
+- 正確做法：(1) 用 `Glob`／`ls *.sln*` 確認方案檔實際副檔名與名稱，
+  不要假設一定是 `.sln`；(2) 加入 NuGet 套件後，若呼叫的是該套件提供的
+  擴充方法，需同時在使用檔案加入對應的 `using <PackageNamespace>;`，
+  並先 `dotnet build` 確認可編譯，再執行 `dotnet test`
+- 相關模式：新增第三方套件整合時，「安裝套件」與「加入對應 using」是
+  兩個獨立步驟，缺一不可；專案結構（方案檔格式、命名）不可憑經驗假設，
+  動手前先用搜尋工具確認
