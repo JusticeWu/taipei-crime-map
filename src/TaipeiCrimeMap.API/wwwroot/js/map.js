@@ -57,9 +57,10 @@
     '機車竊盜':   '🏍️',
     '自行車竊盜': '🚲',
     '搶奪':      '👜',
-    '強盜':      '🏏',
+    '強盜':      '⚡',
   };
   const DEFAULT_EMOJI = '📍';
+  const MARKER_BG_COLOR = '#FFFFFF';
 
   const HEAT_OPTIONS = { radius: 20, blur: 15, maxZoom: 17, max: 1.0 };
   const HEAT_INTENSITY = 0.5;
@@ -116,9 +117,9 @@
     const emoji = emojiForType(caseType);
     return L.divIcon({
       className: '',
-      html: `<div class="emoji-marker">${emoji}</div>`,
-      iconSize:   [24, 24],
-      iconAnchor: [12, 12],
+      html: `<div class="emoji-marker" style="background:${MARKER_BG_COLOR};">${emoji}</div>`,
+      iconSize:   [32, 32],
+      iconAnchor: [16, 16],
     });
   }
 
@@ -243,7 +244,7 @@
           '<div class="legend-title">案件類型</div>' +
           entries.map(([label, emoji]) =>
             `<div class="legend-item">` +
-            `<span class="legend-emoji">${emoji}</span>` +
+            `<span class="legend-emoji" style="background:${MARKER_BG_COLOR};">${emoji}</span>` +
             `<span class="legend-label">${escapeHtml(label)}</span>` +
             `</div>`
           ).join('');
@@ -355,7 +356,7 @@
       .crime-legend { background:rgba(30,30,30,.85); color:#ddd; padding:10px 14px; border-radius:6px; font-size:12px; line-height:1.6; box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:110px; }
       .legend-title { font-weight:bold; margin-bottom:6px; font-size:13px; border-bottom:1px solid #555; padding-bottom:4px; }
       .legend-item  { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
-      .legend-emoji { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; flex-shrink:0; font-size:16px; line-height:1; }
+      .legend-emoji { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; flex-shrink:0; font-size:16px; line-height:1; }
       .legend-label { white-space:nowrap; }
 
       .district-bubble { width:56px; height:56px; border-radius:50%; background:rgba(44,62,80,.88); border:2px solid rgba(255,255,255,.75); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,.5); cursor:pointer; transition:transform .15s; }
@@ -365,7 +366,7 @@
 
       .map-progress { background:rgba(30,30,30,.80); color:#fff; padding:6px 12px; border-radius:4px; font-size:13px; font-weight:bold; box-shadow:0 2px 6px rgba(0,0,0,.4); }
 
-      .emoji-marker { width:24px; height:24px; display:flex; align-items:center; justify-content:center; font-size:20px; line-height:1; text-shadow:0 1px 3px rgba(0,0,0,.7); }
+      .emoji-marker { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:22px; line-height:1; box-shadow:0 1px 4px rgba(0,0,0,.5); }
     `;
     document.head.appendChild(style);
   }
