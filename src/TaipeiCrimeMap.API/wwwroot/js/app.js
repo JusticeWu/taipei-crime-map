@@ -53,9 +53,9 @@
      Display mode
   ----------------------------------------------------------------------- */
   function getDisplayMode() {
-    if (!elToggleMode) return 'heat';
+    if (!elToggleMode) return 'point';
     const checked = elToggleMode.querySelector('input[type="radio"]:checked');
-    return checked ? checked.value : 'heat';
+    return checked ? checked.value : 'point';
   }
 
   /* -----------------------------------------------------------------------
@@ -440,7 +440,7 @@
     if (elBtnQuery) elBtnQuery.addEventListener('click', doQuery);
     if (elToggleMode) elToggleMode.addEventListener('change', onModeChange);
 
-    doQuery(); // defaults to heat mode → queryHeatmapOnly() (instant)
+    doQuery(); // defaults to point mode → queryProgressive()
   }
 
   if (document.readyState === 'loading') {
