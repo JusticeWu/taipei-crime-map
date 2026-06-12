@@ -332,3 +332,53 @@
 - 相關模式：新增第三方套件整合時，「安裝套件」與「加入對應 using」是
   兩個獨立步驟，缺一不可；專案結構（方案檔格式、命名）不可憑經驗假設，
   動手前先用搜尋工具確認
+
+## L028：.gitignore 的 *.e2e（VS Trace Files）在 Windows 上不分大小寫，誤擋新建立的 E2E 測試專案目錄
+- 問題：依需求在 `tests/TaipeiCrimeMap.E2E/` 建立 Playwright 專案後，
+  `git status` 完全看不到該目錄（連 untracked 都不顯示），
+  `git add` 也無效
+- 根本原因：`.gitignore` 中既有一條 Visual Studio 產生的規則 `*.e2e`
+  （Visual Studio Trace Files 副檔名），git 在 Windows 上對 `.gitignore`
+  pattern 的比對不分大小寫，導致 `TaipeiCrimeMap.E2E`（以 `.E2E` 結尾的
+  目錄名）被這條規則整個目錄忽略
+- 正確做法：新增檔案/目錄後若 `git status` 完全沒有顯示，先用
+  `git status --ignored=matching -- <path>` 確認是否被忽略、
+  再用 `grep` 找出對應的 `.gitignore` 規則；不要直接刪除既有的通用規則，
+  改為新增明確的反向規則（`!tests/TaipeiCrimeMap.E2E/` +
+  `!tests/TaipeiCrimeMap.E2E/**`）解除特定目錄的忽略
+- 相關模式：建立新檔案/目錄時，命名若恰好符合 `.gitignore` 中既有的
+  通用副檔名規則（尤其是大小寫不敏感的 Windows 環境），會被靜默忽略；
+  `git add` 後務必用 `git status --porcelain` 確認檔案確實被加入
+
+## L029：自訂樣式的 radio/checkbox（display:none）用 Playwright locator.check() 會卡到逾時
+- 問題：`#toggle-mode` 的顯示模式切換用 `<input type="radio">` +
+  `<span>` 自訂樣式，CSS 將 `input[type="radio"]` 設為 `display:none`；
+  Playwright 對該 input 呼叫 `.check()`（含 `force: true`）或用
+  `locator('label', { has: input })` 尋找父層 label 都會卡住直到
+  60~120 秒逾時，而非立即報錯
+- 根本原因：`display:none` 的元素沒有 bounding box，Playwright 的
+  actionability 檢查（即使加 `force: true`）仍可能持續等待元素變為可互動；
+  `{ has: ... }` 的 locator 過濾在某些情況下也未如預期立即解析
+- 正確做法：自訂樣式的表單控制項，改用使用者實際看得到、點得到的元素
+  （例如 `page.locator('#toggle-mode').getByText('熱力圖')`）觸發互動，
+  而不是直接操作被隱藏的原生 input
+- 相關模式：E2E 測試應模擬「使用者實際可互動的元素」，
+  CSS 隱藏的原生表單元素即使技術上仍存在於 DOM，也不應作為互動目標
+
+## L030：前端「智慧模式切換」會略過重複 API 請求，E2E 等待 API 回應的斷言永遠不會觸發
+- 問題：撰寫「熱力圖／點位圖切換」測試時，切換到熱力圖模式後用
+  `page.waitForResponse(/\/api\/crime\/heatmap/)` 等待 API 回應，
+  結果卡到測試逾時（120 秒）
+- 根本原因：點位圖模式載入時，`app.js` 的 `queryProgressive()` 已在
+  背景預先呼叫 `/api/crime/heatmap` 並快取於 `_lastHeatmapData`；
+  切換到熱力圖模式時 `onModeChange()` 發現快取已存在，直接重繪
+  （`setHeatmap(_lastHeatmapData)`），不會再發送新的 API 請求，
+  因此等待新請求的 Promise 永遠不會 resolve
+- 正確做法：E2E 測試應斷言「使用者可觀察到的最終結果」（例如
+  `.leaflet-heatmap-layer` 是否出現/消失），而非假設「使用者操作
+  必定觸發特定的網路請求」；點位圖初次載入（11,514 筆，progressive
+  paging）在 UAT 冷啟動時可能耗時數十秒，相關測試需個別用
+  `test.setTimeout()` 放寬逾時，並先等待操作按鈕恢復可用
+  （非 disabled）再進行互動
+- 相關模式：[[L019]] 懶載入／快取會改變預期的網路行為；
+  E2E 測試應驗證「行為結果」而非「實作細節（特定請求是否發出）」
