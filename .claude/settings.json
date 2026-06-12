@@ -25,6 +25,7 @@
       "Bash(Write-Host *)",
       "Bash(Invoke-WebRequest *)",
       "Bash($env:SLACK_WEBHOOK_URL*)",
+      "Bash(powershell -NoProfile*)",
       "WebFetch(domain:github.com)"
     ]
   }
