@@ -5,9 +5,9 @@ export default defineConfig({
   timeout: 30 * 1000,
   retries: 1,
   fullyParallel: true,
-  reporter: 'list',
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'https://taipei-crime-map-uat.ambitioussand-7326440b.japaneast.azurecontainerapps.io',
+    baseURL: process.env.UAT_URL ?? 'https://taipei-crime-map-uat.ambitioussand-7326440b.japaneast.azurecontainerapps.io',
     trace: 'on-first-retry',
   },
   projects: [
