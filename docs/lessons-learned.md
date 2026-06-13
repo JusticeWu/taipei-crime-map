@@ -382,3 +382,16 @@
   （非 disabled）再進行互動
 - 相關模式：[[L019]] 懶載入／快取會改變預期的網路行為；
   E2E 測試應驗證「行為結果」而非「實作細節（特定請求是否發出）」
+
+## L031：Task.WhenAll(taskA, taskB) 在兩個 Task 回傳型別不同時，無法用陣列索引取值
+- 問題：將 GetStatsByFilterAsync 改為並行查詢時，寫成
+  `var results = await Task.WhenAll(districtTask, timeSlotTask); var districtRows = results[0];`
+  編譯失敗
+- 根本原因：districtTask 回傳 IEnumerable<StatsDistrictRow>，
+  timeSlotTask 回傳 IEnumerable<StatsTimeSlotRow>，兩者型別不同，
+  Task.WhenAll<TResult> 無法推論出共同的 TResult，因此無法回傳陣列
+- 正確做法：先 `await Task.WhenAll(taskA, taskB)` 讓兩者並行執行完成，
+  再分別 `await taskA` 與 `await taskB` 取得各自結果（此時已完成，
+  不會再等待）
+- 相關模式：兩個獨立、型別不同的非同步查詢要並行執行時，
+  使用「await Task.WhenAll 等待 + 個別 await 取值」而非陣列索引
