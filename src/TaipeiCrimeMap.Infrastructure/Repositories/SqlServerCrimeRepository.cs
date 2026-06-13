@@ -227,9 +227,21 @@ public class SqlServerCrimeRepository : ICrimeRepository
             YearTo   = filter.YearTo,
         };
 
-        await using var conn = CreateConnection();
-        var districtRows = await conn.QueryAsync<StatsDistrictRow>(districtSql, parameters);
-        var timeSlotRows = await conn.QueryAsync<StatsTimeSlotRow>(timeSlotSql, parameters);
+        var districtTask = Task.Run(async () =>
+        {
+            await using var conn = CreateConnection();
+            return await conn.QueryAsync<StatsDistrictRow>(districtSql, parameters);
+        }, cancellationToken);
+
+        var timeSlotTask = Task.Run(async () =>
+        {
+            await using var conn = CreateConnection();
+            return await conn.QueryAsync<StatsTimeSlotRow>(timeSlotSql, parameters);
+        }, cancellationToken);
+
+        await Task.WhenAll(districtTask, timeSlotTask);
+        var districtRows = await districtTask;
+        var timeSlotRows = await timeSlotTask;
 
         return (
             districtRows.Select(r => (r.District, r.Count)).ToList(),
