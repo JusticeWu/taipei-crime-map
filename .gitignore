@@ -154,15 +154,6 @@ ipch/
 *.vspx
 *.sap
 
-# Visual Studio Trace Files
-*.e2e
-
-# 上面的 *.e2e（VS Trace Files）在 Windows 上不分大小寫，
-# 會誤擋掉 Playwright E2E 測試專案目錄 tests/TaipeiCrimeMap.E2E/，
-# 故明確取消忽略
-!tests/TaipeiCrimeMap.E2E/
-!tests/TaipeiCrimeMap.E2E/**
-
 # TFS 2012 Local Workspace
 $tf/
 

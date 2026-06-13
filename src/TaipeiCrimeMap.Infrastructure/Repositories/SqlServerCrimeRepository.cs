@@ -174,8 +174,8 @@ public class SqlServerCrimeRepository : ICrimeRepository
             WHERE district IS NOT NULL
               AND (@CaseType IS NULL OR case_type = @CaseType)
               AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year + 1911 >= @YearFrom)
-              AND (@YearTo   IS NULL OR occurred_year + 1911 <= @YearTo)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
             GROUP BY district
             """;
 
@@ -200,8 +200,8 @@ public class SqlServerCrimeRepository : ICrimeRepository
             WHERE district IS NOT NULL
               AND (@CaseType IS NULL OR case_type = @CaseType)
               AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year + 1911 >= @YearFrom)
-              AND (@YearTo   IS NULL OR occurred_year + 1911 <= @YearTo)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
             GROUP BY district
             """;
 
@@ -214,8 +214,8 @@ public class SqlServerCrimeRepository : ICrimeRepository
             WHERE time_slot_start IS NOT NULL AND time_slot_end IS NOT NULL
               AND (@CaseType IS NULL OR case_type = @CaseType)
               AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year + 1911 >= @YearFrom)
-              AND (@YearTo   IS NULL OR occurred_year + 1911 <= @YearTo)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
             GROUP BY time_slot_start, time_slot_end
             """;
 
@@ -227,9 +227,21 @@ public class SqlServerCrimeRepository : ICrimeRepository
             YearTo   = filter.YearTo,
         };
 
-        await using var conn = CreateConnection();
-        var districtRows = await conn.QueryAsync<StatsDistrictRow>(districtSql, parameters);
-        var timeSlotRows = await conn.QueryAsync<StatsTimeSlotRow>(timeSlotSql, parameters);
+        var districtTask = Task.Run(async () =>
+        {
+            await using var conn = CreateConnection();
+            return await conn.QueryAsync<StatsDistrictRow>(districtSql, parameters);
+        }, cancellationToken);
+
+        var timeSlotTask = Task.Run(async () =>
+        {
+            await using var conn = CreateConnection();
+            return await conn.QueryAsync<StatsTimeSlotRow>(timeSlotSql, parameters);
+        }, cancellationToken);
+
+        await Task.WhenAll(districtTask, timeSlotTask);
+        var districtRows = await districtTask;
+        var timeSlotRows = await timeSlotTask;
 
         return (
             districtRows.Select(r => (r.District, r.Count)).ToList(),

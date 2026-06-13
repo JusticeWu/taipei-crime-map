@@ -382,3 +382,32 @@
   （非 disabled）再進行互動
 - 相關模式：[[L019]] 懶載入／快取會改變預期的網路行為；
   E2E 測試應驗證「行為結果」而非「實作細節（特定請求是否發出）」
+
+## L031：Task.WhenAll(taskA, taskB) 在兩個 Task 回傳型別不同時，無法用陣列索引取值
+- 問題：將 GetStatsByFilterAsync 改為並行查詢時，寫成
+  `var results = await Task.WhenAll(districtTask, timeSlotTask); var districtRows = results[0];`
+  編譯失敗
+- 根本原因：districtTask 回傳 IEnumerable<StatsDistrictRow>，
+  timeSlotTask 回傳 IEnumerable<StatsTimeSlotRow>，兩者型別不同，
+  Task.WhenAll<TResult> 無法推論出共同的 TResult，因此無法回傳陣列
+- 正確做法：先 `await Task.WhenAll(taskA, taskB)` 讓兩者並行執行完成，
+  再分別 `await taskA` 與 `await taskB` 取得各自結果（此時已完成，
+  不會再等待）
+- 相關模式：兩個獨立、型別不同的非同步查詢要並行執行時，
+  使用「await Task.WhenAll 等待 + 個別 await 取值」而非陣列索引
+
+## L032：WHERE 條件對索引欄位做運算（occurred_year + 1911）造成 non-sargable，索引失效
+- 問題：[[L022]] 為了把民國年轉西元年，在 WHERE 條件寫成
+  `occurred_year + 1911 >= @YearFrom`，雖然邏輯正確，但 `occurred_year`
+  欄位被算式包住後，SQL Server 無法用 `ix_theft_cases_occurred_year`
+  做 Index Seek，只能 Index/Table Scan
+- 根本原因：non-sargable 的寫法——對欄位本身做運算的 WHERE 條件，
+  Optimizer 無法利用該欄位上的索引；同樣的轉換邏輯放在欄位側還是
+  參數側，邏輯等價但效能差異很大
+- 正確做法：把運算移到參數（常數）側，欄位保持原樣：
+  `occurred_year >= @YearFrom - 1911`、`occurred_year <= @YearTo - 1911`，
+  讓 Optimizer 可以走 Index Seek；SP 內以字串組裝 SQL 的版本也要同步修改
+  （新增 migration script，不修改已部署的舊版本）
+- 相關模式：sargable predicate — WHERE/JOIN/ORDER BY 條件中，
+  索引欄位不應被函式或運算式包住（CAST、+ - * /、YEAR()、SUBSTRING 等），
+  運算應移到常數/參數側；SELECT 投影欄位上的函式則不影響索引，無需修改
