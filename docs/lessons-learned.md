@@ -434,3 +434,23 @@
   `CERTIFICATE_VERIFY_FAILED` 或 `CRYPT_E_NO_REVOCATION_CHECK` 時，
   先檢查 `Cert:\LocalMachine\Root` 是否有防毒軟體產生的中間人憑證，
   再決定要修補 CA bundle 還是用工具本身的「跳過驗證」參數繞過
+
+## L034：CI workflow 改用新的 GitHub Secret 後，先 push 的那次執行會因 Secret 尚未建立而失敗
+- 問題：將 `.github/workflows/ci.yml` 的 `to: chengyi.ks@gmail.com`
+  改為 `to: ${{ secrets.REPORT_EMAIL_TO }}` 並 push 到 uat 後，
+  `deploy-to-uat` 的 `Send email report` 步驟失敗：
+  `##[error]At least one of 'to', 'cc' or 'bcc' must be specified`
+- 根本原因：push 發生在 16:52，但 `REPORT_EMAIL_TO` 這個 GitHub Secret
+  是在 push 之後才建立的（00:37 隔日 UTC，即更晚）。該次 CI run 執行時
+  Secret 還不存在，`${{ secrets.REPORT_EMAIL_TO }}` 解析為空字串，
+  導致 action-send-mail 的 `to` 欄位是空的而報錯
+- 正確做法：
+  - 變更 CI workflow 改參照新的 `${{ secrets.XXX }}` 之前，必須先用
+    `gh secret set XXX` 建立好該 Secret，再 push 參照它的 commit
+  - 若順序顛倒導致該次 run 失敗，Secret 建立後用
+    `gh run rerun <run-id> --failed` 重跑失敗的 job 即可，
+    不需要重新 push commit
+- 相關模式：CI 設定變更與其所依賴的外部資源（Secret、環境變數、
+  雲端資源）之間有相依順序時，「依賴方」必須在「被依賴方」就位後
+  才能被觸發；若已觸發且失敗，補上依賴後重跑該次 run 即可，
+  不必製造新的 commit
