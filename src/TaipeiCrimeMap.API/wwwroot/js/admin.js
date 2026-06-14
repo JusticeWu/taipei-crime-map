@@ -3,6 +3,7 @@
 (function () {
   const PING_URL = '/api/crime/coordinate/ping';
   const PATCH_URL = '/api/crime/coordinate';
+  const CACHE_CLEAR_URL = '/api/admin/cache/clear';
   const STORAGE_KEY = 'adminAuthCredentials';
 
   const loginSection = document.getElementById('login-section');
@@ -12,6 +13,7 @@
   const updateForm = document.getElementById('update-form');
   const resultEl = document.getElementById('result');
   const logoutBtn = document.getElementById('btn-logout');
+  const clearCacheBtn = document.getElementById('btn-clear-cache');
 
   function getStoredCredentials() {
     return sessionStorage.getItem(STORAGE_KEY);
@@ -73,6 +75,40 @@
     resultEl.textContent = '';
     updateForm.reset();
     showLogin();
+  });
+
+  clearCacheBtn.addEventListener('click', async () => {
+    const credentials = getStoredCredentials();
+    if (!credentials) {
+      showLogin();
+      return;
+    }
+
+    resultEl.textContent = '清除快取中...';
+
+    try {
+      const response = await fetch(CACHE_CLEAR_URL, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${credentials}` },
+      });
+
+      if (response.status === 401) {
+        resultEl.textContent = '❌ 認證失敗（401），請重新登入';
+        return;
+      }
+
+      if (!response.ok) {
+        resultEl.textContent = `❌ 清除快取失敗（HTTP ${response.status}）`;
+        return;
+      }
+
+      const data = await response.json();
+      resultEl.textContent =
+        `✅ 快取清除完成：L1（記憶體）${data.l1Cleared ? '成功' : '失敗'}，` +
+        `L2（Garnet）${data.l2Cleared ? '成功' : '失敗'}`;
+    } catch (error) {
+      resultEl.textContent = `❌ 清除快取發生錯誤：${error.message}`;
+    }
   });
 
   function parseLines(raw) {

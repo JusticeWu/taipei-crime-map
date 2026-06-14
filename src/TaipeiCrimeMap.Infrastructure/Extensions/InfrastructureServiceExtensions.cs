@@ -46,6 +46,17 @@ public static class InfrastructureServiceExtensions
             options.ConfigurationOptions = redisConfigOptions;
         });
 
+        // 提供 IConnectionMultiplexer，供管理端點（清除快取 FLUSHALL）直接操作 Garnet
+        // AbortOnConnectFail = false：Garnet 連線失敗時不讓應用程式啟動失敗
+        services.AddSingleton<IConnectionMultiplexer>(_ =>
+        {
+            var redisConfigOptions = ConfigurationOptions.Parse(configuration.GetConnectionString("Redis")!);
+            redisConfigOptions.ConnectTimeout = 2000;
+            redisConfigOptions.SyncTimeout = 2000;
+            redisConfigOptions.AbortOnConnectFail = false;
+            return ConnectionMultiplexer.Connect(redisConfigOptions);
+        });
+
         return services;
     }
 }

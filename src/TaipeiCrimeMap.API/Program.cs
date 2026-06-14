@@ -110,7 +110,8 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.UseWhen(
-    context => context.Request.Path.StartsWithSegments("/api/crime/coordinate"),
+    context => context.Request.Path.StartsWithSegments("/api/crime/coordinate")
+        || context.Request.Path.StartsWithSegments("/api/admin"),
     branch => branch.UseMiddleware<BasicAuthMiddleware>());
 
 app.MapGet("/admin", () => Results.Redirect("/admin.html"));
