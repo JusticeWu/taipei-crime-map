@@ -231,20 +231,31 @@ describe('layer picker control', () => {
 /**
  * Replicates the fitBounds logic in map.js:
  *   finalizeLoad(allData, mode) — fits the map to all loaded points
- *     (filtered via hasCoords: numeric latitude/longitude).
+ *     (filtered via hasCoords: numeric latitude/longitude, then restricted
+ *     to TAIPEI_BOUNDS).
  *   setHeatmap(points)          — fits the map to the aggregated district
- *     points (filtered to numeric lat/lng).
- * Both only call _map.fitBounds(...) when there is at least one valid point.
+ *     points (filtered to numeric lat/lng, then restricted to TAIPEI_BOUNDS).
+ * Both only call _map.fitBounds(...) when there is at least one valid point
+ * within TAIPEI_BOUNDS. Points outside TAIPEI_BOUNDS are excluded from the
+ * bounds calculation but are still rendered on the map.
  * Any change to that logic in map.js must be reflected here.
  */
+const TAIPEI_BOUNDS = { minLat: 24.8, maxLat: 25.4, minLng: 121.3, maxLng: 121.8 };
+
 function hasCoords(item) {
   return typeof item.latitude === 'number' && !isNaN(item.latitude) &&
          typeof item.longitude === 'number' && !isNaN(item.longitude);
 }
 
+function isWithinTaipei(lat, lng) {
+  return lat >= TAIPEI_BOUNDS.minLat && lat <= TAIPEI_BOUNDS.maxLat &&
+         lng >= TAIPEI_BOUNDS.minLng && lng <= TAIPEI_BOUNDS.maxLng;
+}
+
 function finalizeLoadFitBounds(map, L, allData) {
   const coords = (Array.isArray(allData) ? allData : [])
     .filter(hasCoords)
+    .filter(i => isWithinTaipei(i.latitude, i.longitude))
     .map(i => [i.latitude, i.longitude]);
   if (coords.length > 0) {
     map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
@@ -254,6 +265,7 @@ function finalizeLoadFitBounds(map, L, allData) {
 function setHeatmapFitBounds(map, L, points) {
   const coords = points
     .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
+    .filter(p => isWithinTaipei(p.lat, p.lng))
     .map(p => [p.lat, p.lng]);
   if (coords.length > 0) {
     map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
@@ -292,6 +304,38 @@ describe('fitBounds — point mode (finalizeLoad)', () => {
       { padding: [50, 50] }
     );
   });
+
+  test('台北市範圍外的點位不會影響 fitBounds 計算', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    finalizeLoadFitBounds(map, L, [
+      { latitude: 25.03, longitude: 121.5 },
+      { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
+    ]);
+    expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5]]);
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      { coords: [[25.03, 121.5]] },
+      { padding: [50, 50] }
+    );
+  });
+
+  test('所有點位都在台北市範圍外時不呼叫 fitBounds', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    finalizeLoadFitBounds(map, L, [
+      { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
+    ]);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+});
+
+describe('fitBounds — 範圍外的點位仍會被渲染', () => {
+  test('buildMarkerLayer 不過濾範圍，台北市範圍外但具座標的點位仍會加入圖層', () => {
+    const data = [
+      { latitude: 25.03, longitude: 121.5 },
+      { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍但仍應渲染
+    ];
+    const rendered = data.filter(hasCoords);
+    expect(rendered).toHaveLength(2);
+  });
 });
 
 describe('fitBounds — heat mode (setHeatmap)', () => {
@@ -318,5 +362,26 @@ describe('fitBounds — heat mode (setHeatmap)', () => {
       { coords: [[25.0328, 121.5199], [25.0637, 121.5131]] },
       { padding: [50, 50] }
     );
+  });
+
+  test('台北市範圍外的點位不會影響 fitBounds 計算', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    setHeatmapFitBounds(map, L, [
+      { district: '中正區', weight: 10, lat: 25.0328, lng: 121.5199 },
+      { district: '高雄某區', weight: 3, lat: 22.99, lng: 120.21 }, // 超出台北市範圍
+    ]);
+    expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199]]);
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      { coords: [[25.0328, 121.5199]] },
+      { padding: [50, 50] }
+    );
+  });
+
+  test('所有點位都在台北市範圍外時不呼叫 fitBounds', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    setHeatmapFitBounds(map, L, [
+      { district: '高雄某區', weight: 3, lat: 22.99, lng: 120.21 }, // 超出台北市範圍
+    ]);
+    expect(map.fitBounds).not.toHaveBeenCalled();
   });
 });

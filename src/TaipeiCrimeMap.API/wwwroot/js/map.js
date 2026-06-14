@@ -51,6 +51,9 @@
   const TAIPEI_CENTER = [25.0478, 121.5318];
   const DEFAULT_ZOOM  = 13;
 
+  // 台北市合理範圍（稍微放寬）— 僅用於 fitBounds 計算，不影響點位渲染
+  const TAIPEI_BOUNDS = { minLat: 24.8, maxLat: 25.4, minLng: 121.3, maxLng: 121.8 };
+
   const CASE_TYPE_EMOJIS = {
     '住宅竊盜':   '🏠',
     '汽車竊盜':   '🚗',
@@ -109,6 +112,12 @@
   function hasCoords(item) {
     return typeof item.latitude === 'number' && !isNaN(item.latitude) &&
            typeof item.longitude === 'number' && !isNaN(item.longitude);
+  }
+
+  // 是否落在台北市合理範圍內 — 僅用於 fitBounds 計算，不影響點位渲染
+  function isWithinTaipei(lat, lng) {
+    return lat >= TAIPEI_BOUNDS.minLat && lat <= TAIPEI_BOUNDS.maxLat &&
+           lng >= TAIPEI_BOUNDS.minLng && lng <= TAIPEI_BOUNDS.maxLng;
   }
 
   function emojiForType(caseType) {
@@ -652,8 +661,10 @@
       _fallbackLayer.addTo(_map);
 
       // Fit the map to the aggregated district points
+      // （排除不在台北市合理範圍內的點位，但這些點位仍會在上方正常渲染熱力圖/泡泡）
       const heatCoords = points
         .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
+        .filter(p => isWithinTaipei(p.lat, p.lng))
         .map(p => [p.lat, p.lng]);
       if (heatCoords.length > 0) {
         _map.fitBounds(L.latLngBounds(heatCoords), { padding: [50, 50] });
@@ -667,8 +678,10 @@
       buildDistrictFallbackLayer(allData);
 
       // Fit the map to all loaded points
+      // （排除不在台北市合理範圍內的點位，但這些點位仍會正常顯示在地圖上）
       const coords = (Array.isArray(allData) ? allData : [])
         .filter(hasCoords)
+        .filter(i => isWithinTaipei(i.latitude, i.longitude))
         .map(i => [i.latitude, i.longitude]);
       if (coords.length > 0) {
         _map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
