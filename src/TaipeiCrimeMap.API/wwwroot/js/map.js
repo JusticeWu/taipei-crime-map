@@ -667,7 +667,7 @@
         .filter(p => isWithinTaipei(p.lat, p.lng))
         .map(p => [p.lat, p.lng]);
       if (heatCoords.length > 0) {
-        _map.fitBounds(L.latLngBounds(heatCoords), { padding: [50, 50] });
+        _map.fitBounds(L.latLngBounds(heatCoords), { padding: [50, 50], maxZoom: 13 });
       }
     },
 
@@ -684,7 +684,7 @@
         .filter(i => isWithinTaipei(i.latitude, i.longitude))
         .map(i => [i.latitude, i.longitude]);
       if (coords.length > 0) {
-        _map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
+        _map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 13 });
       }
     },
 
