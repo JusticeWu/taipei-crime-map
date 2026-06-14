@@ -679,13 +679,27 @@
 
       // Fit the map to all loaded points
       // （排除不在台北市合理範圍內的點位，但這些點位仍會正常顯示在地圖上）
-      const coords = (Array.isArray(allData) ? allData : [])
+      const withinTaipei = (Array.isArray(allData) ? allData : [])
         .filter(hasCoords)
-        .filter(i => isWithinTaipei(i.latitude, i.longitude))
-        .map(i => [i.latitude, i.longitude]);
+        .filter(i => isWithinTaipei(i.latitude, i.longitude));
+      const coords = withinTaipei.map(i => [i.latitude, i.longitude]);
       if (coords.length > 0) {
         const bounds = L.latLngBounds(coords);
-        console.log('[fitBounds] 即將執行，點位數量：', coords.length, '，bounds：', bounds);
+        console.log('[fitBounds] 即將執行，點位數量：', coords.length,
+          '，bounds：', JSON.stringify({
+            southWest: bounds.getSouthWest(),
+            northEast: bounds.getNorthEast(),
+          }));
+
+        // 找出推高 bounds 的離群點（最北/最南/最東/最西），方便定位錯誤座標
+        const extremes = {
+          north: withinTaipei.reduce((a, b) => (a.latitude >= b.latitude ? a : b)),
+          south: withinTaipei.reduce((a, b) => (a.latitude <= b.latitude ? a : b)),
+          east:  withinTaipei.reduce((a, b) => (a.longitude >= b.longitude ? a : b)),
+          west:  withinTaipei.reduce((a, b) => (a.longitude <= b.longitude ? a : b)),
+        };
+        console.log('[fitBounds] bounds 四個極端點：', JSON.stringify(extremes));
+
         _map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
         console.log('[fitBounds] 執行完成，目前縮放層級：', _map.getZoom());
       }
