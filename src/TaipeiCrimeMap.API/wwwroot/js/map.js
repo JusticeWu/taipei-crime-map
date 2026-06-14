@@ -684,7 +684,10 @@
         .filter(i => isWithinTaipei(i.latitude, i.longitude))
         .map(i => [i.latitude, i.longitude]);
       if (coords.length > 0) {
-        _map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 16 });
+        const bounds = L.latLngBounds(coords);
+        console.log('[fitBounds] 即將執行，點位數量：', coords.length, '，bounds：', bounds);
+        _map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        console.log('[fitBounds] 執行完成，目前縮放層級：', _map.getZoom());
       }
     },
 
