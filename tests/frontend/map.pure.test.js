@@ -240,7 +240,7 @@ describe('layer picker control', () => {
  * bounds calculation but are still rendered on the map.
  * Any change to that logic in map.js must be reflected here.
  */
-const TAIPEI_BOUNDS = { minLat: 24.8, maxLat: 25.4, minLng: 121.3, maxLng: 121.8 };
+const TAIPEI_BOUNDS = { minLat: 24.95, maxLat: 25.25, minLng: 121.4, maxLng: 121.75 };
 
 function hasCoords(item) {
   return typeof item.latitude === 'number' && !isNaN(item.latitude) &&
@@ -258,7 +258,7 @@ function finalizeLoadFitBounds(map, L, allData) {
     .filter(i => isWithinTaipei(i.latitude, i.longitude))
     .map(i => [i.latitude, i.longitude]);
   if (coords.length > 0) {
-    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 13 });
+    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 14 });
   }
 }
 
@@ -268,7 +268,7 @@ function setHeatmapFitBounds(map, L, points) {
     .filter(p => isWithinTaipei(p.lat, p.lng))
     .map(p => [p.lat, p.lng]);
   if (coords.length > 0) {
-    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 13 });
+    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 14 });
   }
 }
 
@@ -301,7 +301,7 @@ describe('fitBounds — point mode (finalizeLoad)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5], [25.10, 121.6]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.03, 121.5], [25.10, 121.6]] },
-      { padding: [50, 50], maxZoom: 13 }
+      { padding: [50, 50], maxZoom: 14 }
     );
   });
 
@@ -314,7 +314,7 @@ describe('fitBounds — point mode (finalizeLoad)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.03, 121.5]] },
-      { padding: [50, 50], maxZoom: 13 }
+      { padding: [50, 50], maxZoom: 14 }
     );
   });
 
@@ -360,7 +360,7 @@ describe('fitBounds — heat mode (setHeatmap)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199], [25.0637, 121.5131]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.0328, 121.5199], [25.0637, 121.5131]] },
-      { padding: [50, 50], maxZoom: 13 }
+      { padding: [50, 50], maxZoom: 14 }
     );
   });
 
@@ -373,7 +373,7 @@ describe('fitBounds — heat mode (setHeatmap)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.0328, 121.5199]] },
-      { padding: [50, 50], maxZoom: 13 }
+      { padding: [50, 50], maxZoom: 14 }
     );
   });
 
