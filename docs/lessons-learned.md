@@ -411,3 +411,26 @@
 - 相關模式：sargable predicate — WHERE/JOIN/ORDER BY 條件中，
   索引欄位不應被函式或運算式包住（CAST、+ - * /、YEAR()、SUBSTRING 等），
   運算應移到常數/參數側；SELECT 投影欄位上的函式則不影響索引，無需修改
+
+## L033：本機 AVG 防毒軟體的 SSL 攔截，導致 az CLI 與 curl 對外 HTTPS 請求失敗
+- 問題：執行 `az containerapp logs show` / `az containerapp show` 一律
+  失敗於 `SSLCertVerificationError: unable to get local issuer certificate`
+  （連到 login.microsoftonline.com）；改用 `curl` 直接打 Container App
+  的 FQDN 時，又失敗於 schannel 錯誤
+  `CRYPT_E_NO_REVOCATION_CHECK`（撤銷清單檢查失敗）
+- 根本原因：本機已安裝 AVG 防毒軟體並啟用「Web/Mail Shield」SSL/TLS
+  掃描，會在本機產生中間人憑證（`CN=AVG Web/Mail Shield Root`）。
+  (1) az CLI（Python/requests）使用自帶的 certifi CA bundle，
+  不認得這張本機自簽憑證，驗證失敗；
+  (2) curl 在 Windows 走 schannel，AVG 攔截後的憑證鏈撤銷資訊
+  （CRL/OCSP）查詢失敗，導致 `CRYPT_E_NO_REVOCATION_CHECK`
+- 正確做法：
+  - az CLI 的問題：需修補 az CLI 的 CA bundle 信任 AVG 憑證
+    （本次因屬本機環境設定變更，使用者選擇改走 Azure Portal 操作，未修補）
+  - curl 的問題：加上 `--ssl-no-revoke` 參數跳過撤銷檢查即可正常連線
+    （`curl -s --ssl-no-revoke "https://<app>.azurecontainerapps.io/..."`）
+- 相關模式：本機防毒/防火牆做 SSL 攔截是一類常見、會同時影響多種 CLI
+  工具（az、curl、python requests）的環境問題；遇到
+  `CERTIFICATE_VERIFY_FAILED` 或 `CRYPT_E_NO_REVOCATION_CHECK` 時，
+  先檢查 `Cert:\LocalMachine\Root` 是否有防毒軟體產生的中間人憑證，
+  再決定要修補 CA bundle 還是用工具本身的「跳過驗證」參數繞過

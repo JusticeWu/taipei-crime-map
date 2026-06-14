@@ -434,3 +434,9 @@ FodyWeavers.xsd
 
 # Local development settings (contains sensitive data)
 appsettings.Development.json
+
+# Claude Code local settings (may contain real secrets, e.g. webhook URLs)
+.claude/settings.local.json
+
+# Private keys
+*.key
