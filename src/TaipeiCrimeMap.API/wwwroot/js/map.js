@@ -650,6 +650,14 @@
           .addTo(_fallbackLayer);
       });
       _fallbackLayer.addTo(_map);
+
+      // Fit the map to the aggregated district points
+      const heatCoords = points
+        .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
+        .map(p => [p.lat, p.lng]);
+      if (heatCoords.length > 0) {
+        _map.fitBounds(L.latLngBounds(heatCoords), { padding: [50, 50] });
+      }
     },
 
     // Called once after all pages loaded: add district bubble markers.
@@ -657,6 +665,14 @@
     finalizeLoad(allData, mode) {
       if (!_map) return;
       buildDistrictFallbackLayer(allData);
+
+      // Fit the map to all loaded points
+      const coords = (Array.isArray(allData) ? allData : [])
+        .filter(hasCoords)
+        .map(i => [i.latitude, i.longitude]);
+      if (coords.length > 0) {
+        _map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
+      }
     },
 
     // Show / update progress indicator (top-left)

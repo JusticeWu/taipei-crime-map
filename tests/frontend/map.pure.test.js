@@ -225,3 +225,98 @@ describe('layer picker control', () => {
     expect(state.menuOpen).toBe(false);
   });
 });
+
+// ── fitBounds (point mode finalizeLoad / heat mode setHeatmap) ──────────────
+
+/**
+ * Replicates the fitBounds logic in map.js:
+ *   finalizeLoad(allData, mode) — fits the map to all loaded points
+ *     (filtered via hasCoords: numeric latitude/longitude).
+ *   setHeatmap(points)          — fits the map to the aggregated district
+ *     points (filtered to numeric lat/lng).
+ * Both only call _map.fitBounds(...) when there is at least one valid point.
+ * Any change to that logic in map.js must be reflected here.
+ */
+function hasCoords(item) {
+  return typeof item.latitude === 'number' && !isNaN(item.latitude) &&
+         typeof item.longitude === 'number' && !isNaN(item.longitude);
+}
+
+function finalizeLoadFitBounds(map, L, allData) {
+  const coords = (Array.isArray(allData) ? allData : [])
+    .filter(hasCoords)
+    .map(i => [i.latitude, i.longitude]);
+  if (coords.length > 0) {
+    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
+  }
+}
+
+function setHeatmapFitBounds(map, L, points) {
+  const coords = points
+    .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
+    .map(p => [p.lat, p.lng]);
+  if (coords.length > 0) {
+    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50] });
+  }
+}
+
+function createMockMapAndLeaflet() {
+  return {
+    map: { fitBounds: jest.fn() },
+    L: { latLngBounds: jest.fn((coords) => ({ coords })) },
+  };
+}
+
+describe('fitBounds — point mode (finalizeLoad)', () => {
+  test('沒有任何點位時不呼叫 fitBounds', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    finalizeLoadFitBounds(map, L, []);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  test('所有點位都缺少座標時不呼叫 fitBounds', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    finalizeLoadFitBounds(map, L, [{ latitude: null, longitude: null }]);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  test('有點位且具有座標時呼叫 fitBounds，並帶入 padding', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    finalizeLoadFitBounds(map, L, [
+      { latitude: 25.03, longitude: 121.5 },
+      { latitude: 25.10, longitude: 121.6 },
+    ]);
+    expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5], [25.10, 121.6]]);
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      { coords: [[25.03, 121.5], [25.10, 121.6]] },
+      { padding: [50, 50] }
+    );
+  });
+});
+
+describe('fitBounds — heat mode (setHeatmap)', () => {
+  test('沒有任何點位時不呼叫 fitBounds', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    setHeatmapFitBounds(map, L, []);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  test('點位缺少 lat/lng 時不呼叫 fitBounds', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    setHeatmapFitBounds(map, L, [{ district: '中正區', weight: 10 }]);
+    expect(map.fitBounds).not.toHaveBeenCalled();
+  });
+
+  test('有點位且具有 lat/lng 時呼叫 fitBounds，並帶入 padding', () => {
+    const { map, L } = createMockMapAndLeaflet();
+    setHeatmapFitBounds(map, L, [
+      { district: '中正區', weight: 10, lat: 25.0328, lng: 121.5199 },
+      { district: '大同區', weight: 5,  lat: 25.0637, lng: 121.5131 },
+    ]);
+    expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199], [25.0637, 121.5131]]);
+    expect(map.fitBounds).toHaveBeenCalledWith(
+      { coords: [[25.0328, 121.5199], [25.0637, 121.5131]] },
+      { padding: [50, 50] }
+    );
+  });
+});
