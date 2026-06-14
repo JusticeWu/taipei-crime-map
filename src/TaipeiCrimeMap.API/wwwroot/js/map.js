@@ -52,7 +52,7 @@
   const DEFAULT_ZOOM  = 13;
 
   // 台北市合理範圍（稍微放寬）— 僅用於 fitBounds 計算，不影響點位渲染
-  const TAIPEI_BOUNDS = { minLat: 24.95, maxLat: 25.25, minLng: 121.4, maxLng: 121.75 };
+  const TAIPEI_BOUNDS = { minLat: 24.95, maxLat: 25.25, minLng: 121.45, maxLng: 121.75 };
 
   const CASE_TYPE_EMOJIS = {
     '住宅竊盜':   '🏠',
@@ -667,7 +667,7 @@
         .filter(p => isWithinTaipei(p.lat, p.lng))
         .map(p => [p.lat, p.lng]);
       if (heatCoords.length > 0) {
-        _map.fitBounds(L.latLngBounds(heatCoords), { padding: [50, 50], maxZoom: 15 });
+        _map.fitBounds(L.latLngBounds(heatCoords), { padding: [50, 50], maxZoom: 16 });
       }
     },
 
@@ -684,7 +684,7 @@
         .filter(i => isWithinTaipei(i.latitude, i.longitude))
         .map(i => [i.latitude, i.longitude]);
       if (coords.length > 0) {
-        _map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 15 });
+        _map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 16 });
       }
     },
 
