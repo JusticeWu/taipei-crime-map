@@ -1,7 +1,7 @@
 # 台北市治安地圖 Taipei Crime Map
 
 利用台北市政府開放資料，將六類竊盜案件（住宅竊盜、汽車竊盜、機車竊盜、
-自行車竊盜、搶奪、強盜，共 11,514 筆）視覺化呈現在互動地圖上，
+自行車竊盜、搶奪、強盜，共 11,000+ 筆）視覺化呈現在互動地圖上，
 讓使用者依行政區、案類、年份、時段篩選案件分布，並透過圖表了解統計趨勢。
 
 ## 線上 Demo
@@ -14,7 +14,7 @@ https://taipei-crime-map-prod.ambitioussand-7326440b.japaneast.azurecontainerapp
 - **資料庫**：Azure SQL Database、Dapper、DbUp（SQL migration）
 - **快取**：Garnet（Redis 相容的分散式快取，L2）+ MemoryCache（L1）
 - **前端**：Leaflet.js（地圖）、Chart.js（統計圖表）
-- **測試**：xUnit、FluentAssertions、Moq（TDD）、Jest（前端單元測試）、
+- **測試**：xUnit、FluentAssertions、NSubstitute（TDD）、Jest（前端單元測試）、
   Playwright（E2E 測試）
 - **CI/CD**：GitHub Actions（自動建置、測試、部署）
 - **雲端**：Azure Container Apps、Azure Container Registry（Japan East）
@@ -26,7 +26,7 @@ https://taipei-crime-map-prod.ambitioussand-7326440b.japaneast.azurecontainerapp
   以 CQRS 區分查詢與命令，業務邏輯集中於 Domain 層，方便測試與維護。
 - **L1 / L2 雙層快取**：查詢結果先查 MemoryCache（L1，程序內），
   未命中再查 Garnet（L2，跨執行個體共用），降低資料庫負載並縮短回應時間。
-- **漸進式地圖載入（Progressive Loading）**：11,514 筆案件資料分批載入，
+- **漸進式地圖載入（Progressive Loading）**：11,000+ 筆案件資料分批載入，
   避免使用者等待全部資料下載完成才看到地圖內容。
 - **CI/CD 自動化**：採 GitLab Flow 分支策略
   （`feature/* → uat → main`），push 到 `uat` / `main` 會自動建置、
