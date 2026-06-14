@@ -230,14 +230,19 @@ describe('layer picker control', () => {
 
 /**
  * Replicates the fitBounds logic in map.js:
- *   finalizeLoad(allData, mode) — fits the map to all loaded points
+ *   finalizeLoad(allData, mode) — computes bounds from all loaded points
  *     (filtered via hasCoords: numeric latitude/longitude, then restricted
- *     to TAIPEI_BOUNDS).
+ *     to TAIPEI_BOUNDS) and stores it in _pendingBounds (does NOT call
+ *     fitBounds directly).
+ *   drainOneFromQueue / applyPendingBounds — once the render queue drains
+ *     (renderQueue.length === 0), applies _pendingBounds via
+ *     _map.fitBounds(_pendingBounds, { padding: [50, 50], maxZoom: 15 })
+ *     and clears _pendingBounds.
  *   setHeatmap(points)          — fits the map to the aggregated district
  *     points (filtered to numeric lat/lng, then restricted to TAIPEI_BOUNDS).
- * Both only call _map.fitBounds(...) when there is at least one valid point
- * within TAIPEI_BOUNDS. Points outside TAIPEI_BOUNDS are excluded from the
- * bounds calculation but are still rendered on the map.
+ * fitBounds is only called when there is at least one valid point within
+ * TAIPEI_BOUNDS. Points outside TAIPEI_BOUNDS are excluded from the bounds
+ * calculation but are still rendered on the map.
  * Any change to that logic in map.js must be reflected here.
  */
 const TAIPEI_BOUNDS = { minLat: 24.95, maxLat: 25.25, minLng: 121.45, maxLng: 121.75 };
@@ -252,14 +257,21 @@ function isWithinTaipei(lat, lng) {
          lng >= TAIPEI_BOUNDS.minLng && lng <= TAIPEI_BOUNDS.maxLng;
 }
 
-function finalizeLoadFitBounds(map, L, allData) {
+// Replicates finalizeLoad's bounds computation: returns the value that
+// would be stored in _pendingBounds (or null if no in-bounds points).
+function finalizeLoadComputeBounds(L, allData) {
   const coords = (Array.isArray(allData) ? allData : [])
     .filter(hasCoords)
     .filter(i => isWithinTaipei(i.latitude, i.longitude))
     .map(i => [i.latitude, i.longitude]);
-  if (coords.length > 0) {
-    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 16 });
-  }
+  return coords.length > 0 ? L.latLngBounds(coords) : null;
+}
+
+// Replicates applyPendingBounds: called once the render queue drains.
+function applyPendingBounds(map, pendingBounds) {
+  if (!pendingBounds) return null;
+  map.fitBounds(pendingBounds, { padding: [50, 50], maxZoom: 15 });
+  return null;
 }
 
 function setHeatmapFitBounds(map, L, points) {
@@ -279,50 +291,67 @@ function createMockMapAndLeaflet() {
   };
 }
 
-describe('fitBounds — point mode (finalizeLoad)', () => {
-  test('沒有任何點位時不呼叫 fitBounds', () => {
+describe('fitBounds — point mode (finalizeLoad + 延遲至 render queue 清空後套用)', () => {
+  test('沒有任何點位時，_pendingBounds 為 null，render queue 清空後不呼叫 fitBounds', () => {
     const { map, L } = createMockMapAndLeaflet();
-    finalizeLoadFitBounds(map, L, []);
+    const pendingBounds = finalizeLoadComputeBounds(L, []);
+    expect(pendingBounds).toBeNull();
+
+    applyPendingBounds(map, pendingBounds);
     expect(map.fitBounds).not.toHaveBeenCalled();
   });
 
-  test('所有點位都缺少座標時不呼叫 fitBounds', () => {
+  test('所有點位都缺少座標時，_pendingBounds 為 null，render queue 清空後不呼叫 fitBounds', () => {
     const { map, L } = createMockMapAndLeaflet();
-    finalizeLoadFitBounds(map, L, [{ latitude: null, longitude: null }]);
+    const pendingBounds = finalizeLoadComputeBounds(L, [{ latitude: null, longitude: null }]);
+    expect(pendingBounds).toBeNull();
+
+    applyPendingBounds(map, pendingBounds);
     expect(map.fitBounds).not.toHaveBeenCalled();
   });
 
-  test('有點位且具有座標時呼叫 fitBounds，並帶入 padding', () => {
+  test('有點位且具有座標時，render queue 清空後呼叫 fitBounds，並帶入 padding 與 maxZoom: 15', () => {
     const { map, L } = createMockMapAndLeaflet();
-    finalizeLoadFitBounds(map, L, [
+    const pendingBounds = finalizeLoadComputeBounds(L, [
       { latitude: 25.03, longitude: 121.5 },
       { latitude: 25.10, longitude: 121.6 },
     ]);
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5], [25.10, 121.6]]);
+
+    // fitBounds 尚未被呼叫，要等 render queue 清空
+    expect(map.fitBounds).not.toHaveBeenCalled();
+
+    const remaining = applyPendingBounds(map, pendingBounds);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.03, 121.5], [25.10, 121.6]] },
-      { padding: [50, 50], maxZoom: 16 }
+      { padding: [50, 50], maxZoom: 15 }
     );
+    expect(remaining).toBeNull(); // _pendingBounds 被清空
   });
 
   test('台北市範圍外的點位不會影響 fitBounds 計算', () => {
     const { map, L } = createMockMapAndLeaflet();
-    finalizeLoadFitBounds(map, L, [
+    const pendingBounds = finalizeLoadComputeBounds(L, [
       { latitude: 25.03, longitude: 121.5 },
       { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
     ]);
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5]]);
+
+    applyPendingBounds(map, pendingBounds);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.03, 121.5]] },
-      { padding: [50, 50], maxZoom: 16 }
+      { padding: [50, 50], maxZoom: 15 }
     );
   });
 
-  test('所有點位都在台北市範圍外時不呼叫 fitBounds', () => {
+  test('所有點位都在台北市範圍外時，_pendingBounds 為 null，render queue 清空後不呼叫 fitBounds', () => {
     const { map, L } = createMockMapAndLeaflet();
-    finalizeLoadFitBounds(map, L, [
+    const pendingBounds = finalizeLoadComputeBounds(L, [
       { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
     ]);
+    expect(pendingBounds).toBeNull();
+
+    applyPendingBounds(map, pendingBounds);
     expect(map.fitBounds).not.toHaveBeenCalled();
   });
 });

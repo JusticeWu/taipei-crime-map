@@ -104,6 +104,7 @@
   let _renderRafId      = null;
   let _renderStartTime  = null; // performance.now() when first chunk starts rendering
   let _renderTotalChunks = 0;   // total chunks queued for current load
+  let _pendingBounds    = null; // bounds computed by finalizeLoad, applied once the render queue drains
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -379,8 +380,20 @@
   // Render queue — one page of markers per animation frame
   // ---------------------------------------------------------------------------
 
+  // Apply the bounds computed by finalizeLoad once the render queue has
+  // fully drained, so fitBounds runs against a fully rendered map.
+  function applyPendingBounds() {
+    if (!_pendingBounds || !_map) return;
+    _map.fitBounds(_pendingBounds, { padding: [50, 50], maxZoom: 15 });
+    _pendingBounds = null;
+  }
+
   function drainOneFromQueue() {
-    if (_renderQueue.length === 0) { _renderRafId = null; return; }
+    if (_renderQueue.length === 0) {
+      _renderRafId = null;
+      applyPendingBounds();
+      return;
+    }
 
     // Log render start on the very first chunk
     if (_renderStartTime === null) {
@@ -408,6 +421,7 @@
       console.log(`[點位圖] 渲染完成｜渲染耗時: ${ms} ms`);
       _renderStartTime   = null;
       _renderTotalChunks = 0;
+      applyPendingBounds();
     }
   }
 
@@ -677,32 +691,15 @@
       if (!_map) return;
       buildDistrictFallbackLayer(allData);
 
-      // Fit the map to all loaded points
+      // Compute the bounds to fit, but defer applying it until the render
+      // queue drains (drainOneFromQueue) so fitBounds runs on a fully
+      // rendered map.
       // （排除不在台北市合理範圍內的點位，但這些點位仍會正常顯示在地圖上）
-      const withinTaipei = (Array.isArray(allData) ? allData : [])
+      const coords = (Array.isArray(allData) ? allData : [])
         .filter(hasCoords)
-        .filter(i => isWithinTaipei(i.latitude, i.longitude));
-      const coords = withinTaipei.map(i => [i.latitude, i.longitude]);
-      if (coords.length > 0) {
-        const bounds = L.latLngBounds(coords);
-        console.log('[fitBounds] 即將執行，點位數量：', coords.length,
-          '，bounds：', JSON.stringify({
-            southWest: bounds.getSouthWest(),
-            northEast: bounds.getNorthEast(),
-          }));
-
-        // 找出推高 bounds 的離群點（最北/最南/最東/最西），方便定位錯誤座標
-        const extremes = {
-          north: withinTaipei.reduce((a, b) => (a.latitude >= b.latitude ? a : b)),
-          south: withinTaipei.reduce((a, b) => (a.latitude <= b.latitude ? a : b)),
-          east:  withinTaipei.reduce((a, b) => (a.longitude >= b.longitude ? a : b)),
-          west:  withinTaipei.reduce((a, b) => (a.longitude <= b.longitude ? a : b)),
-        };
-        console.log('[fitBounds] bounds 四個極端點：', JSON.stringify(extremes));
-
-        _map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-        console.log('[fitBounds] 執行完成，目前縮放層級：', _map.getZoom());
-      }
+        .filter(i => isWithinTaipei(i.latitude, i.longitude))
+        .map(i => [i.latitude, i.longitude]);
+      _pendingBounds = coords.length > 0 ? L.latLngBounds(coords) : null;
     },
 
     // Show / update progress indicator (top-left)
