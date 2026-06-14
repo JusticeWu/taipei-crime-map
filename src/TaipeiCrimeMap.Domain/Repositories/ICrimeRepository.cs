@@ -37,6 +37,11 @@ public interface ICrimeRepository
     Task UpdateCoordinateAsync(Guid id, GeoCoordinate coordinate, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 依 RawLocation 更新座標（管理用途，可一次更新多筆相同地點的案件），回傳受影響筆數
+    /// </summary>
+    Task<int> UpdateCoordinateByLocationAsync(string rawLocation, double latitude, double longitude, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 計算座標尚未補齊（Latitude 或 Longitude 為 NULL）的案件數量
     /// </summary>
     Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default);
