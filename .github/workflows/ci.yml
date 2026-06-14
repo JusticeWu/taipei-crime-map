@@ -207,44 +207,6 @@ jobs:
             echo ""
           done
 
-      - name: Find latest report
-        id: find_report
-        run: |
-          # 找本次 push 新增或修改的報告（fetch-depth: 2 確保 HEAD~1 可用）
-          # sort -r：日期前綴檔名倒序 → 第一個 = 最新日期的報告
-          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
-            | sort -r | head -1)
-
-          # Fallback：本次沒有報告變動，取整個目錄最新的
-          if [ -z "$REPORT" ]; then
-            REPORT=$(ls docs/reports/*.md 2>/dev/null | sort -r | head -1)
-          fi
-
-          if [ -z "$REPORT" ]; then
-            echo "report_name=（無報告）" >> $GITHUB_OUTPUT
-            echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
-          else
-            REPORT_NAME=$(basename "$REPORT" .md)
-            echo "report_name=$REPORT_NAME" >> $GITHUB_OUTPUT
-            {
-              echo "content<<EOF"
-              cat "$REPORT"
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
-          fi
-
-      - name: Send email report
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.GMAIL_USERNAME }}
-          password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "[台北市治安地圖] 任務報告：${{ steps.find_report.outputs.report_name }}"
-          to: ${{ secrets.REPORT_EMAIL_TO }}
-          from: ${{ secrets.GMAIL_USERNAME }}
-          body: ${{ steps.find_report.outputs.content }}
-
       - name: Notify Slack
         if: always()
         run: |
@@ -258,14 +220,13 @@ jobs:
             EMOJI=":x:"
             MSG="UAT 部署失敗"
           fi
-          REPORT_NAME="${{ steps.find_report.outputs.report_name }}"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"attachments\": [{
                 \"color\": \"$COLOR\",
-                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n報告：$REPORT_NAME\n<$RUN_URL|查看 CI 記錄>\"
+                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n<$RUN_URL|查看 CI 記錄>\"
               }]
             }"
 
@@ -341,41 +302,6 @@ jobs:
             echo ""
           done
 
-      - name: Find latest report
-        id: find_report
-        run: |
-          REPORT=$(git diff HEAD~1 HEAD --name-only -- 'docs/reports/*.md' 2>/dev/null \
-            | sort -r | head -1)
-
-          if [ -z "$REPORT" ]; then
-            REPORT=$(ls docs/reports/*.md 2>/dev/null | sort -r | head -1)
-          fi
-
-          if [ -z "$REPORT" ]; then
-            echo "report_name=（無報告）" >> $GITHUB_OUTPUT
-            echo "content=（無報告檔案）" >> $GITHUB_OUTPUT
-          else
-            REPORT_NAME=$(basename "$REPORT" .md)
-            echo "report_name=$REPORT_NAME" >> $GITHUB_OUTPUT
-            {
-              echo "content<<EOF"
-              cat "$REPORT"
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
-          fi
-
-      - name: Send email report
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          username: ${{ secrets.GMAIL_USERNAME }}
-          password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "[台北市治安地圖][Prod] 任務報告：${{ steps.find_report.outputs.report_name }}"
-          to: ${{ secrets.REPORT_EMAIL_TO }}
-          from: ${{ secrets.GMAIL_USERNAME }}
-          body: ${{ steps.find_report.outputs.content }}
-
       - name: Notify Slack
         if: always()
         run: |
@@ -389,13 +315,12 @@ jobs:
             EMOJI=":x:"
             MSG="Prod 部署失敗"
           fi
-          REPORT_NAME="${{ steps.find_report.outputs.report_name }}"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"attachments\": [{
                 \"color\": \"$COLOR\",
-                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n報告：$REPORT_NAME\n<$RUN_URL|查看 CI 記錄>\"
+                \"text\": \"$EMOJI *台北市治安地圖* — $MSG\n<$RUN_URL|查看 CI 記錄>\"
               }]
             }"
