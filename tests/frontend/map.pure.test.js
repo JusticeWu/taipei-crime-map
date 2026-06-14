@@ -226,22 +226,23 @@ describe('layer picker control', () => {
   });
 });
 
-// ── fitBounds (point mode finalizeLoad / heat mode setHeatmap) ──────────────
+// ── panTo (point mode finalizeLoad / heat mode setHeatmap) ──────────────────
 
 /**
- * Replicates the fitBounds logic in map.js:
- *   finalizeLoad(allData, mode) — computes bounds from all loaded points
- *     (filtered via hasCoords: numeric latitude/longitude, then restricted
- *     to TAIPEI_BOUNDS) and stores it in _pendingBounds (does NOT call
- *     fitBounds directly).
- *   drainOneFromQueue / applyPendingBounds — once the render queue drains
- *     (renderQueue.length === 0), applies _pendingBounds via
- *     _map.fitBounds(_pendingBounds, { padding: [50, 50], maxZoom: 15 })
- *     and clears _pendingBounds.
- *   setHeatmap(points)          — fits the map to the aggregated district
- *     points (filtered to numeric lat/lng, then restricted to TAIPEI_BOUNDS).
- * fitBounds is only called when there is at least one valid point within
- * TAIPEI_BOUNDS. Points outside TAIPEI_BOUNDS are excluded from the bounds
+ * Replicates the panTo-based re-centering logic in map.js:
+ *   finalizeLoad(allData, mode) — computes the average lat/lng of all loaded
+ *     points (filtered via hasCoords: numeric latitude/longitude, then
+ *     restricted to TAIPEI_BOUNDS) and stores it in _pendingCenter (does NOT
+ *     call panTo directly).
+ *   drainOneFromQueue / applyPendingCenter — once the render queue drains
+ *     (renderQueue.length === 0), applies _pendingCenter via
+ *     _map.panTo(_pendingCenter) and clears _pendingCenter. Only the map
+ *     center moves — the zoom level is left unchanged.
+ *   setHeatmap(points)          — pans the map to the average lat/lng of the
+ *     aggregated district points (filtered to numeric lat/lng, then
+ *     restricted to TAIPEI_BOUNDS).
+ * panTo is only called when there is at least one valid point within
+ * TAIPEI_BOUNDS. Points outside TAIPEI_BOUNDS are excluded from the center
  * calculation but are still rendered on the map.
  * Any change to that logic in map.js must be reflected here.
  */
@@ -257,106 +258,102 @@ function isWithinTaipei(lat, lng) {
          lng >= TAIPEI_BOUNDS.minLng && lng <= TAIPEI_BOUNDS.maxLng;
 }
 
-// Replicates finalizeLoad's bounds computation: returns the value that
-// would be stored in _pendingBounds (or null if no in-bounds points).
-function finalizeLoadComputeBounds(L, allData) {
+function computeAverageCenter(coords) {
+  const sum = coords.reduce((acc, [lat, lng]) => [acc[0] + lat, acc[1] + lng], [0, 0]);
+  return [sum[0] / coords.length, sum[1] / coords.length];
+}
+
+// Replicates finalizeLoad's center computation: returns the value that
+// would be stored in _pendingCenter (or null if no in-bounds points).
+function finalizeLoadComputeCenter(allData) {
   const coords = (Array.isArray(allData) ? allData : [])
     .filter(hasCoords)
     .filter(i => isWithinTaipei(i.latitude, i.longitude))
     .map(i => [i.latitude, i.longitude]);
-  return coords.length > 0 ? L.latLngBounds(coords) : null;
+  return coords.length > 0 ? computeAverageCenter(coords) : null;
 }
 
-// Replicates applyPendingBounds: called once the render queue drains.
-function applyPendingBounds(map, pendingBounds) {
-  if (!pendingBounds) return null;
-  map.fitBounds(pendingBounds, { padding: [50, 50], maxZoom: 15 });
+// Replicates applyPendingCenter: called once the render queue drains.
+function applyPendingCenter(map, pendingCenter) {
+  if (!pendingCenter) return null;
+  map.panTo(pendingCenter);
   return null;
 }
 
-function setHeatmapFitBounds(map, L, points) {
+function setHeatmapPanTo(map, points) {
   const coords = points
     .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
     .filter(p => isWithinTaipei(p.lat, p.lng))
     .map(p => [p.lat, p.lng]);
   if (coords.length > 0) {
-    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 16 });
+    map.panTo(computeAverageCenter(coords));
   }
 }
 
-function createMockMapAndLeaflet() {
-  return {
-    map: { fitBounds: jest.fn() },
-    L: { latLngBounds: jest.fn((coords) => ({ coords })) },
-  };
+function createMockMap() {
+  return { map: { panTo: jest.fn() } };
 }
 
-describe('fitBounds — point mode (finalizeLoad + 延遲至 render queue 清空後套用)', () => {
-  test('沒有任何點位時，_pendingBounds 為 null，render queue 清空後不呼叫 fitBounds', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    const pendingBounds = finalizeLoadComputeBounds(L, []);
-    expect(pendingBounds).toBeNull();
+describe('panTo — point mode (finalizeLoad + 延遲至 render queue 清空後套用)', () => {
+  test('沒有任何點位時，_pendingCenter 為 null，render queue 清空後不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([]);
+    expect(pendingCenter).toBeNull();
 
-    applyPendingBounds(map, pendingBounds);
-    expect(map.fitBounds).not.toHaveBeenCalled();
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).not.toHaveBeenCalled();
   });
 
-  test('所有點位都缺少座標時，_pendingBounds 為 null，render queue 清空後不呼叫 fitBounds', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    const pendingBounds = finalizeLoadComputeBounds(L, [{ latitude: null, longitude: null }]);
-    expect(pendingBounds).toBeNull();
+  test('所有點位都缺少座標時，_pendingCenter 為 null，render queue 清空後不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([{ latitude: null, longitude: null }]);
+    expect(pendingCenter).toBeNull();
 
-    applyPendingBounds(map, pendingBounds);
-    expect(map.fitBounds).not.toHaveBeenCalled();
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).not.toHaveBeenCalled();
   });
 
-  test('有點位且具有座標時，render queue 清空後呼叫 fitBounds，並帶入 padding 與 maxZoom: 15', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    const pendingBounds = finalizeLoadComputeBounds(L, [
+  test('有點位且具有座標時，render queue 清空後呼叫 panTo，並帶入平均座標', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([
       { latitude: 25.03, longitude: 121.5 },
       { latitude: 25.10, longitude: 121.6 },
     ]);
-    expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5], [25.10, 121.6]]);
+    expect(pendingCenter).toEqual([25.065, 121.55]);
 
-    // fitBounds 尚未被呼叫，要等 render queue 清空
-    expect(map.fitBounds).not.toHaveBeenCalled();
+    // panTo 尚未被呼叫，要等 render queue 清空
+    expect(map.panTo).not.toHaveBeenCalled();
 
-    const remaining = applyPendingBounds(map, pendingBounds);
-    expect(map.fitBounds).toHaveBeenCalledWith(
-      { coords: [[25.03, 121.5], [25.10, 121.6]] },
-      { padding: [50, 50], maxZoom: 15 }
-    );
-    expect(remaining).toBeNull(); // _pendingBounds 被清空
+    const remaining = applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).toHaveBeenCalledWith([25.065, 121.55]);
+    expect(remaining).toBeNull(); // _pendingCenter 被清空
   });
 
-  test('台北市範圍外的點位不會影響 fitBounds 計算', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    const pendingBounds = finalizeLoadComputeBounds(L, [
+  test('台北市範圍外的點位不會影響 panTo 中心點計算', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([
       { latitude: 25.03, longitude: 121.5 },
       { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
     ]);
-    expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5]]);
+    expect(pendingCenter).toEqual([25.03, 121.5]);
 
-    applyPendingBounds(map, pendingBounds);
-    expect(map.fitBounds).toHaveBeenCalledWith(
-      { coords: [[25.03, 121.5]] },
-      { padding: [50, 50], maxZoom: 15 }
-    );
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).toHaveBeenCalledWith([25.03, 121.5]);
   });
 
-  test('所有點位都在台北市範圍外時，_pendingBounds 為 null，render queue 清空後不呼叫 fitBounds', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    const pendingBounds = finalizeLoadComputeBounds(L, [
+  test('所有點位都在台北市範圍外時，_pendingCenter 為 null，render queue 清空後不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([
       { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
     ]);
-    expect(pendingBounds).toBeNull();
+    expect(pendingCenter).toBeNull();
 
-    applyPendingBounds(map, pendingBounds);
-    expect(map.fitBounds).not.toHaveBeenCalled();
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).not.toHaveBeenCalled();
   });
 });
 
-describe('fitBounds — 範圍外的點位仍會被渲染', () => {
+describe('panTo — 範圍外的點位仍會被渲染', () => {
   test('buildMarkerLayer 不過濾範圍，台北市範圍外但具座標的點位仍會加入圖層', () => {
     const data = [
       { latitude: 25.03, longitude: 121.5 },
@@ -367,50 +364,42 @@ describe('fitBounds — 範圍外的點位仍會被渲染', () => {
   });
 });
 
-describe('fitBounds — heat mode (setHeatmap)', () => {
-  test('沒有任何點位時不呼叫 fitBounds', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    setHeatmapFitBounds(map, L, []);
-    expect(map.fitBounds).not.toHaveBeenCalled();
+describe('panTo — heat mode (setHeatmap)', () => {
+  test('沒有任何點位時不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, []);
+    expect(map.panTo).not.toHaveBeenCalled();
   });
 
-  test('點位缺少 lat/lng 時不呼叫 fitBounds', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    setHeatmapFitBounds(map, L, [{ district: '中正區', weight: 10 }]);
-    expect(map.fitBounds).not.toHaveBeenCalled();
+  test('點位缺少 lat/lng 時不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [{ district: '中正區', weight: 10 }]);
+    expect(map.panTo).not.toHaveBeenCalled();
   });
 
-  test('有點位且具有 lat/lng 時呼叫 fitBounds，並帶入 padding', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    setHeatmapFitBounds(map, L, [
+  test('有點位且具有 lat/lng 時呼叫 panTo，並帶入平均座標', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [
       { district: '中正區', weight: 10, lat: 25.0328, lng: 121.5199 },
       { district: '大同區', weight: 5,  lat: 25.0637, lng: 121.5131 },
     ]);
-    expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199], [25.0637, 121.5131]]);
-    expect(map.fitBounds).toHaveBeenCalledWith(
-      { coords: [[25.0328, 121.5199], [25.0637, 121.5131]] },
-      { padding: [50, 50], maxZoom: 16 }
-    );
+    expect(map.panTo).toHaveBeenCalledWith([(25.0328 + 25.0637) / 2, (121.5199 + 121.5131) / 2]);
   });
 
-  test('台北市範圍外的點位不會影響 fitBounds 計算', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    setHeatmapFitBounds(map, L, [
+  test('台北市範圍外的點位不會影響 panTo 中心點計算', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [
       { district: '中正區', weight: 10, lat: 25.0328, lng: 121.5199 },
       { district: '高雄某區', weight: 3, lat: 22.99, lng: 120.21 }, // 超出台北市範圍
     ]);
-    expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199]]);
-    expect(map.fitBounds).toHaveBeenCalledWith(
-      { coords: [[25.0328, 121.5199]] },
-      { padding: [50, 50], maxZoom: 16 }
-    );
+    expect(map.panTo).toHaveBeenCalledWith([25.0328, 121.5199]);
   });
 
-  test('所有點位都在台北市範圍外時不呼叫 fitBounds', () => {
-    const { map, L } = createMockMapAndLeaflet();
-    setHeatmapFitBounds(map, L, [
+  test('所有點位都在台北市範圍外時不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [
       { district: '高雄某區', weight: 3, lat: 22.99, lng: 120.21 }, // 超出台北市範圍
     ]);
-    expect(map.fitBounds).not.toHaveBeenCalled();
+    expect(map.panTo).not.toHaveBeenCalled();
   });
 });
