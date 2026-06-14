@@ -172,6 +172,14 @@ public class CrimeController : ControllerBase
     }
 
     /// <summary>
+    /// 驗證管理頁面的 Basic Authentication 是否正確（受 BasicAuthMiddleware 保護）
+    /// </summary>
+    [HttpGet("coordinate/ping")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public IActionResult CoordinatePing() => Ok();
+
+    /// <summary>
     /// 依 RawLocation 更新座標（管理用途，需 Basic Authentication）
     /// </summary>
     [HttpPatch("coordinate")]

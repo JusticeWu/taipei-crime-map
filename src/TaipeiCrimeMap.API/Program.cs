@@ -113,6 +113,8 @@ app.UseWhen(
     context => context.Request.Path.StartsWithSegments("/api/crime/coordinate"),
     branch => branch.UseMiddleware<BasicAuthMiddleware>());
 
+app.MapGet("/admin", () => Results.Redirect("/admin.html"));
+
 app.MapControllers();
 app.Run();
 
