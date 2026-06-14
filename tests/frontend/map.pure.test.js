@@ -258,7 +258,7 @@ function finalizeLoadFitBounds(map, L, allData) {
     .filter(i => isWithinTaipei(i.latitude, i.longitude))
     .map(i => [i.latitude, i.longitude]);
   if (coords.length > 0) {
-    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 14 });
+    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 15 });
   }
 }
 
@@ -268,7 +268,7 @@ function setHeatmapFitBounds(map, L, points) {
     .filter(p => isWithinTaipei(p.lat, p.lng))
     .map(p => [p.lat, p.lng]);
   if (coords.length > 0) {
-    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 14 });
+    map.fitBounds(L.latLngBounds(coords), { padding: [50, 50], maxZoom: 15 });
   }
 }
 
@@ -301,7 +301,7 @@ describe('fitBounds — point mode (finalizeLoad)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5], [25.10, 121.6]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.03, 121.5], [25.10, 121.6]] },
-      { padding: [50, 50], maxZoom: 14 }
+      { padding: [50, 50], maxZoom: 15 }
     );
   });
 
@@ -314,7 +314,7 @@ describe('fitBounds — point mode (finalizeLoad)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.03, 121.5]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.03, 121.5]] },
-      { padding: [50, 50], maxZoom: 14 }
+      { padding: [50, 50], maxZoom: 15 }
     );
   });
 
@@ -360,7 +360,7 @@ describe('fitBounds — heat mode (setHeatmap)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199], [25.0637, 121.5131]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.0328, 121.5199], [25.0637, 121.5131]] },
-      { padding: [50, 50], maxZoom: 14 }
+      { padding: [50, 50], maxZoom: 15 }
     );
   });
 
@@ -373,7 +373,7 @@ describe('fitBounds — heat mode (setHeatmap)', () => {
     expect(L.latLngBounds).toHaveBeenCalledWith([[25.0328, 121.5199]]);
     expect(map.fitBounds).toHaveBeenCalledWith(
       { coords: [[25.0328, 121.5199]] },
-      { padding: [50, 50], maxZoom: 14 }
+      { padding: [50, 50], maxZoom: 15 }
     );
   });
 
