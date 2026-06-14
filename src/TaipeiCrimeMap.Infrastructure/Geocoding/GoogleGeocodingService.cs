@@ -79,7 +79,8 @@ public sealed class GoogleGeocodingService : IGeocodingService
             return null;
         }
 
-        var url = $"{BaseUrl}?address={Uri.EscapeDataString(address)}&key={_options.ApiKey}&language=zh-TW&region=TW";
+        var normalizedAddress = AddressNormalizer.Normalize(address);
+        var url = $"{BaseUrl}?address={Uri.EscapeDataString(normalizedAddress)}&key={_options.ApiKey}&language=zh-TW&region=TW";
 
         try
         {
