@@ -225,3 +225,181 @@ describe('layer picker control', () => {
     expect(state.menuOpen).toBe(false);
   });
 });
+
+// ── panTo (point mode finalizeLoad / heat mode setHeatmap) ──────────────────
+
+/**
+ * Replicates the panTo-based re-centering logic in map.js:
+ *   finalizeLoad(allData, mode) — computes the average lat/lng of all loaded
+ *     points (filtered via hasCoords: numeric latitude/longitude, then
+ *     restricted to TAIPEI_BOUNDS) and stores it in _pendingCenter (does NOT
+ *     call panTo directly).
+ *   drainOneFromQueue / applyPendingCenter — once the render queue drains
+ *     (renderQueue.length === 0), applies _pendingCenter via
+ *     _map.panTo(_pendingCenter) and clears _pendingCenter. Only the map
+ *     center moves — the zoom level is left unchanged.
+ *   setHeatmap(points)          — pans the map to the average lat/lng of the
+ *     aggregated district points (filtered to numeric lat/lng, then
+ *     restricted to TAIPEI_BOUNDS).
+ * panTo is only called when there is at least one valid point within
+ * TAIPEI_BOUNDS. Points outside TAIPEI_BOUNDS are excluded from the center
+ * calculation but are still rendered on the map.
+ * Any change to that logic in map.js must be reflected here.
+ */
+const TAIPEI_BOUNDS = { minLat: 24.95, maxLat: 25.25, minLng: 121.45, maxLng: 121.75 };
+
+function hasCoords(item) {
+  return typeof item.latitude === 'number' && !isNaN(item.latitude) &&
+         typeof item.longitude === 'number' && !isNaN(item.longitude);
+}
+
+function isWithinTaipei(lat, lng) {
+  return lat >= TAIPEI_BOUNDS.minLat && lat <= TAIPEI_BOUNDS.maxLat &&
+         lng >= TAIPEI_BOUNDS.minLng && lng <= TAIPEI_BOUNDS.maxLng;
+}
+
+function computeAverageCenter(coords) {
+  const sum = coords.reduce((acc, [lat, lng]) => [acc[0] + lat, acc[1] + lng], [0, 0]);
+  return [sum[0] / coords.length, sum[1] / coords.length];
+}
+
+// Replicates finalizeLoad's center computation: returns the value that
+// would be stored in _pendingCenter (or null if no in-bounds points).
+function finalizeLoadComputeCenter(allData) {
+  const coords = (Array.isArray(allData) ? allData : [])
+    .filter(hasCoords)
+    .filter(i => isWithinTaipei(i.latitude, i.longitude))
+    .map(i => [i.latitude, i.longitude]);
+  return coords.length > 0 ? computeAverageCenter(coords) : null;
+}
+
+// Replicates applyPendingCenter: called once the render queue drains.
+function applyPendingCenter(map, pendingCenter) {
+  if (!pendingCenter) return null;
+  map.panTo(pendingCenter);
+  return null;
+}
+
+function setHeatmapPanTo(map, points) {
+  const coords = points
+    .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
+    .filter(p => isWithinTaipei(p.lat, p.lng))
+    .map(p => [p.lat, p.lng]);
+  if (coords.length > 0) {
+    map.panTo(computeAverageCenter(coords));
+  }
+}
+
+function createMockMap() {
+  return { map: { panTo: jest.fn() } };
+}
+
+describe('panTo — point mode (finalizeLoad + 延遲至 render queue 清空後套用)', () => {
+  test('沒有任何點位時，_pendingCenter 為 null，render queue 清空後不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([]);
+    expect(pendingCenter).toBeNull();
+
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).not.toHaveBeenCalled();
+  });
+
+  test('所有點位都缺少座標時，_pendingCenter 為 null，render queue 清空後不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([{ latitude: null, longitude: null }]);
+    expect(pendingCenter).toBeNull();
+
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).not.toHaveBeenCalled();
+  });
+
+  test('有點位且具有座標時，render queue 清空後呼叫 panTo，並帶入平均座標', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([
+      { latitude: 25.03, longitude: 121.5 },
+      { latitude: 25.10, longitude: 121.6 },
+    ]);
+    expect(pendingCenter).toEqual([25.065, 121.55]);
+
+    // panTo 尚未被呼叫，要等 render queue 清空
+    expect(map.panTo).not.toHaveBeenCalled();
+
+    const remaining = applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).toHaveBeenCalledWith([25.065, 121.55]);
+    expect(remaining).toBeNull(); // _pendingCenter 被清空
+  });
+
+  test('台北市範圍外的點位不會影響 panTo 中心點計算', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([
+      { latitude: 25.03, longitude: 121.5 },
+      { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
+    ]);
+    expect(pendingCenter).toEqual([25.03, 121.5]);
+
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).toHaveBeenCalledWith([25.03, 121.5]);
+  });
+
+  test('所有點位都在台北市範圍外時，_pendingCenter 為 null，render queue 清空後不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    const pendingCenter = finalizeLoadComputeCenter([
+      { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍
+    ]);
+    expect(pendingCenter).toBeNull();
+
+    applyPendingCenter(map, pendingCenter);
+    expect(map.panTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('panTo — 範圍外的點位仍會被渲染', () => {
+  test('buildMarkerLayer 不過濾範圍，台北市範圍外但具座標的點位仍會加入圖層', () => {
+    const data = [
+      { latitude: 25.03, longitude: 121.5 },
+      { latitude: 22.99, longitude: 120.21 }, // 高雄，超出台北市範圍但仍應渲染
+    ];
+    const rendered = data.filter(hasCoords);
+    expect(rendered).toHaveLength(2);
+  });
+});
+
+describe('panTo — heat mode (setHeatmap)', () => {
+  test('沒有任何點位時不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, []);
+    expect(map.panTo).not.toHaveBeenCalled();
+  });
+
+  test('點位缺少 lat/lng 時不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [{ district: '中正區', weight: 10 }]);
+    expect(map.panTo).not.toHaveBeenCalled();
+  });
+
+  test('有點位且具有 lat/lng 時呼叫 panTo，並帶入平均座標', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [
+      { district: '中正區', weight: 10, lat: 25.0328, lng: 121.5199 },
+      { district: '大同區', weight: 5,  lat: 25.0637, lng: 121.5131 },
+    ]);
+    expect(map.panTo).toHaveBeenCalledWith([(25.0328 + 25.0637) / 2, (121.5199 + 121.5131) / 2]);
+  });
+
+  test('台北市範圍外的點位不會影響 panTo 中心點計算', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [
+      { district: '中正區', weight: 10, lat: 25.0328, lng: 121.5199 },
+      { district: '高雄某區', weight: 3, lat: 22.99, lng: 120.21 }, // 超出台北市範圍
+    ]);
+    expect(map.panTo).toHaveBeenCalledWith([25.0328, 121.5199]);
+  });
+
+  test('所有點位都在台北市範圍外時不呼叫 panTo', () => {
+    const { map } = createMockMap();
+    setHeatmapPanTo(map, [
+      { district: '高雄某區', weight: 3, lat: 22.99, lng: 120.21 }, // 超出台北市範圍
+    ]);
+    expect(map.panTo).not.toHaveBeenCalled();
+  });
+});

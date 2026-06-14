@@ -180,6 +180,18 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.CompletedTask;
     }
 
+    public Task<int> UpdateCoordinateByLocationAsync(string rawLocation, double latitude, double longitude, CancellationToken cancellationToken = default)
+    {
+        var coordinate = GeoCoordinate.Create(latitude, longitude);
+        var matches = _cases.Where(c => c.RawLocation == rawLocation).ToList();
+        foreach (var theftCase in matches)
+        {
+            theftCase.UpdateCoordinate(coordinate);
+        }
+
+        return Task.FromResult(matches.Count);
+    }
+
     public Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(_cases.Count(c => c.Coordinate is null));

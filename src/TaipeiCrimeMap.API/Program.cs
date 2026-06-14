@@ -30,6 +30,7 @@ builder.Services.AddScoped<GetHeatmapQueryHandler>();
 builder.Services.AddScoped<GeocodeBatchCommandHandler>();
 builder.Services.AddScoped<GetCrimeStatsQueryHandler>();
 builder.Services.AddScoped<GetCrimeByIdQueryHandler>();
+builder.Services.AddScoped<UpdateCoordinateByLocationCommandHandler>();
 
 // OpenTelemetry + Application Insights
 // 連線字串不存在時不啟用（graceful degradation），避免本機/測試環境噴錯
@@ -49,6 +50,10 @@ if (!string.IsNullOrWhiteSpace(appInsightsConnectionString))
 // Timing
 builder.Services.Configure<TimingOptions>(
     builder.Configuration.GetSection(TimingOptions.SectionName));
+
+// Admin Basic Authentication（用於 /api/crime/coordinate）
+builder.Services.Configure<AdminAuthOptions>(
+    builder.Configuration.GetSection(AdminAuthOptions.SectionName));
 
 var timingEnabled = builder.Configuration
     .GetSection(TimingOptions.SectionName)
@@ -103,6 +108,14 @@ app.UseMiddleware<TimingMiddleware>();
 app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+app.UseWhen(
+    context => context.Request.Path.StartsWithSegments("/api/crime/coordinate")
+        || context.Request.Path.StartsWithSegments("/api/admin"),
+    branch => branch.UseMiddleware<BasicAuthMiddleware>());
+
+app.MapGet("/admin", () => Results.Redirect("/admin.html"));
+
 app.MapControllers();
 app.Run();
 

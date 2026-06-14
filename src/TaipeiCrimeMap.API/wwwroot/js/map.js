@@ -51,6 +51,9 @@
   const TAIPEI_CENTER = [25.0478, 121.5318];
   const DEFAULT_ZOOM  = 13;
 
+  // 台北市合理範圍（稍微放寬）— 僅用於地圖置中計算，不影響點位渲染
+  const TAIPEI_BOUNDS = { minLat: 24.95, maxLat: 25.25, minLng: 121.45, maxLng: 121.75 };
+
   const CASE_TYPE_EMOJIS = {
     '住宅竊盜':   '🏠',
     '汽車竊盜':   '🚗',
@@ -101,6 +104,7 @@
   let _renderRafId      = null;
   let _renderStartTime  = null; // performance.now() when first chunk starts rendering
   let _renderTotalChunks = 0;   // total chunks queued for current load
+  let _pendingCenter    = null; // [avgLat, avgLng] computed by finalizeLoad, applied once the render queue drains
 
   // ---------------------------------------------------------------------------
   // Helpers
@@ -109,6 +113,18 @@
   function hasCoords(item) {
     return typeof item.latitude === 'number' && !isNaN(item.latitude) &&
            typeof item.longitude === 'number' && !isNaN(item.longitude);
+  }
+
+  // 是否落在台北市合理範圍內 — 僅用於地圖置中計算，不影響點位渲染
+  function isWithinTaipei(lat, lng) {
+    return lat >= TAIPEI_BOUNDS.minLat && lat <= TAIPEI_BOUNDS.maxLat &&
+           lng >= TAIPEI_BOUNDS.minLng && lng <= TAIPEI_BOUNDS.maxLng;
+  }
+
+  // 計算座標清單的平均緯度/經度，作為地圖置中目標 — 只移動中心點，不改變縮放層級
+  function computeAverageCenter(coords) {
+    const sum = coords.reduce((acc, [lat, lng]) => [acc[0] + lat, acc[1] + lng], [0, 0]);
+    return [sum[0] / coords.length, sum[1] / coords.length];
   }
 
   function emojiForType(caseType) {
@@ -370,8 +386,21 @@
   // Render queue — one page of markers per animation frame
   // ---------------------------------------------------------------------------
 
+  // Apply the center computed by finalizeLoad once the render queue has
+  // fully drained, so panTo runs against a fully rendered map. Only pans
+  // the map center — does not change the zoom level.
+  function applyPendingCenter() {
+    if (!_pendingCenter || !_map) return;
+    _map.panTo(_pendingCenter);
+    _pendingCenter = null;
+  }
+
   function drainOneFromQueue() {
-    if (_renderQueue.length === 0) { _renderRafId = null; return; }
+    if (_renderQueue.length === 0) {
+      _renderRafId = null;
+      applyPendingCenter();
+      return;
+    }
 
     // Log render start on the very first chunk
     if (_renderStartTime === null) {
@@ -399,6 +428,7 @@
       console.log(`[點位圖] 渲染完成｜渲染耗時: ${ms} ms`);
       _renderStartTime   = null;
       _renderTotalChunks = 0;
+      applyPendingCenter();
     }
   }
 
@@ -650,6 +680,17 @@
           .addTo(_fallbackLayer);
       });
       _fallbackLayer.addTo(_map);
+
+      // Pan the map to the center of the aggregated district points
+      // （排除不在台北市合理範圍內的點位，但這些點位仍會在上方正常渲染熱力圖/泡泡）
+      // Only the center moves — the zoom level is left unchanged.
+      const heatCoords = points
+        .filter(p => typeof p.lat === 'number' && typeof p.lng === 'number')
+        .filter(p => isWithinTaipei(p.lat, p.lng))
+        .map(p => [p.lat, p.lng]);
+      if (heatCoords.length > 0) {
+        _map.panTo(computeAverageCenter(heatCoords));
+      }
     },
 
     // Called once after all pages loaded: add district bubble markers.
@@ -657,6 +698,16 @@
     finalizeLoad(allData, mode) {
       if (!_map) return;
       buildDistrictFallbackLayer(allData);
+
+      // Compute the center to pan to, but defer applying it until the render
+      // queue drains (drainOneFromQueue) so panTo runs on a fully rendered
+      // map. Only the center moves — the zoom level is left unchanged.
+      // （排除不在台北市合理範圍內的點位，但這些點位仍會正常顯示在地圖上）
+      const coords = (Array.isArray(allData) ? allData : [])
+        .filter(hasCoords)
+        .filter(i => isWithinTaipei(i.latitude, i.longitude))
+        .map(i => [i.latitude, i.longitude]);
+      _pendingCenter = coords.length > 0 ? computeAverageCenter(coords) : null;
     },
 
     // Show / update progress indicator (top-left)

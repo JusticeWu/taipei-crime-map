@@ -158,6 +158,14 @@ public class SqlServerCrimeRepository : ICrimeRepository
             new { Id = id, coordinate.Latitude, coordinate.Longitude });
     }
 
+    public async Task<int> UpdateCoordinateByLocationAsync(string rawLocation, double latitude, double longitude, CancellationToken cancellationToken = default)
+    {
+        await using var conn = CreateConnection();
+        return await conn.ExecuteAsync(
+            "UPDATE theft_cases SET latitude = @Latitude, longitude = @Longitude WHERE raw_location = @RawLocation",
+            new { RawLocation = rawLocation, Latitude = latitude, Longitude = longitude });
+    }
+
     public async Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();

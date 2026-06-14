@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>座標管理 — 台北市治安地圖</title>
+  <style>
+    body {
+      font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+      max-width: 640px;
+      margin: 40px auto;
+      padding: 0 16px;
+      color: #222;
+    }
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-top: 1rem;
+      margin-bottom: 0.25rem;
+    }
+    input[type="text"],
+    input[type="password"],
+    input[type="number"],
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.5rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    textarea {
+      min-height: 6rem;
+      font-family: inherit;
+      resize: vertical;
+    }
+    .hint {
+      color: #666;
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+    }
+    button {
+      margin-top: 1.25rem;
+      padding: 0.6rem 1.25rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    #btn-logout {
+      background: #6b7280;
+      margin-left: 0.5rem;
+    }
+    #btn-logout:hover {
+      background: #4b5563;
+    }
+    .error {
+      color: #dc2626;
+      margin-top: 0.5rem;
+    }
+    #result {
+      margin-top: 1.25rem;
+      padding: 0.75rem;
+      border-radius: 4px;
+      background: #f3f4f6;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+    #result:empty {
+      display: none;
+    }
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>座標管理</h1>
+
+  <section id="login-section">
+    <p>請輸入管理帳號密碼登入。</p>
+    <form id="login-form">
+      <label for="login-username">帳號</label>
+      <input type="text" id="login-username" name="username" autocomplete="username" required />
+
+      <label for="login-password">密碼</label>
+      <input type="password" id="login-password" name="password" autocomplete="current-password" required />
+
+      <button type="submit">登入</button>
+      <div class="error" id="login-error"></div>
+    </form>
+  </section>
+
+  <section id="form-section" hidden>
+    <form id="update-form">
+      <label for="rawLocation">發生地點</label>
+      <textarea id="rawLocation" name="rawLocation" required
+        placeholder="單筆：輸入地點，搭配下方緯度／經度&#10;批次：每行一筆，格式為「地點,緯度,經度」"></textarea>
+      <div class="hint">
+        單筆更新：輸入一行地點，並填寫下方緯度／經度。<br />
+        批次更新：每行一筆，格式為「地點,緯度,經度」，多行時會逐筆送出。
+      </div>
+
+      <label for="latitude">緯度（單筆更新用，-90 ~ 90）</label>
+      <input type="number" id="latitude" name="latitude" step="any" min="-90" max="90" />
+
+      <label for="longitude">經度（單筆更新用，-180 ~ 180）</label>
+      <input type="number" id="longitude" name="longitude" step="any" min="-180" max="180" />
+
+      <button type="submit">更新座標</button>
+      <button type="button" id="btn-clear-cache">清除快取</button>
+      <button type="button" id="btn-logout">登出</button>
+    </form>
+
+    <div id="result"></div>
+  </section>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>

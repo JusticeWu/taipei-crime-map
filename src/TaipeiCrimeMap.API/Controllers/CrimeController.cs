@@ -17,6 +17,7 @@ public class CrimeController : ControllerBase
     private readonly GeocodeBatchCommandHandler _geocodeHandler;
     private readonly GetCrimeStatsQueryHandler _statsHandler;
     private readonly GetCrimeByIdQueryHandler _byIdHandler;
+    private readonly UpdateCoordinateByLocationCommandHandler _updateCoordinateHandler;
 
     public CrimeController(
         ImportCsvCommandHandler importHandler,
@@ -24,7 +25,8 @@ public class CrimeController : ControllerBase
         GetHeatmapQueryHandler heatmapHandler,
         GeocodeBatchCommandHandler geocodeHandler,
         GetCrimeStatsQueryHandler statsHandler,
-        GetCrimeByIdQueryHandler byIdHandler)
+        GetCrimeByIdQueryHandler byIdHandler,
+        UpdateCoordinateByLocationCommandHandler updateCoordinateHandler)
     {
         _importHandler = importHandler;
         _queryHandler = queryHandler;
@@ -32,6 +34,7 @@ public class CrimeController : ControllerBase
         _geocodeHandler = geocodeHandler;
         _statsHandler = statsHandler;
         _byIdHandler = byIdHandler;
+        _updateCoordinateHandler = updateCoordinateHandler;
     }
 
     /// <summary>
@@ -169,7 +172,53 @@ public class CrimeController : ControllerBase
     }
 
     /// <summary>
+    /// 驗證管理頁面的 Basic Authentication 是否正確（受 BasicAuthMiddleware 保護）
+    /// </summary>
+    [HttpGet("coordinate/ping")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public IActionResult CoordinatePing() => Ok();
+
+    /// <summary>
+    /// 依 RawLocation 更新座標（管理用途，需 Basic Authentication）
+    /// </summary>
+    [HttpPatch("coordinate")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateCoordinate(
+        [FromBody] UpdateCoordinateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.RawLocation))
+        {
+            return BadRequest("rawLocation 為必填欄位。");
+        }
+
+        if (request.Latitude is < -90 or > 90)
+        {
+            return BadRequest("latitude 必須在 -90 到 90 之間。");
+        }
+
+        if (request.Longitude is < -180 or > 180)
+        {
+            return BadRequest("longitude 必須在 -180 到 180 之間。");
+        }
+
+        var command = new UpdateCoordinateByLocationCommand(request.RawLocation, request.Latitude, request.Longitude);
+        var affected = await _updateCoordinateHandler.HandleAsync(command, cancellationToken);
+
+        return affected == 0 ? NotFound() : Ok(new { affected });
+    }
+
+    /// <summary>
     /// 匯入 CSV 的請求物件
     /// </summary>
     public record ImportCsvRequest(string FilePath, CaseType CaseType);
+
+    /// <summary>
+    /// 更新座標的請求物件
+    /// </summary>
+    public record UpdateCoordinateRequest(string RawLocation, double Latitude, double Longitude);
 }
