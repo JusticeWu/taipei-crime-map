@@ -250,6 +250,34 @@ public class GoogleGeocodingServiceTests
         result.Should().NotBeNull();
     }
 
+    [Fact]
+    public async Task GeocodeAsync_AddressWithNumberRangeAndTrailingParentheses_SendsNormalizedAddress()
+    {
+        // Arrange
+        var responseJson = """
+            {
+                "status": "OK",
+                "results": [{ "geometry": { "location": { "lat": 25.0339, "lng": 121.5654 } } }]
+            }
+            """;
+        var handler = new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseJson, Encoding.UTF8, "application/json")
+        });
+        var httpClient = new HttpClient(handler);
+        var options = Options.Create(new GoogleMapsOptions { ApiKey = "test-key" });
+        var logger = NullLogger<GoogleGeocodingService>.Instance;
+        var geoService = new GoogleGeocodingService(httpClient, options, logger);
+
+        // Act
+        await geoService.GeocodeAsync("臺北市信義路路31~60號(景中街口)一帶");
+
+        // Assert
+        handler.LastRequestUri.Should().NotBeNull();
+        var query = Uri.UnescapeDataString(handler.LastRequestUri!.Query);
+        query.Should().Contain("address=臺北市信義路45號");
+    }
+
     private static GoogleGeocodingService CreateService(HttpResponseMessage response)
     {
         var httpMessageHandler = new MockHttpMessageHandler(response);
@@ -265,6 +293,8 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
 {
     private readonly HttpResponseMessage _response;
 
+    public Uri? LastRequestUri { get; private set; }
+
     public MockHttpMessageHandler(HttpResponseMessage response)
     {
         _response = response;
@@ -274,6 +304,7 @@ internal sealed class MockHttpMessageHandler : HttpMessageHandler
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        LastRequestUri = request.RequestUri;
         return Task.FromResult(_response);
     }
 }
