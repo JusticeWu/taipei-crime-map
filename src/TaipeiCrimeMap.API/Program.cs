@@ -1,4 +1,5 @@
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using StackExchange.Redis;
 using TaipeiCrimeMap.API.Middleware;
 using TaipeiCrimeMap.API.WebSockets;
 using TaipeiCrimeMap.Application.Handlers;
@@ -21,8 +22,24 @@ builder.Services.AddOpenApi();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-// Server metrics
-builder.Services.AddSingleton<ServerMetricsService>();
+// Secondary Redis（選配，用於跨環境訂閱其他 Server 的指標）
+var secondaryRedisConnStr = builder.Configuration.GetConnectionString("SecondaryRedis");
+if (!string.IsNullOrWhiteSpace(secondaryRedisConnStr))
+{
+    var connStr = secondaryRedisConnStr;
+    builder.Services.AddKeyedSingleton<IConnectionMultiplexer>("SecondaryRedis", (_, _) =>
+        ConnectionMultiplexer.Connect(new ConfigurationOptions
+        {
+            EndPoints = { connStr },
+            AbortOnConnectFail = false,
+            ConnectTimeout = 2000,
+            SyncTimeout = 2000,
+        }));
+}
+
+// Server metrics（注入主 Garnet，讓 ServerMetricsService 可以 Publish）
+builder.Services.AddSingleton<ServerMetricsService>(sp =>
+    new ServerMetricsService(sp.GetService<IConnectionMultiplexer>()));
 builder.Services.AddSingleton<ServerMetricsWebSocketHandler>();
 
 // Domain / Infrastructure services

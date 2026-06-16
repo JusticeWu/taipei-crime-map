@@ -122,32 +122,67 @@
       border-bottom-color: #2563eb;
     }
 
-    /* Metric cards */
-    .metric-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 1.25rem;
-    }
-    @media (max-width: 480px) {
-      .metric-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    .metric-card {
-      background: #f9fafb;
+    /* Per-server blocks */
+    #server-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 1.25rem; }
+    .server-block {
       border: 1px solid #e5e7eb;
       border-radius: 8px;
-      padding: 12px 14px;
+      overflow: hidden;
+      transition: opacity 0.3s;
+    }
+    .server-block.offline { opacity: 0.45; }
+    .server-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .server-name {
+      font-weight: 700;
+      font-size: 0.9rem;
+      font-family: monospace;
+      color: #111;
+      flex: 1;
+    }
+    .env-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 10px;
+      text-transform: uppercase;
+    }
+    .env-production { background: #dcfce7; color: #15803d; }
+    .env-staging, .env-uat { background: #fef9c3; color: #a16207; }
+    .env-development { background: #e0f2fe; color: #0369a1; }
+    .env-unknown { background: #f3f4f6; color: #6b7280; }
+    .online-dot { font-size: 0.75rem; }
+    .online-dot.online { color: #16a34a; }
+    .online-dot.offline { color: #9ca3af; }
+    .sm-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      background: #e5e7eb;
+    }
+    @media (max-width: 520px) {
+      .sm-row { grid-template-columns: repeat(3, 1fr); }
+    }
+    .sm-cell {
+      padding: 8px 10px;
+      background: #fff;
       text-align: center;
     }
-    .metric-label {
-      font-size: 0.75rem;
-      color: #6b7280;
-      margin-bottom: 6px;
+    .sm-label {
+      font-size: 0.68rem;
+      color: #9ca3af;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.03em;
+      margin-bottom: 3px;
     }
-    .metric-value {
-      font-size: 1.3rem;
+    .sm-val {
+      font-size: 1rem;
       font-weight: 700;
       color: #111;
     }
@@ -239,7 +274,7 @@
     <div id="tab-monitor" class="tab-panel" style="display:none">
       <p class="ws-status" id="ws-status">⬤ 未連線</p>
 
-      <!-- 靜態硬體資訊列（第一次收到資料後顯示） -->
+      <!-- 靜態硬體資訊列（第一次收到資料後顯示，顯示自機資訊） -->
       <div class="hw-info" id="hw-info" style="display:none">
         <span class="hw-item"><b>CPU 核心</b><span id="hw-cores">—</span></span>
         <span class="hw-item"><b>總記憶體</b><span id="hw-total-mem">—</span></span>
@@ -247,34 +282,11 @@
         <span class="hw-item"><b>.NET</b><span id="hw-dotnet">—</span></span>
       </div>
 
-      <div class="metric-grid">
-        <div class="metric-card">
-          <div class="metric-label">CPU</div>
-          <div class="metric-value" id="mc-cpu">—</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">記憶體</div>
-          <div class="metric-value" id="mc-mem">—</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">GC 記憶體</div>
-          <div class="metric-value" id="mc-gc">—</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">Uptime</div>
-          <div class="metric-value" id="mc-uptime">—</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">執行緒數</div>
-          <div class="metric-value" id="mc-threads">—</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">連線數</div>
-          <div class="metric-value" id="mc-conns">—</div>
-        </div>
-      </div>
+      <!-- 每台 Server 動態生成卡片 -->
+      <div id="server-list"></div>
 
       <div class="chart-box">
+        <p style="margin:0 0 6px;font-size:0.82rem;color:#6b7280">CPU 趨勢（所有伺服器，最近 60s）</p>
         <canvas id="metrics-chart"></canvas>
       </div>
     </div>
