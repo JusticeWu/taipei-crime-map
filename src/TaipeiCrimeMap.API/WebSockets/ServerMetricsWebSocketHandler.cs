@@ -1,6 +1,5 @@
 using System.Net.WebSockets;
 using System.Text;
-using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using TaipeiCrimeMap.Application.Options;
 using TaipeiCrimeMap.Infrastructure.Metrics;
@@ -40,20 +39,12 @@ public sealed class ServerMetricsWebSocketHandler
         using var ws = await context.WebSockets.AcceptWebSocketAsync();
         _metricsService.AddConnection();
 
-        var sendChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(64)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleWriter = false,
-            SingleReader = true,
-        });
-
-        _metricsService.RegisterSink(sendChannel.Writer);
-        _logger.LogInformation("Admin WebSocket 已連線，HostId: {HostId}", _metricsService.HostId);
-
+        var (channelId, reader) = _metricsService.RegisterClientChannel();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+
         try
         {
-            await foreach (var bytes in sendChannel.Reader.ReadAllAsync(cts.Token))
+            await foreach (var bytes in reader.ReadAllAsync(cts.Token))
             {
                 if (ws.State != WebSocketState.Open) break;
                 await ws.SendAsync(
@@ -68,10 +59,8 @@ public sealed class ServerMetricsWebSocketHandler
         finally
         {
             cts.Cancel();
-            _metricsService.UnregisterSink(sendChannel.Writer);
-            sendChannel.Writer.TryComplete();
             _metricsService.RemoveConnection();
-            _logger.LogInformation("Admin WebSocket 已斷線，HostId: {HostId}", _metricsService.HostId);
+            _metricsService.UnregisterClientChannel(channelId);
         }
     }
 

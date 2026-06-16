@@ -22,9 +22,9 @@ public sealed class ServerMetricsService : IHostedService
     private TimeSpan _lastCpuTime;
     private DateTime _lastSampleTime;
     private readonly object _cpuLock = new();
+    private readonly ISubscriber? _subscriber;
     private readonly IConnectionMultiplexer? _primaryRedis;
     private readonly IConnectionMultiplexer? _secondaryRedis;
-    private readonly ISubscriber? _publisher;
     private readonly ILogger<ServerMetricsService> _logger;
 
     // 識別資訊
@@ -40,17 +40,16 @@ public sealed class ServerMetricsService : IHostedService
     // 活躍 WebSocket 連線數（由 Handler 透過 Add/RemoveConnection 維護）
     private int _connectionCount;
 
-    // 已連線 WebSocket 的訊息接收端（每個 WebSocket 連線各自一個）
-    private readonly ConcurrentDictionary<ChannelWriter<byte[]>, byte> _sinks = new();
-
     // 背景任務
     private CancellationTokenSource? _cts;
     private Task? _publishLoop;
-    private Task? _primarySubLoop;
-    private Task? _secondarySubLoop;
+    private Task? _subscriptionTask;
 
-    // 發布 log 節流（避免每秒都輸出，每 10 秒或訂閱者為 0 才 log Information）
-    private DateTime _lastPublishLogTime = DateTime.MinValue;
+    // 發布日誌節流：訂閱者為 0 時每次都 log；否則每 10 秒 log 一次
+    private DateTime _lastPublishInfoLogTime = DateTime.MinValue;
+
+    // 廣播頻道：每個 WebSocket 連線各持有一個 writer，收到 Garnet 訊息時廣播給所有連線
+    private readonly ConcurrentDictionary<Guid, ChannelWriter<byte[]>> _clientChannels = new();
 
     public string HostId => _hostId;
 
@@ -64,13 +63,13 @@ public sealed class ServerMetricsService : IHostedService
         : this(redis, null, logger) { }
 
     public ServerMetricsService(
-        IConnectionMultiplexer? primaryRedis,
+        IConnectionMultiplexer? redis,
         IConnectionMultiplexer? secondaryRedis,
         ILogger<ServerMetricsService> logger)
     {
-        _primaryRedis = primaryRedis;
+        _primaryRedis = redis;
         _secondaryRedis = secondaryRedis;
-        _publisher = primaryRedis?.GetSubscriber();
+        _subscriber = redis?.GetSubscriber();
         _logger = logger;
 
         _hostId = System.Environment.GetEnvironmentVariable("HOSTNAME") ?? "unknown";
@@ -91,17 +90,10 @@ public sealed class ServerMetricsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("ServerMetricsService 已啟動，HostId: {HostId}", _hostId);
+        _logger.LogInformation("ServerMetricsService 背景發布已啟動，HostId: {HostId}", _hostId);
         _cts = new CancellationTokenSource();
-
         _publishLoop = RunPublishLoopAsync(_cts.Token);
-
-        if (_primaryRedis is not null)
-            _primarySubLoop = SubscribeToGarnetAsync(_primaryRedis, _cts.Token);
-
-        if (_secondaryRedis is not null)
-            _secondarySubLoop = SubscribeToGarnetAsync(_secondaryRedis, _cts.Token);
-
+        _subscriptionTask = RunSubscriptionsAsync(_cts.Token);
         return Task.CompletedTask;
     }
 
@@ -115,27 +107,46 @@ public sealed class ServerMetricsService : IHostedService
             cts.Dispose();
         }
 
-        var tasks = new List<Task>(3);
+        var tasks = new List<Task>();
         if (_publishLoop is not null) tasks.Add(_publishLoop);
-        if (_primarySubLoop is not null) tasks.Add(_primarySubLoop);
-        if (_secondarySubLoop is not null) tasks.Add(_secondarySubLoop);
+        if (_subscriptionTask is not null) tasks.Add(_subscriptionTask);
 
         if (tasks.Count > 0)
         {
             try { await Task.WhenAll(tasks).ConfigureAwait(false); }
             catch (OperationCanceledException) { }
         }
+
+        foreach (var writer in _clientChannels.Values)
+            writer.TryComplete();
+        _clientChannels.Clear();
     }
-
-    // ── Sink 管理（WebSocket 連線時呼叫） ────────────────────────────────────
-
-    public void RegisterSink(ChannelWriter<byte[]> sink) => _sinks.TryAdd(sink, 0);
-    public void UnregisterSink(ChannelWriter<byte[]> sink) => _sinks.TryRemove(sink, out _);
 
     // ── Connection tracking（由 WebSocketHandler 呼叫） ─────────────────────
 
     public void AddConnection() => Interlocked.Increment(ref _connectionCount);
     public void RemoveConnection() => Interlocked.Decrement(ref _connectionCount);
+
+    // ── Client channel management（廣播 Garnet 訊息給 WebSocket 連線） ──────
+
+    public (Guid Id, ChannelReader<byte[]> Reader) RegisterClientChannel()
+    {
+        var id = Guid.NewGuid();
+        var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(64)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleWriter = false,
+            SingleReader = true,
+        });
+        _clientChannels[id] = channel.Writer;
+        return (id, channel.Reader);
+    }
+
+    public void UnregisterClientChannel(Guid id)
+    {
+        if (_clientChannels.TryRemove(id, out var writer))
+            writer.TryComplete();
+    }
 
     // ── Metrics ─────────────────────────────────────────────────────────────
 
@@ -178,26 +189,26 @@ public sealed class ServerMetricsService : IHostedService
 
     public async Task PublishAsync(ServerMetrics metrics, CancellationToken ct = default)
     {
-        if (_publisher is null) return;
+        if (_subscriber is null) return;
         try
         {
             var json = JsonSerializer.Serialize(metrics, JsonOptions);
-            var subscriberCount = await _publisher.PublishAsync(
+            var subscriberCount = await _subscriber.PublishAsync(
                 RedisChannel.Literal($"metrics:{_hostId}"),
                 json);
 
             var now = DateTime.UtcNow;
-            if (subscriberCount == 0 || (now - _lastPublishLogTime).TotalSeconds >= 10)
+            if (subscriberCount == 0 || (now - _lastPublishInfoLogTime).TotalSeconds >= 10)
             {
                 _logger.LogInformation(
                     "已發布指標到 Garnet, channel: metrics:{HostId}, 訂閱者數量: {SubscriberCount}",
                     _hostId, subscriberCount);
-                _lastPublishLogTime = now;
+                _lastPublishInfoLogTime = now;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "發布指標到 Garnet 失敗: metrics:{HostId}", _hostId);
+            _logger.LogDebug(ex, "發布指標到 Garnet 失敗: metrics:{HostId}", _hostId);
         }
     }
 
@@ -217,7 +228,19 @@ public sealed class ServerMetricsService : IHostedService
         catch (OperationCanceledException) { }
     }
 
-    private async Task SubscribeToGarnetAsync(IConnectionMultiplexer redis, CancellationToken ct)
+    private async Task RunSubscriptionsAsync(CancellationToken ct)
+    {
+        var tasks = new List<Task>();
+        if (_primaryRedis is not null)
+            tasks.Add(SubscribeGarnetAsync(_primaryRedis, ct));
+        if (_secondaryRedis is not null)
+            tasks.Add(SubscribeGarnetAsync(_secondaryRedis, ct));
+
+        if (tasks.Count > 0)
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+    }
+
+    private async Task SubscribeGarnetAsync(IConnectionMultiplexer redis, CancellationToken ct)
     {
         var endpoint = string.Join(",", redis.GetEndPoints().Select(e => e.ToString()));
         ISubscriber? sub = null;
@@ -226,13 +249,10 @@ public sealed class ServerMetricsService : IHostedService
             sub = redis.GetSubscriber();
             await sub.SubscribeAsync(
                 RedisChannel.Pattern("metrics:*"),
-                (channel, message) =>
+                (_, message) =>
                 {
-                    if (message.IsNullOrEmpty || _sinks.IsEmpty) return;
-                    var bytes = Encoding.UTF8.GetBytes((string)message!);
-                    foreach (var (writer, _) in _sinks)
-                        writer.TryWrite(bytes);
-                    _logger.LogDebug("收到 Garnet 訊息 from channel: {Channel}, 廣播給 {SinkCount} 個 WebSocket", (string?)channel ?? "unknown", _sinks.Count);
+                    if (!message.IsNullOrEmpty)
+                        BroadcastToClients((string)message!);
                 });
 
             _logger.LogInformation("已訂閱 Garnet: {Endpoint} pattern: metrics:*", endpoint);
@@ -246,8 +266,18 @@ public sealed class ServerMetricsService : IHostedService
         finally
         {
             if (sub is not null)
-                try { await sub.UnsubscribeAsync(RedisChannel.Pattern("metrics:*")); } catch { }
+            {
+                try { await sub.UnsubscribeAsync(RedisChannel.Pattern("metrics:*")); }
+                catch { }
+            }
         }
+    }
+
+    private void BroadcastToClients(string message)
+    {
+        var bytes = Encoding.UTF8.GetBytes(message);
+        foreach (var writer in _clientChannels.Values)
+            writer.TryWrite(bytes);
     }
 
     private static long ReadTotalMemoryMb()
