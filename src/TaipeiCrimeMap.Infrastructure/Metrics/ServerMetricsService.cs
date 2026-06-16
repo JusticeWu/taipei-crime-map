@@ -72,7 +72,7 @@ public sealed class ServerMetricsService : IHostedService
         _subscriber = redis?.GetSubscriber();
         _logger = logger;
 
-        _hostId = System.Environment.GetEnvironmentVariable("HOSTNAME") ?? "unknown";
+        _hostId = System.Environment.MachineName;
         _appEnvironment = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
 
         _process = Process.GetCurrentProcess();
