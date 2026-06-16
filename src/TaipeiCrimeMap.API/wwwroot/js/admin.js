@@ -106,6 +106,10 @@
     const credentials = getStoredCredentials();
     if (!credentials) return;
 
+    // 重連時清空所有舊卡片與 chart，避免多張相同 HostId 的卡片殘留
+    clearAllServerBlocks();
+    _hwInfoShown = false;
+
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = `${proto}//${location.host}/ws/metrics?token=${encodeURIComponent(credentials)}`;
 
@@ -154,7 +158,7 @@
   // ── Per-server handling ────────────────────────────────────────
   function handleServerData(data) {
     const hostId = data.hostId ?? 'unknown';
-    const shortId = hostId.slice(-8);
+    const shortId = hostId;
 
     // 確保 state 和 chart dataset 存在
     if (!serverState.has(hostId)) {
@@ -210,7 +214,7 @@
   }
 
   function updateServerBlock(hostId, data) {
-    const shortId = hostId.slice(-8);
+    const shortId = hostId;
     const set = (suffix, val) => {
       const el = document.getElementById(`${shortId}-${suffix}`);
       if (el) el.textContent = val;
@@ -224,16 +228,22 @@
 
   // ── Offline detection ──────────────────────────────────────────
   function removeServerBlock(hostId) {
-    const shortId = hostId.slice(-8);
-    const block = document.getElementById(`sb-${shortId}`);
+    const block = document.getElementById(`sb-${hostId}`);
     if (block) block.remove();
     serverState.delete(hostId);
     serverCpuData.delete(hostId);
     if (metricsChart) {
-      const idx = metricsChart.data.datasets.findIndex((d) => d.label === shortId);
+      const idx = metricsChart.data.datasets.findIndex((d) => d.label === hostId);
       if (idx !== -1) metricsChart.data.datasets.splice(idx, 1);
       metricsChart.update('none');
     }
+  }
+
+  function clearAllServerBlocks() {
+    [...serverState.keys()].forEach(removeServerBlock);
+    timeLabels.length = 0;
+    lastLabelMs = 0;
+    if (metricsChart) metricsChart.update('none');
   }
 
   function startOfflineCheck() {
@@ -245,7 +255,7 @@
         const elapsed = !state.lastSeen ? Infinity : now - state.lastSeen;
         if (elapsed > REMOVE_MS) { toRemove.push(hostId); return; }
         const offline = elapsed > OFFLINE_MS;
-        const shortId = hostId.slice(-8);
+        const shortId = hostId;
         const block = document.getElementById(`sb-${shortId}`);
         if (!block) return;
         block.classList.toggle('offline', offline);
@@ -291,7 +301,7 @@
 
   function addChartDataset(hostId, colorIdx) {
     if (!metricsChart) return;
-    const shortId = hostId.slice(-8);
+    const shortId = hostId;
     if (metricsChart.data.datasets.find((d) => d.label === shortId)) return;
     const color = CPU_COLORS[colorIdx % CPU_COLORS.length];
     const data = new Array(timeLabels.length).fill(null);
@@ -327,7 +337,7 @@
     }
 
     // 更新此 server 的最後一個資料點
-    const ds = metricsChart.data.datasets.find((d) => d.label === hostId.slice(-8));
+    const ds = metricsChart.data.datasets.find((d) => d.label === hostId);
     if (ds && timeLabels.length > 0) {
       while (ds.data.length < timeLabels.length) ds.data.push(null);
       ds.data[timeLabels.length - 1] = cpuPercent;
