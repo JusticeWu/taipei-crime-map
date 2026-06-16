@@ -83,6 +83,7 @@ public sealed class ServerMetricsService : IHostedService
         var machineSuffix = System.Environment.MachineName;
         machineSuffix = machineSuffix.Length >= 5 ? machineSuffix[^5..] : machineSuffix;
         _hostId = $"{envPrefix}-{machineSuffix}";
+        _logger.LogInformation("ServerMetricsService 初始化，ASPNETCORE_ENVIRONMENT={Env}，HostId={HostId}", _appEnvironment, _hostId);
 
         _process = Process.GetCurrentProcess();
         _process.Refresh();
