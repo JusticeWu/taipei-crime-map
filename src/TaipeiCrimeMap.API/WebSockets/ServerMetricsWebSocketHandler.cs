@@ -117,10 +117,13 @@ public sealed class ServerMetricsWebSocketHandler
             sub = redis.GetSubscriber();
             await sub.SubscribeAsync(
                 RedisChannel.Pattern("metrics:*"),
-                (_, message) =>
+                (channel, message) =>
                 {
                     if (!message.IsNullOrEmpty)
+                    {
+                        _logger.LogDebug("收到 Garnet 訊息 from channel: {Channel}", (string?)channel ?? "unknown");
                         writer.TryWrite(Encoding.UTF8.GetBytes((string)message!));
+                    }
                 });
 
             _logger.LogInformation("已訂閱 Garnet: {Endpoint} pattern: metrics:*", endpoint);

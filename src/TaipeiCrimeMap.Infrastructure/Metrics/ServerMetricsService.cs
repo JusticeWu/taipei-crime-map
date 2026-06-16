@@ -145,8 +145,12 @@ public sealed class ServerMetricsService : IHostedService
                 RedisChannel.Literal($"metrics:{_hostId}"),
                 json,
                 CommandFlags.FireAndForget);
+            _logger.LogDebug("已發布指標到 Garnet channel: metrics:{HostId}", _hostId);
         }
-        catch { /* Garnet 不可用時靜默跳過 */ }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "發布指標到 Garnet 失敗: metrics:{HostId}", _hostId);
+        }
     }
 
     // ── Private ─────────────────────────────────────────────────────────────
