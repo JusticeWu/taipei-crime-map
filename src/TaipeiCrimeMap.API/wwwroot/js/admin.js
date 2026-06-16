@@ -6,6 +6,13 @@
   const CACHE_CLEAR_URL = '/api/admin/cache/clear';
   const STORAGE_KEY = 'adminAuthCredentials';
   const MAX_HISTORY = 60;
+  const OFFLINE_MS = 5000;
+
+  // CPU 折線圖色盤（每台 Server 一個顏色）
+  const CPU_COLORS = [
+    '#ef4444', '#3b82f6', '#10b981', '#f59e0b',
+    '#8b5cf6', '#ec4899', '#14b8a6', '#f97316',
+  ];
 
   // DOM refs
   const loginSection = document.getElementById('login-section');
@@ -16,50 +23,40 @@
   const resultEl = document.getElementById('result');
   const logoutBtn = document.getElementById('btn-logout');
   const clearCacheBtn = document.getElementById('btn-clear-cache');
-
-  // Metric card refs
-  const mcCpu = document.getElementById('mc-cpu');
-  const mcMem = document.getElementById('mc-mem');
-  const mcGc = document.getElementById('mc-gc');
-  const mcUptime = document.getElementById('mc-uptime');
-  const mcThreads = document.getElementById('mc-threads');
-  const mcConns = document.getElementById('mc-conns');
   const wsStatusEl = document.getElementById('ws-status');
 
-  // DOM refs for static hw info
+  // 靜態硬體資訊 DOM
   const hwInfo = document.getElementById('hw-info');
   const hwCores = document.getElementById('hw-cores');
   const hwTotalMem = document.getElementById('hw-total-mem');
   const hwOs = document.getElementById('hw-os');
   const hwDotnet = document.getElementById('hw-dotnet');
 
+  // 多機狀態
+  // Map<hostId, { lastSeen: number, colorIdx: number }>
+  const serverState = new Map();
+  let colorNext = 0;
+
+  // Chart.js
+  let metricsChart = null;
+  const timeLabels = [];
+  let lastLabelMs = 0;
+  // Map<hostId, number[]>  — cpuData
+  const serverCpuData = new Map();
+
   // WebSocket state
   let ws = null;
   let _hwInfoShown = false;
+  let offlineTimer = null;
 
-  // Chart.js instance
-  let metricsChart = null;
-  const cpuHistory = [];
-  const memHistory = [];
-  const timeLabels = [];
-
-  function getStoredCredentials() {
-    return sessionStorage.getItem(STORAGE_KEY);
-  }
-
-  function setStoredCredentials(value) {
-    sessionStorage.setItem(STORAGE_KEY, value);
-  }
-
-  function clearStoredCredentials() {
-    sessionStorage.removeItem(STORAGE_KEY);
-  }
+  // ── Credentials ────────────────────────────────────────────────
+  function getStoredCredentials() { return sessionStorage.getItem(STORAGE_KEY); }
+  function setStoredCredentials(v) { sessionStorage.setItem(STORAGE_KEY, v); }
+  function clearStoredCredentials() { sessionStorage.removeItem(STORAGE_KEY); }
 
   async function checkAuth(credentials) {
-    const response = await fetch(PING_URL, {
-      headers: { Authorization: `Basic ${credentials}` },
-    });
-    return response.ok;
+    const r = await fetch(PING_URL, { headers: { Authorization: `Basic ${credentials}` } });
+    return r.ok;
   }
 
   function showLogin() {
@@ -75,16 +72,11 @@
 
   async function init() {
     const stored = getStoredCredentials();
-    if (stored && (await checkAuth(stored))) {
-      showForm();
-    } else {
-      clearStoredCredentials();
-      showLogin();
-    }
+    if (stored && (await checkAuth(stored))) showForm();
+    else { clearStoredCredentials(); showLogin(); }
   }
 
   // ── Tab switching ──────────────────────────────────────────────
-
   document.querySelectorAll('.tab-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
@@ -98,14 +90,15 @@
       if (tabName === 'monitor') {
         ensureChart();
         openWebSocket();
+        startOfflineCheck();
       } else {
         closeWebSocket();
+        stopOfflineCheck();
       }
     });
   });
 
   // ── WebSocket ──────────────────────────────────────────────────
-
   function openWebSocket() {
     if (ws && ws.readyState <= WebSocket.OPEN) return;
 
@@ -117,30 +110,20 @@
 
     setWsStatus('connecting');
     ws = new WebSocket(url);
-
     ws.addEventListener('open', () => setWsStatus('connected'));
-
     ws.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (!_hwInfoShown) {
-          populateHwInfo(data);
-          _hwInfoShown = true;
-        }
-        updateCards(data);
-        pushChartPoint(data);
-      } catch (_) { /* ignore malformed frame */ }
+        if (!_hwInfoShown && data.hostId) { populateHwInfo(data); _hwInfoShown = true; }
+        handleServerData(data);
+      } catch (_) { /* ignore malformed */ }
     });
-
     ws.addEventListener('close', () => setWsStatus('disconnected'));
     ws.addEventListener('error', () => setWsStatus('error'));
   }
 
   function closeWebSocket() {
-    if (ws) {
-      ws.close();
-      ws = null;
-    }
+    if (ws) { ws.close(); ws = null; }
     _hwInfoShown = false;
     setWsStatus('disconnected');
   }
@@ -148,129 +131,198 @@
   function setWsStatus(state) {
     if (!wsStatusEl) return;
     wsStatusEl.className = 'ws-status';
-    if (state === 'connected') {
-      wsStatusEl.textContent = '⬤ 已連線';
-      wsStatusEl.classList.add('connected');
-    } else if (state === 'connecting') {
-      wsStatusEl.textContent = '⬤ 連線中…';
-    } else if (state === 'error') {
-      wsStatusEl.textContent = '⬤ 連線錯誤';
-      wsStatusEl.classList.add('error');
-    } else {
-      wsStatusEl.textContent = '⬤ 未連線';
-    }
+    const map = {
+      connected: ['⬤ 已連線', 'connected'],
+      connecting: ['⬤ 連線中…', ''],
+      error: ['⬤ 連線錯誤', 'error'],
+    };
+    const [text, cls] = map[state] || ['⬤ 未連線', ''];
+    wsStatusEl.textContent = text;
+    if (cls) wsStatusEl.classList.add(cls);
   }
 
-  // ── Static hardware info (shown once) ─────────────────────────
-
+  // ── Static hw info ─────────────────────────────────────────────
   function populateHwInfo(data) {
-    hwCores.textContent = data.cpuCores;
-    hwTotalMem.textContent = `${data.totalMemoryMb} MB`;
-    hwOs.textContent = data.osDescription;
-    hwDotnet.textContent = data.dotNetVersion;
+    hwCores.textContent = data.cpuCores ?? '—';
+    hwTotalMem.textContent = data.totalMemoryMb ? `${data.totalMemoryMb} MB` : '—';
+    hwOs.textContent = data.osDescription ?? '—';
+    hwDotnet.textContent = data.dotNetVersion ?? '—';
     hwInfo.style.display = '';
   }
 
-  // ── Metric cards ───────────────────────────────────────────────
+  // ── Per-server handling ────────────────────────────────────────
+  function handleServerData(data) {
+    const hostId = data.hostId ?? 'unknown';
+    const shortId = hostId.slice(-8);
 
-  function updateCards(data) {
-    mcCpu.textContent = `${data.cpuPercent}%`;
-    mcMem.textContent = `${data.memoryMb} MB`;
-    mcGc.textContent = `${data.gcMemoryMb} MB`;
-    mcUptime.textContent = data.uptime;
-    mcThreads.textContent = data.threadCount;
-    mcConns.textContent = data.connectionCount;
+    // 確保 state 和 chart dataset 存在
+    if (!serverState.has(hostId)) {
+      serverState.set(hostId, { colorIdx: colorNext++ % CPU_COLORS.length });
+      createServerBlock(hostId, shortId, data.environment ?? '');
+      addChartDataset(hostId, serverState.get(hostId).colorIdx);
+    }
+
+    // 更新 lastSeen
+    serverState.get(hostId).lastSeen = Date.now();
+
+    // 更新卡片數值
+    updateServerBlock(hostId, data);
+
+    // 更新 CPU 折線圖
+    pushCpuPoint(hostId, data.cpuPercent ?? 0);
+
+    // 確保卡片在線
+    const block = document.getElementById(`sb-${shortId}`);
+    if (block) block.classList.remove('offline');
+    const dot = block?.querySelector('.online-dot');
+    if (dot) { dot.textContent = '⬤ 在線'; dot.className = 'online-dot online'; }
   }
 
-  // ── Chart ──────────────────────────────────────────────────────
+  function envClass(env) {
+    if (!env) return 'unknown';
+    const l = env.toLowerCase();
+    if (l === 'production') return 'production';
+    if (l === 'staging' || l === 'uat') return 'uat';
+    if (l === 'development') return 'development';
+    return 'unknown';
+  }
 
+  function createServerBlock(hostId, shortId, env) {
+    const list = document.getElementById('server-list');
+    const div = document.createElement('div');
+    div.className = 'server-block';
+    div.id = `sb-${shortId}`;
+    div.innerHTML = `
+      <div class="server-head">
+        <span class="server-name">${shortId}</span>
+        <span class="env-badge env-${envClass(env)}">${env || 'unknown'}</span>
+        <span class="online-dot online">⬤ 在線</span>
+      </div>
+      <div class="sm-row">
+        <div class="sm-cell"><div class="sm-label">CPU</div><div class="sm-val" id="${shortId}-cpu">—</div></div>
+        <div class="sm-cell"><div class="sm-label">記憶體</div><div class="sm-val" id="${shortId}-mem">—</div></div>
+        <div class="sm-cell"><div class="sm-label">GC</div><div class="sm-val" id="${shortId}-gc">—</div></div>
+        <div class="sm-cell"><div class="sm-label">Uptime</div><div class="sm-val" id="${shortId}-uptime">—</div></div>
+        <div class="sm-cell"><div class="sm-label">執行緒</div><div class="sm-val" id="${shortId}-threads">—</div></div>
+      </div>`;
+    list.appendChild(div);
+  }
+
+  function updateServerBlock(hostId, data) {
+    const shortId = hostId.slice(-8);
+    const set = (suffix, val) => {
+      const el = document.getElementById(`${shortId}-${suffix}`);
+      if (el) el.textContent = val;
+    };
+    set('cpu', `${data.cpuPercent}%`);
+    set('mem', `${data.memoryMb} MB`);
+    set('gc', `${data.gcMemoryMb} MB`);
+    set('uptime', data.uptime ?? '—');
+    set('threads', data.threadCount ?? '—');
+  }
+
+  // ── Offline detection ──────────────────────────────────────────
+  function startOfflineCheck() {
+    if (offlineTimer) return;
+    offlineTimer = setInterval(() => {
+      const now = Date.now();
+      serverState.forEach((state, hostId) => {
+        const offline = !state.lastSeen || (now - state.lastSeen) > OFFLINE_MS;
+        const shortId = hostId.slice(-8);
+        const block = document.getElementById(`sb-${shortId}`);
+        if (!block) return;
+        block.classList.toggle('offline', offline);
+        const dot = block.querySelector('.online-dot');
+        if (dot) {
+          dot.textContent = offline ? '⬤ 離線' : '⬤ 在線';
+          dot.className = `online-dot ${offline ? 'offline' : 'online'}`;
+        }
+      });
+    }, 1000);
+  }
+
+  function stopOfflineCheck() {
+    if (offlineTimer) { clearInterval(offlineTimer); offlineTimer = null; }
+  }
+
+  // ── Chart（CPU 多線趨勢） ──────────────────────────────────────
   function ensureChart() {
     if (metricsChart) return;
-
     const ctx = document.getElementById('metrics-chart').getContext('2d');
     metricsChart = new Chart(ctx, {
       type: 'line',
-      data: {
-        labels: timeLabels,
-        datasets: [
-          {
-            label: 'CPU %',
-            data: cpuHistory,
-            borderColor: '#ef4444',
-            backgroundColor: 'rgba(239,68,68,0.08)',
-            yAxisID: 'yCpu',
-            tension: 0.3,
-            pointRadius: 0,
-            borderWidth: 2,
-          },
-          {
-            label: '記憶體 MB',
-            data: memHistory,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59,130,246,0.08)',
-            yAxisID: 'yMem',
-            tension: 0.3,
-            pointRadius: 0,
-            borderWidth: 2,
-          },
-        ],
-      },
+      data: { labels: timeLabels, datasets: [] },
       options: {
         animation: false,
         responsive: true,
         interaction: { mode: 'index', intersect: false },
         plugins: { legend: { position: 'top' } },
         scales: {
-          x: {
-            ticks: { maxTicksLimit: 6, maxRotation: 0 },
-          },
-          yCpu: {
+          x: { ticks: { maxTicksLimit: 6, maxRotation: 0 } },
+          y: {
             type: 'linear',
-            position: 'left',
             min: 0,
             max: 100,
             title: { display: true, text: 'CPU %' },
             ticks: { stepSize: 20 },
-          },
-          yMem: {
-            type: 'linear',
-            position: 'right',
-            min: 0,
-            title: { display: true, text: 'MB' },
-            grid: { drawOnChartArea: false },
           },
         },
       },
     });
   }
 
-  function pushChartPoint(data) {
+  function addChartDataset(hostId, colorIdx) {
+    if (!metricsChart) return;
+    const color = CPU_COLORS[colorIdx % CPU_COLORS.length];
+    const data = new Array(timeLabels.length).fill(null);
+    serverCpuData.set(hostId, data);
+    metricsChart.data.datasets.push({
+      label: hostId.slice(-8),
+      data,
+      borderColor: color,
+      backgroundColor: color + '18',
+      tension: 0.3,
+      pointRadius: 0,
+      borderWidth: 2,
+    });
+    metricsChart.update('none');
+  }
+
+  function pushCpuPoint(hostId, cpuPercent) {
     if (!metricsChart) return;
 
-    const now = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-    timeLabels.push(now);
-    cpuHistory.push(data.cpuPercent);
-    memHistory.push(data.memoryMb);
+    const now = Date.now();
+    // 每 800ms 推一個時間刻度
+    if (now - lastLabelMs >= 800) {
+      lastLabelMs = now;
+      const label = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+      timeLabels.push(label);
+      if (timeLabels.length > MAX_HISTORY) timeLabels.shift();
 
-    if (timeLabels.length > MAX_HISTORY) {
-      timeLabels.shift();
-      cpuHistory.shift();
-      memHistory.shift();
+      // 所有 dataset 補 null 對齊新刻度
+      metricsChart.data.datasets.forEach((ds) => {
+        while (ds.data.length < timeLabels.length) ds.data.push(null);
+        if (ds.data.length > MAX_HISTORY) ds.data.shift();
+      });
+    }
+
+    // 更新此 server 的最後一個資料點
+    const ds = metricsChart.data.datasets.find((d) => d.label === hostId.slice(-8));
+    if (ds && timeLabels.length > 0) {
+      while (ds.data.length < timeLabels.length) ds.data.push(null);
+      ds.data[timeLabels.length - 1] = cpuPercent;
     }
 
     metricsChart.update('none');
   }
 
   // ── Login / Logout ─────────────────────────────────────────────
-
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     loginError.textContent = '';
-
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
     const credentials = btoa(`${username}:${password}`);
-
     if (await checkAuth(credentials)) {
       setStoredCredentials(credentials);
       showForm();
@@ -287,32 +339,18 @@
   });
 
   // ── Clear cache ────────────────────────────────────────────────
-
   clearCacheBtn.addEventListener('click', async () => {
     const credentials = getStoredCredentials();
-    if (!credentials) {
-      showLogin();
-      return;
-    }
+    if (!credentials) { showLogin(); return; }
 
     resultEl.textContent = '清除快取中...';
-
     try {
       const response = await fetch(CACHE_CLEAR_URL, {
         method: 'POST',
         headers: { Authorization: `Basic ${credentials}` },
       });
-
-      if (response.status === 401) {
-        resultEl.textContent = '❌ 認證失敗（401），請重新登入';
-        return;
-      }
-
-      if (!response.ok) {
-        resultEl.textContent = `❌ 清除快取失敗（HTTP ${response.status}）`;
-        return;
-      }
-
+      if (response.status === 401) { resultEl.textContent = '❌ 認證失敗（401），請重新登入'; return; }
+      if (!response.ok) { resultEl.textContent = `❌ 清除快取失敗（HTTP ${response.status}）`; return; }
       const data = await response.json();
       resultEl.textContent =
         `✅ 快取清除完成：L1（記憶體）${data.l1Cleared ? '成功' : '失敗'}，` +
@@ -322,58 +360,32 @@
     }
   });
 
-  // ── Coordinate update form ─────────────────────────────────────
-
+  // ── Coordinate update ──────────────────────────────────────────
   function parseLines(raw) {
-    return raw
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+    return raw.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
   }
 
   async function submitOne(credentials, rawLocation, latitude, longitude) {
     const response = await fetch(PATCH_URL, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Basic ${credentials}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${credentials}` },
       body: JSON.stringify({ rawLocation, latitude, longitude }),
     });
-
-    if (response.status === 200) {
-      const data = await response.json();
-      return `✅ ${rawLocation} → 成功，受影響 ${data.affected} 筆`;
-    }
-    if (response.status === 404) {
-      return `⚠️ ${rawLocation} → 找不到符合的地點（404）`;
-    }
-    if (response.status === 400) {
-      const message = await response.text();
-      return `❌ ${rawLocation} → 驗證失敗（400）：${message}`;
-    }
-    if (response.status === 401) {
-      return `❌ ${rawLocation} → 認證失敗（401），請重新登入`;
-    }
+    if (response.status === 200) { const d = await response.json(); return `✅ ${rawLocation} → 成功，受影響 ${d.affected} 筆`; }
+    if (response.status === 404) return `⚠️ ${rawLocation} → 找不到符合的地點（404）`;
+    if (response.status === 400) { const m = await response.text(); return `❌ ${rawLocation} → 驗證失敗（400）：${m}`; }
+    if (response.status === 401) return `❌ ${rawLocation} → 認證失敗（401），請重新登入`;
     return `❌ ${rawLocation} → 發生錯誤（HTTP ${response.status}）`;
   }
 
   updateForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-
     const credentials = getStoredCredentials();
-    if (!credentials) {
-      showLogin();
-      return;
-    }
+    if (!credentials) { showLogin(); return; }
 
     const rawLocationInput = document.getElementById('rawLocation').value;
     const lines = parseLines(rawLocationInput);
-
-    if (lines.length === 0) {
-      resultEl.textContent = '請輸入發生地點';
-      return;
-    }
+    if (lines.length === 0) { resultEl.textContent = '請輸入發生地點'; return; }
 
     const isBatch = lines.length > 1 || lines[0].includes(',');
     const messages = [];
@@ -381,42 +393,28 @@
 
     if (isBatch) {
       for (const line of lines) {
-        const parts = line.split(',').map((part) => part.trim());
-
-        if (parts.length !== 3) {
-          messages.push(`❌ ${line} → 格式錯誤，需為「地點,緯度,經度」`);
-          continue;
-        }
-
+        const parts = line.split(',').map((p) => p.trim());
+        if (parts.length !== 3) { messages.push(`❌ ${line} → 格式錯誤，需為「地點,緯度,經度」`); continue; }
         const [rawLocation, latStr, lngStr] = parts;
         const latitude = Number(latStr);
         const longitude = Number(lngStr);
-
         if (!rawLocation || Number.isNaN(latitude) || Number.isNaN(longitude)) {
-          messages.push(`❌ ${line} → 格式錯誤，需為「地點,緯度,經度」`);
-          continue;
+          messages.push(`❌ ${line} → 格式錯誤，需為「地點,緯度,經度」`); continue;
         }
-
         messages.push(await submitOne(credentials, rawLocation, latitude, longitude));
       }
     } else {
       const rawLocation = lines[0];
       const latitude = Number(document.getElementById('latitude').value);
       const longitude = Number(document.getElementById('longitude').value);
-
-      if (Number.isNaN(latitude) || Number.isNaN(longitude)) {
-        resultEl.textContent = '請輸入有效的緯度與經度';
-        return;
-      }
-
+      if (Number.isNaN(latitude) || Number.isNaN(longitude)) { resultEl.textContent = '請輸入有效的緯度與經度'; return; }
       messages.push(await submitOne(credentials, rawLocation, latitude, longitude));
     }
 
     resultEl.textContent = messages.join('\n');
   });
 
-  // Close WebSocket when page unloads
-  window.addEventListener('beforeunload', closeWebSocket);
+  window.addEventListener('beforeunload', () => { closeWebSocket(); stopOfflineCheck(); });
 
   init();
 })();

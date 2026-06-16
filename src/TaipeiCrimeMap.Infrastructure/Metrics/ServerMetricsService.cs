@@ -1,29 +1,50 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using StackExchange.Redis;
 
 namespace TaipeiCrimeMap.Infrastructure.Metrics;
 
 public sealed class ServerMetricsService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
+
     private readonly Process _process;
     private TimeSpan _lastCpuTime;
     private DateTime _lastSampleTime;
     private readonly object _cpuLock = new();
+    private readonly ISubscriber? _subscriber;
 
-    // 靜態硬體資訊，啟動時收集一次
+    // 識別資訊
+    private readonly string _hostId;
+    private readonly string _appEnvironment;
+
+    // 靜態硬體資訊
     private readonly int _cpuCores;
     private readonly long _totalMemoryMb;
     private readonly string _osDescription;
     private readonly string _dotNetVersion;
 
-    public ServerMetricsService()
+    public string HostId => _hostId;
+
+    public ServerMetricsService() : this(null) { }
+
+    public ServerMetricsService(IConnectionMultiplexer? redis)
     {
+        _subscriber = redis?.GetSubscriber();
+
+        _hostId = System.Environment.GetEnvironmentVariable("HOSTNAME") ?? "unknown";
+        _appEnvironment = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+
         _process = Process.GetCurrentProcess();
         _process.Refresh();
         _lastCpuTime = _process.TotalProcessorTime;
         _lastSampleTime = DateTime.UtcNow;
 
-        _cpuCores = Environment.ProcessorCount;
+        _cpuCores = System.Environment.ProcessorCount;
         _totalMemoryMb = ReadTotalMemoryMb();
         _osDescription = RuntimeInformation.OSDescription;
         _dotNetVersion = RuntimeInformation.FrameworkDescription;
@@ -42,7 +63,7 @@ public sealed class ServerMetricsService
 
             cpuPercent = elapsedSeconds > 0
                 ? (currentCpuTime - _lastCpuTime).TotalSeconds
-                  / elapsedSeconds / Environment.ProcessorCount * 100.0
+                  / elapsedSeconds / System.Environment.ProcessorCount * 100.0
                 : 0.0;
 
             _lastCpuTime = currentCpuTime;
@@ -52,6 +73,8 @@ public sealed class ServerMetricsService
         var uptime = DateTime.UtcNow - _process.StartTime.ToUniversalTime();
 
         return new ServerMetrics(
+            HostId: _hostId,
+            Environment: _appEnvironment,
             CpuCores: _cpuCores,
             TotalMemoryMb: _totalMemoryMb,
             OsDescription: _osDescription,
@@ -64,6 +87,20 @@ public sealed class ServerMetricsService
             ConnectionCount: connectionCount);
     }
 
+    public async Task PublishAsync(ServerMetrics metrics, CancellationToken ct = default)
+    {
+        if (_subscriber is null) return;
+        try
+        {
+            var json = JsonSerializer.Serialize(metrics, JsonOptions);
+            await _subscriber.PublishAsync(
+                RedisChannel.Literal($"metrics:{_hostId}"),
+                json,
+                CommandFlags.FireAndForget);
+        }
+        catch { /* Garnet 不可用時靜默跳過 */ }
+    }
+
     private static long ReadTotalMemoryMb()
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -74,7 +111,6 @@ public sealed class ServerMetricsService
                 {
                     if (line.StartsWith("MemTotal:", StringComparison.Ordinal))
                     {
-                        // 格式：「MemTotal:       16384000 kB」
                         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
                         if (parts.Length >= 2 && long.TryParse(parts[1], out var kb))
                             return kb / 1024;
