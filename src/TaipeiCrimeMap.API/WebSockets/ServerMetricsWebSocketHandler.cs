@@ -1,6 +1,5 @@
 using System.Net.WebSockets;
 using System.Text;
-using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
@@ -11,17 +10,11 @@ namespace TaipeiCrimeMap.API.WebSockets;
 
 public sealed class ServerMetricsWebSocketHandler
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-    };
-
     private readonly ServerMetricsService _metricsService;
     private readonly AdminAuthOptions _authOptions;
     private readonly IConnectionMultiplexer _primaryRedis;
     private readonly IConnectionMultiplexer? _secondaryRedis;
     private readonly ILogger<ServerMetricsWebSocketHandler> _logger;
-    private volatile int _connectionCount;
 
     public ServerMetricsWebSocketHandler(
         ServerMetricsService metricsService,
@@ -70,7 +63,7 @@ public sealed class ServerMetricsWebSocketHandler
         }
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync();
-        Interlocked.Increment(ref _connectionCount);
+        _metricsService.AddConnection();
 
         // 所有傳送都走這個 channel，確保 WebSocket.SendAsync 是單執行緒存取
         var sendChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(64)
@@ -82,9 +75,7 @@ public sealed class ServerMetricsWebSocketHandler
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
 
-        // producer 只負責發布到 Garnet，不直接寫入 channel
-        // 所有指標（自機 + 跨 Server）統一由 Garnet 訂閱端接收後寫入 channel
-        var producerTask = RunProducerAsync(cts.Token);
+        // 發布由 ServerMetricsService 背景任務處理；Handler 只負責訂閱並轉發
         var ownSubTask = SubscribeToGarnetAsync(_primaryRedis, sendChannel.Writer, cts.Token);
         var secSubTask = _secondaryRedis is not null
             ? SubscribeToGarnetAsync(_secondaryRedis, sendChannel.Writer, cts.Token)
@@ -108,24 +99,9 @@ public sealed class ServerMetricsWebSocketHandler
         finally
         {
             cts.Cancel();
-            Interlocked.Decrement(ref _connectionCount);
-            await Task.WhenAll(producerTask, ownSubTask, secSubTask).ConfigureAwait(false);
+            _metricsService.RemoveConnection();
+            await Task.WhenAll(ownSubTask, secSubTask).ConfigureAwait(false);
         }
-    }
-
-    // 每秒收集自機指標並發布到 Garnet；不直接寫入 channel，由訂閱端統一接收
-    private async Task RunProducerAsync(CancellationToken ct)
-    {
-        try
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                var metrics = _metricsService.GetMetrics(_connectionCount);
-                await _metricsService.PublishAsync(metrics, ct);
-                await Task.Delay(1000, ct);
-            }
-        }
-        catch (OperationCanceledException) { }
     }
 
     // 訂閱指定 Garnet 的 metrics:* pattern，收到就寫入 channel

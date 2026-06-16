@@ -37,9 +37,13 @@ if (!string.IsNullOrWhiteSpace(secondaryRedisConnStr))
         }));
 }
 
-// Server metrics（注入主 Garnet，讓 ServerMetricsService 可以 Publish）
+// Server metrics：背景常駐任務，啟動即持續向 Garnet 發布指標
+// 同時以 Singleton 注入，讓 WebSocketHandler 可以呼叫 AddConnection/RemoveConnection
 builder.Services.AddSingleton<ServerMetricsService>(sp =>
-    new ServerMetricsService(sp.GetService<IConnectionMultiplexer>()));
+    new ServerMetricsService(
+        sp.GetService<IConnectionMultiplexer>(),
+        sp.GetRequiredService<ILogger<ServerMetricsService>>()));
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ServerMetricsService>());
 builder.Services.AddSingleton<ServerMetricsWebSocketHandler>();
 
 // Domain / Infrastructure services
