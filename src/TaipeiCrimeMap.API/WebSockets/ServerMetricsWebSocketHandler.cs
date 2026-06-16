@@ -24,15 +24,15 @@ public sealed class ServerMetricsWebSocketHandler
 
     public async Task HandleAsync(HttpContext context)
     {
-        if (!context.WebSockets.IsWebSocketRequest)
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            return;
-        }
-
         if (!IsAuthenticated(context))
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        if (!context.WebSockets.IsWebSocketRequest)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
 
