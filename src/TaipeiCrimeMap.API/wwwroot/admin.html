@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>座標管理 — 台北市治安地圖</title>
+  <title>管理後台 — 台北市治安地圖</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     body {
       font-family: -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
-      max-width: 640px;
+      max-width: 700px;
       margin: 40px auto;
       padding: 0 16px;
       color: #222;
@@ -81,12 +82,111 @@
     [hidden] {
       display: none !important;
     }
+
+    /* Tab bar */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+    .section-header h1 {
+      margin: 0;
+    }
+    .section-header #btn-logout {
+      margin-top: 0;
+    }
+    .tab-bar {
+      display: flex;
+      border-bottom: 2px solid #e5e7eb;
+      margin-bottom: 1.25rem;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      margin-top: 0;
+      padding: 0.5rem 1.25rem;
+      font-size: 0.95rem;
+      color: #6b7280;
+      cursor: pointer;
+      border-radius: 0;
+    }
+    .tab-btn:hover {
+      background: none;
+      color: #2563eb;
+    }
+    .tab-btn.active {
+      color: #2563eb;
+      border-bottom-color: #2563eb;
+    }
+
+    /* Metric cards */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 1.25rem;
+    }
+    @media (max-width: 480px) {
+      .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .metric-card {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+    .metric-label {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .metric-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #111;
+    }
+    .hw-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin-bottom: 1rem;
+      padding: 8px 12px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: #374151;
+    }
+    .hw-item b { color: #0369a1; margin-right: 4px; }
+    .ws-status {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-bottom: 0.75rem;
+    }
+    .ws-status.connected { color: #16a34a; }
+    .ws-status.error { color: #dc2626; }
+    .chart-box {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .chart-box canvas {
+      display: block;
+      width: 100% !important;
+      max-height: 240px;
+    }
   </style>
 </head>
 <body>
-  <h1>座標管理</h1>
-
   <section id="login-section">
+    <h1>座標管理</h1>
     <p>請輸入管理帳號密碼登入。</p>
     <form id="login-form">
       <label for="login-username">帳號</label>
@@ -101,27 +201,83 @@
   </section>
 
   <section id="form-section" hidden>
-    <form id="update-form">
-      <label for="rawLocation">發生地點</label>
-      <textarea id="rawLocation" name="rawLocation" required
-        placeholder="單筆：輸入地點，搭配下方緯度／經度&#10;批次：每行一筆，格式為「地點,緯度,經度」"></textarea>
-      <div class="hint">
-        單筆更新：輸入一行地點，並填寫下方緯度／經度。<br />
-        批次更新：每行一筆，格式為「地點,緯度,經度」，多行時會逐筆送出。
+    <div class="section-header">
+      <h1>管理後台</h1>
+      <button type="button" id="btn-logout">登出</button>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="maintenance">資料維護</button>
+      <button class="tab-btn" data-tab="monitor">伺服器監控</button>
+    </div>
+
+    <!-- Tab: 資料維護 -->
+    <div id="tab-maintenance" class="tab-panel">
+      <form id="update-form">
+        <label for="rawLocation">發生地點</label>
+        <textarea id="rawLocation" name="rawLocation" required
+          placeholder="單筆：輸入地點，搭配下方緯度／經度&#10;批次：每行一筆，格式為「地點,緯度,經度」"></textarea>
+        <div class="hint">
+          單筆更新：輸入一行地點，並填寫下方緯度／經度。<br />
+          批次更新：每行一筆，格式為「地點,緯度,經度」，多行時會逐筆送出。
+        </div>
+
+        <label for="latitude">緯度（單筆更新用，-90 ~ 90）</label>
+        <input type="number" id="latitude" name="latitude" step="any" min="-90" max="90" />
+
+        <label for="longitude">經度（單筆更新用，-180 ~ 180）</label>
+        <input type="number" id="longitude" name="longitude" step="any" min="-180" max="180" />
+
+        <button type="submit">更新座標</button>
+        <button type="button" id="btn-clear-cache">清除快取</button>
+      </form>
+
+      <div id="result"></div>
+    </div>
+
+    <!-- Tab: 伺服器監控 -->
+    <div id="tab-monitor" class="tab-panel" style="display:none">
+      <p class="ws-status" id="ws-status">⬤ 未連線</p>
+
+      <!-- 靜態硬體資訊列（第一次收到資料後顯示） -->
+      <div class="hw-info" id="hw-info" style="display:none">
+        <span class="hw-item"><b>CPU 核心</b><span id="hw-cores">—</span></span>
+        <span class="hw-item"><b>總記憶體</b><span id="hw-total-mem">—</span></span>
+        <span class="hw-item"><b>OS</b><span id="hw-os">—</span></span>
+        <span class="hw-item"><b>.NET</b><span id="hw-dotnet">—</span></span>
       </div>
 
-      <label for="latitude">緯度（單筆更新用，-90 ~ 90）</label>
-      <input type="number" id="latitude" name="latitude" step="any" min="-90" max="90" />
+      <div class="metric-grid">
+        <div class="metric-card">
+          <div class="metric-label">CPU</div>
+          <div class="metric-value" id="mc-cpu">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">記憶體</div>
+          <div class="metric-value" id="mc-mem">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">GC 記憶體</div>
+          <div class="metric-value" id="mc-gc">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Uptime</div>
+          <div class="metric-value" id="mc-uptime">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">執行緒數</div>
+          <div class="metric-value" id="mc-threads">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">連線數</div>
+          <div class="metric-value" id="mc-conns">—</div>
+        </div>
+      </div>
 
-      <label for="longitude">經度（單筆更新用，-180 ~ 180）</label>
-      <input type="number" id="longitude" name="longitude" step="any" min="-180" max="180" />
-
-      <button type="submit">更新座標</button>
-      <button type="button" id="btn-clear-cache">清除快取</button>
-      <button type="button" id="btn-logout">登出</button>
-    </form>
-
-    <div id="result"></div>
+      <div class="chart-box">
+        <canvas id="metrics-chart"></canvas>
+      </div>
+    </div>
   </section>
 
   <script src="js/admin.js"></script>
