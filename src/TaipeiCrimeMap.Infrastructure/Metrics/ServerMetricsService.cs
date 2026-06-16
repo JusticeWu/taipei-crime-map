@@ -78,10 +78,12 @@ public sealed class ServerMetricsService : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_cts is not null)
+        var cts = _cts;
+        _cts = null;
+        if (cts is not null)
         {
-            await _cts.CancelAsync();
-            _cts.Dispose();
+            await cts.CancelAsync();
+            cts.Dispose();
         }
 
         if (_publishLoop is not null)
