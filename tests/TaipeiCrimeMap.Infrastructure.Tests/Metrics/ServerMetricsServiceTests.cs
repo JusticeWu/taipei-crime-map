@@ -42,4 +42,31 @@ public class ServerMetricsServiceTests
 
         metrics.CpuPercent.Should().BeInRange(0, 100 * Environment.ProcessorCount);
     }
+
+    [Fact]
+    public void GetMetrics_StaticHardwareInfo_IsPopulated()
+    {
+        var service = new ServerMetricsService();
+
+        var metrics = service.GetMetrics(0);
+
+        metrics.CpuCores.Should().BeGreaterThan(0);
+        metrics.TotalMemoryMb.Should().BeGreaterThan(0);
+        metrics.OsDescription.Should().NotBeNullOrWhiteSpace();
+        metrics.DotNetVersion.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void GetMetrics_StaticHardwareInfo_DoesNotChangeBetweenCalls()
+    {
+        var service = new ServerMetricsService();
+
+        var first = service.GetMetrics(0);
+        var second = service.GetMetrics(0);
+
+        second.CpuCores.Should().Be(first.CpuCores);
+        second.TotalMemoryMb.Should().Be(first.TotalMemoryMb);
+        second.OsDescription.Should().Be(first.OsDescription);
+        second.DotNetVersion.Should().Be(first.DotNetVersion);
+    }
 }
