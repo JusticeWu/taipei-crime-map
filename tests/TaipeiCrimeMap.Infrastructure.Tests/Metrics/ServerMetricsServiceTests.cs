@@ -40,7 +40,7 @@ public class ServerMetricsServiceTests
         System.Threading.Thread.Sleep(50);
         var metrics = service.GetMetrics(0);
 
-        metrics.CpuPercent.Should().BeInRange(0, 100 * Environment.ProcessorCount);
+        metrics.CpuPercent.Should().BeInRange(0, 100 * System.Environment.ProcessorCount);
     }
 
     [Fact]
@@ -68,5 +68,49 @@ public class ServerMetricsServiceTests
         second.TotalMemoryMb.Should().Be(first.TotalMemoryMb);
         second.OsDescription.Should().Be(first.OsDescription);
         second.DotNetVersion.Should().Be(first.DotNetVersion);
+    }
+
+    [Fact]
+    public void GetMetrics_HostId_IsPopulated()
+    {
+        var service = new ServerMetricsService();
+
+        var metrics = service.GetMetrics(0);
+
+        metrics.HostId.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void GetMetrics_Environment_IsPopulated()
+    {
+        var service = new ServerMetricsService();
+
+        var metrics = service.GetMetrics(0);
+
+        metrics.Environment.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void GetMetrics_HostId_IsConsistentAcrossCalls()
+    {
+        var service = new ServerMetricsService();
+
+        var first = service.GetMetrics(0);
+        var second = service.GetMetrics(0);
+
+        second.HostId.Should().Be(first.HostId);
+        second.Environment.Should().Be(first.Environment);
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithoutRedis_DoesNotThrow()
+    {
+        // 建立無 Redis 的 service（null），PublishAsync 應為 no-op
+        var service = new ServerMetricsService(redis: null);
+        var metrics = service.GetMetrics(0);
+
+        var act = async () => await service.PublishAsync(metrics);
+
+        await act.Should().NotThrowAsync();
     }
 }

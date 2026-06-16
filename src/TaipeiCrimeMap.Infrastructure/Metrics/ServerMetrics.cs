@@ -1,6 +1,9 @@
 namespace TaipeiCrimeMap.Infrastructure.Metrics;
 
 public sealed record ServerMetrics(
+    // 識別資訊
+    string HostId,
+    string Environment,
     // 靜態硬體資訊（啟動時收集一次）
     int CpuCores,
     long TotalMemoryMb,
