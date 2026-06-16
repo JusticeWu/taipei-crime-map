@@ -5,7 +5,9 @@
   const PATCH_URL = '/api/crime/coordinate';
   const CACHE_CLEAR_URL = '/api/admin/cache/clear';
   const STORAGE_KEY = 'adminAuthCredentials';
+  const MAX_HISTORY = 60;
 
+  // DOM refs
   const loginSection = document.getElementById('login-section');
   const formSection = document.getElementById('form-section');
   const loginForm = document.getElementById('login-form');
@@ -14,6 +16,24 @@
   const resultEl = document.getElementById('result');
   const logoutBtn = document.getElementById('btn-logout');
   const clearCacheBtn = document.getElementById('btn-clear-cache');
+
+  // Metric card refs
+  const mcCpu = document.getElementById('mc-cpu');
+  const mcMem = document.getElementById('mc-mem');
+  const mcGc = document.getElementById('mc-gc');
+  const mcUptime = document.getElementById('mc-uptime');
+  const mcThreads = document.getElementById('mc-threads');
+  const mcConns = document.getElementById('mc-conns');
+  const wsStatusEl = document.getElementById('ws-status');
+
+  // WebSocket state
+  let ws = null;
+
+  // Chart.js instance
+  let metricsChart = null;
+  const cpuHistory = [];
+  const memHistory = [];
+  const timeLabels = [];
 
   function getStoredCredentials() {
     return sessionStorage.getItem(STORAGE_KEY);
@@ -37,6 +57,7 @@
   function showLogin() {
     loginSection.hidden = false;
     formSection.hidden = true;
+    closeWebSocket();
   }
 
   function showForm() {
@@ -53,6 +74,171 @@
       showLogin();
     }
   }
+
+  // ── Tab switching ──────────────────────────────────────────────
+
+  document.querySelectorAll('.tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const tabName = btn.dataset.tab;
+      document.querySelectorAll('.tab-panel').forEach((panel) => {
+        panel.style.display = panel.id === `tab-${tabName}` ? '' : 'none';
+      });
+
+      if (tabName === 'monitor') {
+        ensureChart();
+        openWebSocket();
+      } else {
+        closeWebSocket();
+      }
+    });
+  });
+
+  // ── WebSocket ──────────────────────────────────────────────────
+
+  function openWebSocket() {
+    if (ws && ws.readyState <= WebSocket.OPEN) return;
+
+    const credentials = getStoredCredentials();
+    if (!credentials) return;
+
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${proto}//${location.host}/ws/metrics?token=${encodeURIComponent(credentials)}`;
+
+    setWsStatus('connecting');
+    ws = new WebSocket(url);
+
+    ws.addEventListener('open', () => setWsStatus('connected'));
+
+    ws.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        updateCards(data);
+        pushChartPoint(data);
+      } catch (_) { /* ignore malformed frame */ }
+    });
+
+    ws.addEventListener('close', () => setWsStatus('disconnected'));
+    ws.addEventListener('error', () => setWsStatus('error'));
+  }
+
+  function closeWebSocket() {
+    if (ws) {
+      ws.close();
+      ws = null;
+    }
+    setWsStatus('disconnected');
+  }
+
+  function setWsStatus(state) {
+    if (!wsStatusEl) return;
+    wsStatusEl.className = 'ws-status';
+    if (state === 'connected') {
+      wsStatusEl.textContent = '⬤ 已連線';
+      wsStatusEl.classList.add('connected');
+    } else if (state === 'connecting') {
+      wsStatusEl.textContent = '⬤ 連線中…';
+    } else if (state === 'error') {
+      wsStatusEl.textContent = '⬤ 連線錯誤';
+      wsStatusEl.classList.add('error');
+    } else {
+      wsStatusEl.textContent = '⬤ 未連線';
+    }
+  }
+
+  // ── Metric cards ───────────────────────────────────────────────
+
+  function updateCards(data) {
+    mcCpu.textContent = `${data.cpuPercent}%`;
+    mcMem.textContent = `${data.memoryMb} MB`;
+    mcGc.textContent = `${data.gcMemoryMb} MB`;
+    mcUptime.textContent = data.uptime;
+    mcThreads.textContent = data.threadCount;
+    mcConns.textContent = data.connectionCount;
+  }
+
+  // ── Chart ──────────────────────────────────────────────────────
+
+  function ensureChart() {
+    if (metricsChart) return;
+
+    const ctx = document.getElementById('metrics-chart').getContext('2d');
+    metricsChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [
+          {
+            label: 'CPU %',
+            data: cpuHistory,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239,68,68,0.08)',
+            yAxisID: 'yCpu',
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2,
+          },
+          {
+            label: '記憶體 MB',
+            data: memHistory,
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59,130,246,0.08)',
+            yAxisID: 'yMem',
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2,
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          x: {
+            ticks: { maxTicksLimit: 6, maxRotation: 0 },
+          },
+          yCpu: {
+            type: 'linear',
+            position: 'left',
+            min: 0,
+            max: 100,
+            title: { display: true, text: 'CPU %' },
+            ticks: { stepSize: 20 },
+          },
+          yMem: {
+            type: 'linear',
+            position: 'right',
+            min: 0,
+            title: { display: true, text: 'MB' },
+            grid: { drawOnChartArea: false },
+          },
+        },
+      },
+    });
+  }
+
+  function pushChartPoint(data) {
+    if (!metricsChart) return;
+
+    const now = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+    timeLabels.push(now);
+    cpuHistory.push(data.cpuPercent);
+    memHistory.push(data.memoryMb);
+
+    if (timeLabels.length > MAX_HISTORY) {
+      timeLabels.shift();
+      cpuHistory.shift();
+      memHistory.shift();
+    }
+
+    metricsChart.update('none');
+  }
+
+  // ── Login / Logout ─────────────────────────────────────────────
 
   loginForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -76,6 +262,8 @@
     updateForm.reset();
     showLogin();
   });
+
+  // ── Clear cache ────────────────────────────────────────────────
 
   clearCacheBtn.addEventListener('click', async () => {
     const credentials = getStoredCredentials();
@@ -110,6 +298,8 @@
       resultEl.textContent = `❌ 清除快取發生錯誤：${error.message}`;
     }
   });
+
+  // ── Coordinate update form ─────────────────────────────────────
 
   function parseLines(raw) {
     return raw
@@ -201,6 +391,9 @@
 
     resultEl.textContent = messages.join('\n');
   });
+
+  // Close WebSocket when page unloads
+  window.addEventListener('beforeunload', closeWebSocket);
 
   init();
 })();
