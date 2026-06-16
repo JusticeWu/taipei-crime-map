@@ -141,12 +141,15 @@ public sealed class ServerMetricsService : IHostedService
         try
         {
             var json = JsonSerializer.Serialize(metrics, JsonOptions);
-            await _subscriber.PublishAsync(
+            var subscriberCount = await _subscriber.PublishAsync(
                 RedisChannel.Literal($"metrics:{_hostId}"),
-                json,
-                CommandFlags.FireAndForget);
+                json);
+            _logger.LogDebug("已發布指標到 Garnet, channel: metrics:{HostId}, 訂閱者數量: {SubscriberCount}", _hostId, subscriberCount);
         }
-        catch { /* Garnet 不可用時靜默跳過 */ }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "發布指標到 Garnet 失敗: metrics:{HostId}", _hostId);
+        }
     }
 
     // ── Private ─────────────────────────────────────────────────────────────
