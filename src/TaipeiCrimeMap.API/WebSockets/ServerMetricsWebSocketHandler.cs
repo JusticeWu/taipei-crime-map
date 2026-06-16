@@ -1,8 +1,6 @@
 using System.Net.WebSockets;
 using System.Text;
-using System.Threading.Channels;
 using Microsoft.Extensions.Options;
-using StackExchange.Redis;
 using TaipeiCrimeMap.Application.Options;
 using TaipeiCrimeMap.Infrastructure.Metrics;
 
@@ -12,40 +10,16 @@ public sealed class ServerMetricsWebSocketHandler
 {
     private readonly ServerMetricsService _metricsService;
     private readonly AdminAuthOptions _authOptions;
-    private readonly IConnectionMultiplexer _primaryRedis;
-    private readonly IConnectionMultiplexer? _secondaryRedis;
     private readonly ILogger<ServerMetricsWebSocketHandler> _logger;
 
     public ServerMetricsWebSocketHandler(
         ServerMetricsService metricsService,
         IOptions<AdminAuthOptions> authOptions,
-        IConnectionMultiplexer primaryRedis,
-        IServiceProvider serviceProvider,
         ILogger<ServerMetricsWebSocketHandler> logger)
     {
         _metricsService = metricsService;
         _authOptions = authOptions.Value;
-        _primaryRedis = primaryRedis;
-        _secondaryRedis = serviceProvider.GetKeyedService<IConnectionMultiplexer>("SecondaryRedis");
         _logger = logger;
-
-        // 啟動時 ping 一次，確認跨 Server 連線是否可用
-        if (_secondaryRedis is not null)
-            _ = PingSecondaryRedisAsync();
-    }
-
-    private async Task PingSecondaryRedisAsync()
-    {
-        var endpoint = string.Join(",", _secondaryRedis!.GetEndPoints().Select(e => e.ToString()));
-        try
-        {
-            await _secondaryRedis!.GetDatabase().PingAsync();
-            _logger.LogInformation("SecondaryRedis 連線成功: {Endpoint}", endpoint);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("SecondaryRedis 連線失敗，跨 Server 監控將不可用: {Error}", ex.Message);
-        }
     }
 
     public async Task HandleAsync(HttpContext context)
@@ -65,26 +39,12 @@ public sealed class ServerMetricsWebSocketHandler
         using var ws = await context.WebSockets.AcceptWebSocketAsync();
         _metricsService.AddConnection();
 
-        // 所有傳送都走這個 channel，確保 WebSocket.SendAsync 是單執行緒存取
-        var sendChannel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(64)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleWriter = false,
-            SingleReader = true,
-        });
-
+        var (channelId, reader) = _metricsService.RegisterClientChannel();
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
-
-        // 發布由 ServerMetricsService 背景任務處理；Handler 只負責訂閱並轉發
-        var ownSubTask = SubscribeToGarnetAsync(_primaryRedis, sendChannel.Writer, cts.Token);
-        var secSubTask = _secondaryRedis is not null
-            ? SubscribeToGarnetAsync(_secondaryRedis, sendChannel.Writer, cts.Token)
-            : Task.CompletedTask;
 
         try
         {
-            // 單一消費者：從 channel 讀取並推送到 WebSocket
-            await foreach (var bytes in sendChannel.Reader.ReadAllAsync(cts.Token))
+            await foreach (var bytes in reader.ReadAllAsync(cts.Token))
             {
                 if (ws.State != WebSocketState.Open) break;
                 await ws.SendAsync(
@@ -100,45 +60,7 @@ public sealed class ServerMetricsWebSocketHandler
         {
             cts.Cancel();
             _metricsService.RemoveConnection();
-            await Task.WhenAll(ownSubTask, secSubTask).ConfigureAwait(false);
-        }
-    }
-
-    // 訂閱指定 Garnet 的 metrics:* pattern，收到就寫入 channel
-    private async Task SubscribeToGarnetAsync(
-        IConnectionMultiplexer redis,
-        ChannelWriter<byte[]> writer,
-        CancellationToken ct)
-    {
-        var endpoint = string.Join(",", redis.GetEndPoints().Select(e => e.ToString()));
-        ISubscriber? sub = null;
-        try
-        {
-            sub = redis.GetSubscriber();
-            await sub.SubscribeAsync(
-                RedisChannel.Pattern("metrics:*"),
-                (_, message) =>
-                {
-                    if (!message.IsNullOrEmpty)
-                        writer.TryWrite(Encoding.UTF8.GetBytes((string)message!));
-                });
-
-            _logger.LogInformation("已訂閱 Garnet: {Endpoint} pattern: metrics:*", endpoint);
-
-            await Task.Delay(Timeout.Infinite, ct);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Garnet 訂閱例外: {Endpoint}", endpoint);
-        }
-        finally
-        {
-            if (sub is not null)
-            {
-                try { await sub.UnsubscribeAsync(RedisChannel.Pattern("metrics:*")); }
-                catch { }
-            }
+            _metricsService.UnregisterClientChannel(channelId);
         }
     }
 

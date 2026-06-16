@@ -42,6 +42,7 @@ if (!string.IsNullOrWhiteSpace(secondaryRedisConnStr))
 builder.Services.AddSingleton<ServerMetricsService>(sp =>
     new ServerMetricsService(
         sp.GetService<IConnectionMultiplexer>(),
+        sp.GetKeyedService<IConnectionMultiplexer>("SecondaryRedis"),
         sp.GetRequiredService<ILogger<ServerMetricsService>>()));
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ServerMetricsService>());
 builder.Services.AddSingleton<ServerMetricsWebSocketHandler>();

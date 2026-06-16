@@ -6,7 +6,8 @@
   const CACHE_CLEAR_URL = '/api/admin/cache/clear';
   const STORAGE_KEY = 'adminAuthCredentials';
   const MAX_HISTORY = 60;
-  const OFFLINE_MS = 5000;
+  const OFFLINE_MS = 5_000;   // 5 s → 灰色離線
+  const REMOVE_MS  = 15_000;  // 15 s → 從 DOM 與 Map 完全移除
 
   // CPU 折線圖色盤（每台 Server 一個顏色）
   const CPU_COLORS = [
@@ -222,12 +223,28 @@
   }
 
   // ── Offline detection ──────────────────────────────────────────
+  function removeServerBlock(hostId) {
+    const shortId = hostId.slice(-8);
+    const block = document.getElementById(`sb-${shortId}`);
+    if (block) block.remove();
+    serverState.delete(hostId);
+    serverCpuData.delete(hostId);
+    if (metricsChart) {
+      const idx = metricsChart.data.datasets.findIndex((d) => d.label === shortId);
+      if (idx !== -1) metricsChart.data.datasets.splice(idx, 1);
+      metricsChart.update('none');
+    }
+  }
+
   function startOfflineCheck() {
     if (offlineTimer) return;
     offlineTimer = setInterval(() => {
       const now = Date.now();
+      const toRemove = [];
       serverState.forEach((state, hostId) => {
-        const offline = !state.lastSeen || (now - state.lastSeen) > OFFLINE_MS;
+        const elapsed = !state.lastSeen ? Infinity : now - state.lastSeen;
+        if (elapsed > REMOVE_MS) { toRemove.push(hostId); return; }
+        const offline = elapsed > OFFLINE_MS;
         const shortId = hostId.slice(-8);
         const block = document.getElementById(`sb-${shortId}`);
         if (!block) return;
@@ -238,6 +255,7 @@
           dot.className = `online-dot ${offline ? 'offline' : 'online'}`;
         }
       });
+      toRemove.forEach(removeServerBlock);
     }, 1000);
   }
 
@@ -273,11 +291,13 @@
 
   function addChartDataset(hostId, colorIdx) {
     if (!metricsChart) return;
+    const shortId = hostId.slice(-8);
+    if (metricsChart.data.datasets.find((d) => d.label === shortId)) return;
     const color = CPU_COLORS[colorIdx % CPU_COLORS.length];
     const data = new Array(timeLabels.length).fill(null);
     serverCpuData.set(hostId, data);
     metricsChart.data.datasets.push({
-      label: hostId.slice(-8),
+      label: shortId,
       data,
       borderColor: color,
       backgroundColor: color + '18',

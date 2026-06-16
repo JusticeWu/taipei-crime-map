@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -20,6 +23,8 @@ public sealed class ServerMetricsService : IHostedService
     private DateTime _lastSampleTime;
     private readonly object _cpuLock = new();
     private readonly ISubscriber? _subscriber;
+    private readonly IConnectionMultiplexer? _primaryRedis;
+    private readonly IConnectionMultiplexer? _secondaryRedis;
     private readonly ILogger<ServerMetricsService> _logger;
 
     // 識別資訊
@@ -35,25 +40,49 @@ public sealed class ServerMetricsService : IHostedService
     // 活躍 WebSocket 連線數（由 Handler 透過 Add/RemoveConnection 維護）
     private int _connectionCount;
 
-    // 背景發布任務
+    // 背景任務
     private CancellationTokenSource? _cts;
     private Task? _publishLoop;
+    private Task? _subscriptionTask;
+
+    // 發布日誌節流：訂閱者為 0 時每次都 log；否則每 10 秒 log 一次
+    private DateTime _lastPublishInfoLogTime = DateTime.MinValue;
+
+    // 廣播頻道：每個 WebSocket 連線各持有一個 writer，收到 Garnet 訊息時廣播給所有連線
+    private readonly ConcurrentDictionary<Guid, ChannelWriter<byte[]>> _clientChannels = new();
 
     public string HostId => _hostId;
 
     public ServerMetricsService()
-        : this(null, NullLogger<ServerMetricsService>.Instance) { }
+        : this(null, null, NullLogger<ServerMetricsService>.Instance) { }
 
     public ServerMetricsService(IConnectionMultiplexer? redis)
-        : this(redis, NullLogger<ServerMetricsService>.Instance) { }
+        : this(redis, null, NullLogger<ServerMetricsService>.Instance) { }
 
     public ServerMetricsService(IConnectionMultiplexer? redis, ILogger<ServerMetricsService> logger)
+        : this(redis, null, logger) { }
+
+    public ServerMetricsService(
+        IConnectionMultiplexer? redis,
+        IConnectionMultiplexer? secondaryRedis,
+        ILogger<ServerMetricsService> logger)
     {
+        _primaryRedis = redis;
+        _secondaryRedis = secondaryRedis;
         _subscriber = redis?.GetSubscriber();
         _logger = logger;
 
-        _hostId = System.Environment.GetEnvironmentVariable("HOSTNAME") ?? "unknown";
         _appEnvironment = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        var envPrefix = _appEnvironment switch
+        {
+            "Development" => "DEV",
+            "Staging"     => "STG",
+            "Production"  => "PROD",
+            var e         => e.Length >= 4 ? e[..4].ToUpperInvariant() : e.ToUpperInvariant(),
+        };
+        var machineSuffix = System.Environment.MachineName;
+        machineSuffix = machineSuffix.Length >= 5 ? machineSuffix[^5..] : machineSuffix;
+        _hostId = $"{envPrefix}-{machineSuffix}";
 
         _process = Process.GetCurrentProcess();
         _process.Refresh();
@@ -73,28 +102,60 @@ public sealed class ServerMetricsService : IHostedService
         _logger.LogInformation("ServerMetricsService 背景發布已啟動，HostId: {HostId}", _hostId);
         _cts = new CancellationTokenSource();
         _publishLoop = RunPublishLoopAsync(_cts.Token);
+        _subscriptionTask = RunSubscriptionsAsync(_cts.Token);
         return Task.CompletedTask;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        if (_cts is not null)
+        var cts = _cts;
+        _cts = null;
+        if (cts is not null)
         {
-            await _cts.CancelAsync();
-            _cts.Dispose();
+            await cts.CancelAsync();
+            cts.Dispose();
         }
 
-        if (_publishLoop is not null)
+        var tasks = new List<Task>();
+        if (_publishLoop is not null) tasks.Add(_publishLoop);
+        if (_subscriptionTask is not null) tasks.Add(_subscriptionTask);
+
+        if (tasks.Count > 0)
         {
-            try { await _publishLoop.ConfigureAwait(false); }
+            try { await Task.WhenAll(tasks).ConfigureAwait(false); }
             catch (OperationCanceledException) { }
         }
+
+        foreach (var writer in _clientChannels.Values)
+            writer.TryComplete();
+        _clientChannels.Clear();
     }
 
     // ── Connection tracking（由 WebSocketHandler 呼叫） ─────────────────────
 
     public void AddConnection() => Interlocked.Increment(ref _connectionCount);
     public void RemoveConnection() => Interlocked.Decrement(ref _connectionCount);
+
+    // ── Client channel management（廣播 Garnet 訊息給 WebSocket 連線） ──────
+
+    public (Guid Id, ChannelReader<byte[]> Reader) RegisterClientChannel()
+    {
+        var id = Guid.NewGuid();
+        var channel = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(64)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleWriter = false,
+            SingleReader = true,
+        });
+        _clientChannels[id] = channel.Writer;
+        return (id, channel.Reader);
+    }
+
+    public void UnregisterClientChannel(Guid id)
+    {
+        if (_clientChannels.TryRemove(id, out var writer))
+            writer.TryComplete();
+    }
 
     // ── Metrics ─────────────────────────────────────────────────────────────
 
@@ -141,12 +202,23 @@ public sealed class ServerMetricsService : IHostedService
         try
         {
             var json = JsonSerializer.Serialize(metrics, JsonOptions);
-            await _subscriber.PublishAsync(
+            var subscriberCount = await _subscriber.PublishAsync(
                 RedisChannel.Literal($"metrics:{_hostId}"),
-                json,
-                CommandFlags.FireAndForget);
+                json);
+
+            var now = DateTime.UtcNow;
+            if (subscriberCount == 0 || (now - _lastPublishInfoLogTime).TotalSeconds >= 10)
+            {
+                _logger.LogInformation(
+                    "已發布指標到 Garnet, channel: metrics:{HostId}, 訂閱者數量: {SubscriberCount}",
+                    _hostId, subscriberCount);
+                _lastPublishInfoLogTime = now;
+            }
         }
-        catch { /* Garnet 不可用時靜默跳過 */ }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "發布指標到 Garnet 失敗: metrics:{HostId}", _hostId);
+        }
     }
 
     // ── Private ─────────────────────────────────────────────────────────────
@@ -163,6 +235,58 @@ public sealed class ServerMetricsService : IHostedService
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    private async Task RunSubscriptionsAsync(CancellationToken ct)
+    {
+        var tasks = new List<Task>();
+        if (_primaryRedis is not null)
+            tasks.Add(SubscribeGarnetAsync(_primaryRedis, ct));
+        if (_secondaryRedis is not null)
+            tasks.Add(SubscribeGarnetAsync(_secondaryRedis, ct));
+
+        if (tasks.Count > 0)
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+    }
+
+    private async Task SubscribeGarnetAsync(IConnectionMultiplexer redis, CancellationToken ct)
+    {
+        var endpoint = string.Join(",", redis.GetEndPoints().Select(e => e.ToString()));
+        ISubscriber? sub = null;
+        try
+        {
+            sub = redis.GetSubscriber();
+            await sub.SubscribeAsync(
+                RedisChannel.Pattern("metrics:*"),
+                (_, message) =>
+                {
+                    if (!message.IsNullOrEmpty)
+                        BroadcastToClients((string)message!);
+                });
+
+            _logger.LogInformation("已訂閱 Garnet: {Endpoint} pattern: metrics:*", endpoint);
+            await Task.Delay(Timeout.Infinite, ct);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Garnet 訂閱例外: {Endpoint}", endpoint);
+        }
+        finally
+        {
+            if (sub is not null)
+            {
+                try { await sub.UnsubscribeAsync(RedisChannel.Pattern("metrics:*")); }
+                catch { }
+            }
+        }
+    }
+
+    private void BroadcastToClients(string message)
+    {
+        var bytes = Encoding.UTF8.GetBytes(message);
+        foreach (var writer in _clientChannels.Values)
+            writer.TryWrite(bytes);
     }
 
     private static long ReadTotalMemoryMb()
