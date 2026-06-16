@@ -113,4 +113,27 @@ public class ServerMetricsServiceTests
 
         await act.Should().NotThrowAsync();
     }
+
+    [Fact]
+    public void UnregisterClientChannel_AfterRegister_CompletesReader()
+    {
+        var service = new ServerMetricsService();
+
+        var (id, reader) = service.RegisterClientChannel();
+        service.UnregisterClientChannel(id);
+
+        reader.Completion.IsCompleted.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task StopAsync_CalledTwice_DoesNotThrow()
+    {
+        var service = new ServerMetricsService();
+        await service.StartAsync(CancellationToken.None);
+        await service.StopAsync(CancellationToken.None);
+
+        var act = async () => await service.StopAsync(CancellationToken.None);
+
+        await act.Should().NotThrowAsync();
+    }
 }

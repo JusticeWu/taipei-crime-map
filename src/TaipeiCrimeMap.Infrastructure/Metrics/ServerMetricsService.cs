@@ -83,7 +83,7 @@ public sealed class ServerMetricsService : IHostedService
         var machineSuffix = System.Environment.MachineName;
         machineSuffix = machineSuffix.Length >= 5 ? machineSuffix[^5..] : machineSuffix;
         _hostId = $"{envPrefix}-{machineSuffix}";
-        _logger.LogInformation("ServerMetricsService 初始化，ASPNETCORE_ENVIRONMENT={Env}，HostId={HostId}", _appEnvironment, _hostId);
+        _logger.LogDebug("ServerMetricsService 初始化，ASPNETCORE_ENVIRONMENT={Env}，HostId={HostId}", _appEnvironment, _hostId);
 
         _process = Process.GetCurrentProcess();
         _process.Refresh();
@@ -100,7 +100,7 @@ public sealed class ServerMetricsService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("ServerMetricsService 背景發布已啟動，HostId: {HostId}", _hostId);
+        _logger.LogDebug("ServerMetricsService 背景發布已啟動，HostId: {HostId}", _hostId);
         _cts = new CancellationTokenSource();
         _publishLoop = RunPublishLoopAsync(_cts.Token);
         _subscriptionTask = RunSubscriptionsAsync(_cts.Token);
@@ -207,13 +207,22 @@ public sealed class ServerMetricsService : IHostedService
                 RedisChannel.Literal($"metrics:{_hostId}"),
                 json);
 
-            var now = DateTime.UtcNow;
-            if (subscriberCount == 0 || (now - _lastPublishInfoLogTime).TotalSeconds >= 10)
+            if (subscriberCount == 0)
             {
-                _logger.LogInformation(
+                var now = DateTime.UtcNow;
+                if ((now - _lastPublishInfoLogTime).TotalSeconds >= 10)
+                {
+                    _logger.LogWarning(
+                        "已發布指標到 Garnet, channel: metrics:{HostId}, 但無訂閱者",
+                        _hostId);
+                    _lastPublishInfoLogTime = now;
+                }
+            }
+            else
+            {
+                _logger.LogDebug(
                     "已發布指標到 Garnet, channel: metrics:{HostId}, 訂閱者數量: {SubscriberCount}",
                     _hostId, subscriberCount);
-                _lastPublishInfoLogTime = now;
             }
         }
         catch (Exception ex)
@@ -232,6 +241,9 @@ public sealed class ServerMetricsService : IHostedService
             {
                 var metrics = GetMetrics(Volatile.Read(ref _connectionCount));
                 await PublishAsync(metrics, ct);
+                // Direct-broadcast to local clients (works without Garnet;
+                // subscription skips our own channel to avoid duplicates)
+                BroadcastToClients(JsonSerializer.Serialize(metrics, JsonOptions));
                 await Task.Delay(1000, ct);
             }
         }
@@ -259,13 +271,15 @@ public sealed class ServerMetricsService : IHostedService
             sub = redis.GetSubscriber();
             await sub.SubscribeAsync(
                 RedisChannel.Pattern("metrics:*"),
-                (_, message) =>
+                (channel, message) =>
                 {
+                    // local metrics are direct-broadcast; skip to avoid duplicates
+                    if ((string?)channel == $"metrics:{_hostId}") return;
                     if (!message.IsNullOrEmpty)
                         BroadcastToClients((string)message!);
                 });
 
-            _logger.LogInformation("已訂閱 Garnet: {Endpoint} pattern: metrics:*", endpoint);
+            _logger.LogDebug("已訂閱 Garnet: {Endpoint} pattern: metrics:*", endpoint);
             await Task.Delay(Timeout.Infinite, ct);
         }
         catch (OperationCanceledException) { }
