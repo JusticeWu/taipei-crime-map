@@ -151,6 +151,19 @@
       font-weight: 700;
       color: #111;
     }
+    .hw-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin-bottom: 1rem;
+      padding: 8px 12px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: #374151;
+    }
+    .hw-item b { color: #0369a1; margin-right: 4px; }
     .ws-status {
       font-size: 0.8rem;
       color: #9ca3af;
@@ -225,6 +238,14 @@
     <!-- Tab: 伺服器監控 -->
     <div id="tab-monitor" class="tab-panel" style="display:none">
       <p class="ws-status" id="ws-status">⬤ 未連線</p>
+
+      <!-- 靜態硬體資訊列（第一次收到資料後顯示） -->
+      <div class="hw-info" id="hw-info" style="display:none">
+        <span class="hw-item"><b>CPU 核心</b><span id="hw-cores">—</span></span>
+        <span class="hw-item"><b>總記憶體</b><span id="hw-total-mem">—</span></span>
+        <span class="hw-item"><b>OS</b><span id="hw-os">—</span></span>
+        <span class="hw-item"><b>.NET</b><span id="hw-dotnet">—</span></span>
+      </div>
 
       <div class="metric-grid">
         <div class="metric-card">

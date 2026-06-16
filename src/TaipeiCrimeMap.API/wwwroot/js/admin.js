@@ -26,8 +26,16 @@
   const mcConns = document.getElementById('mc-conns');
   const wsStatusEl = document.getElementById('ws-status');
 
+  // DOM refs for static hw info
+  const hwInfo = document.getElementById('hw-info');
+  const hwCores = document.getElementById('hw-cores');
+  const hwTotalMem = document.getElementById('hw-total-mem');
+  const hwOs = document.getElementById('hw-os');
+  const hwDotnet = document.getElementById('hw-dotnet');
+
   // WebSocket state
   let ws = null;
+  let _hwInfoShown = false;
 
   // Chart.js instance
   let metricsChart = null;
@@ -115,6 +123,10 @@
     ws.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
+        if (!_hwInfoShown) {
+          populateHwInfo(data);
+          _hwInfoShown = true;
+        }
         updateCards(data);
         pushChartPoint(data);
       } catch (_) { /* ignore malformed frame */ }
@@ -129,6 +141,7 @@
       ws.close();
       ws = null;
     }
+    _hwInfoShown = false;
     setWsStatus('disconnected');
   }
 
@@ -146,6 +159,16 @@
     } else {
       wsStatusEl.textContent = '⬤ 未連線';
     }
+  }
+
+  // ── Static hardware info (shown once) ─────────────────────────
+
+  function populateHwInfo(data) {
+    hwCores.textContent = data.cpuCores;
+    hwTotalMem.textContent = `${data.totalMemoryMb} MB`;
+    hwOs.textContent = data.osDescription;
+    hwDotnet.textContent = data.dotNetVersion;
+    hwInfo.style.display = '';
   }
 
   // ── Metric cards ───────────────────────────────────────────────
