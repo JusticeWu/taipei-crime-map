@@ -20,18 +20,39 @@ public sealed class ServerMetricsWebSocketHandler
     private readonly AdminAuthOptions _authOptions;
     private readonly IConnectionMultiplexer _primaryRedis;
     private readonly IConnectionMultiplexer? _secondaryRedis;
+    private readonly ILogger<ServerMetricsWebSocketHandler> _logger;
     private volatile int _connectionCount;
 
     public ServerMetricsWebSocketHandler(
         ServerMetricsService metricsService,
         IOptions<AdminAuthOptions> authOptions,
         IConnectionMultiplexer primaryRedis,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        ILogger<ServerMetricsWebSocketHandler> logger)
     {
         _metricsService = metricsService;
         _authOptions = authOptions.Value;
         _primaryRedis = primaryRedis;
         _secondaryRedis = serviceProvider.GetKeyedService<IConnectionMultiplexer>("SecondaryRedis");
+        _logger = logger;
+
+        // 啟動時 ping 一次，確認跨 Server 連線是否可用
+        if (_secondaryRedis is not null)
+            _ = PingSecondaryRedisAsync();
+    }
+
+    private async Task PingSecondaryRedisAsync()
+    {
+        var endpoint = string.Join(",", _secondaryRedis!.GetEndPoints().Select(e => e.ToString()));
+        try
+        {
+            await _secondaryRedis!.GetDatabase().PingAsync();
+            _logger.LogInformation("SecondaryRedis 連線成功: {Endpoint}", endpoint);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("SecondaryRedis 連線失敗，跨 Server 監控將不可用: {Error}", ex.Message);
+        }
     }
 
     public async Task HandleAsync(HttpContext context)
@@ -61,8 +82,9 @@ public sealed class ServerMetricsWebSocketHandler
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
 
-        // 啟動三條資料流（全部寫入同一個 channel）
-        var producerTask = RunProducerAsync(sendChannel.Writer, cts.Token);
+        // producer 只負責發布到 Garnet，不直接寫入 channel
+        // 所有指標（自機 + 跨 Server）統一由 Garnet 訂閱端接收後寫入 channel
+        var producerTask = RunProducerAsync(cts.Token);
         var ownSubTask = SubscribeToGarnetAsync(_primaryRedis, sendChannel.Writer, cts.Token);
         var secSubTask = _secondaryRedis is not null
             ? SubscribeToGarnetAsync(_secondaryRedis, sendChannel.Writer, cts.Token)
@@ -87,13 +109,12 @@ public sealed class ServerMetricsWebSocketHandler
         {
             cts.Cancel();
             Interlocked.Decrement(ref _connectionCount);
-            // 讓背景任務自然結束（已透過 cts 取消）
             await Task.WhenAll(producerTask, ownSubTask, secSubTask).ConfigureAwait(false);
         }
     }
 
-    // 每秒收集自機指標 → 發布到 Garnet → 直接寫入 channel（fallback：Garnet 不可用時仍能顯示）
-    private async Task RunProducerAsync(ChannelWriter<byte[]> writer, CancellationToken ct)
+    // 每秒收集自機指標並發布到 Garnet；不直接寫入 channel，由訂閱端統一接收
+    private async Task RunProducerAsync(CancellationToken ct)
     {
         try
         {
@@ -101,23 +122,19 @@ public sealed class ServerMetricsWebSocketHandler
             {
                 var metrics = _metricsService.GetMetrics(_connectionCount);
                 await _metricsService.PublishAsync(metrics, ct);
-
-                // 直接塞入 channel 作為 fallback（訂閱端也會收到同樣資料，前端去重）
-                var json = JsonSerializer.Serialize(metrics, JsonOptions);
-                writer.TryWrite(Encoding.UTF8.GetBytes(json));
-
                 await Task.Delay(1000, ct);
             }
         }
         catch (OperationCanceledException) { }
     }
 
-    // 訂閱指定 Garnet 的 metrics:* channel，收到就轉寫入 channel
-    private static async Task SubscribeToGarnetAsync(
+    // 訂閱指定 Garnet 的 metrics:* pattern，收到就寫入 channel
+    private async Task SubscribeToGarnetAsync(
         IConnectionMultiplexer redis,
         ChannelWriter<byte[]> writer,
         CancellationToken ct)
     {
+        var endpoint = string.Join(",", redis.GetEndPoints().Select(e => e.ToString()));
         ISubscriber? sub = null;
         try
         {
@@ -130,10 +147,15 @@ public sealed class ServerMetricsWebSocketHandler
                         writer.TryWrite(Encoding.UTF8.GetBytes((string)message!));
                 });
 
+            _logger.LogInformation("已訂閱 Garnet: {Endpoint} pattern: metrics:*", endpoint);
+
             await Task.Delay(Timeout.Infinite, ct);
         }
         catch (OperationCanceledException) { }
-        catch { /* Garnet 不可用時靜默跳過 */ }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Garnet 訂閱例外: {Endpoint}", endpoint);
+        }
         finally
         {
             if (sub is not null)
