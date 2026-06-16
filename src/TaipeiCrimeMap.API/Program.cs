@@ -1,9 +1,11 @@
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using TaipeiCrimeMap.API.Middleware;
+using TaipeiCrimeMap.API.WebSockets;
 using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Interfaces;
 using TaipeiCrimeMap.Application.Options;
 using TaipeiCrimeMap.Infrastructure.Extensions;
+using TaipeiCrimeMap.Infrastructure.Metrics;
 using TaipeiCrimeMap.Infrastructure.Persistence;
 using TaipeiCrimeMap.Infrastructure.Timing;
 
@@ -18,6 +20,10 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
+
+// Server metrics
+builder.Services.AddSingleton<ServerMetricsService>();
+builder.Services.AddSingleton<ServerMetricsWebSocketHandler>();
 
 // Domain / Infrastructure services
 builder.Services.AddMemoryCache();
@@ -106,6 +112,7 @@ app.UseExceptionHandler();
 app.UseMiddleware<ObservabilityMiddleware>();
 app.UseMiddleware<TimingMiddleware>();
 app.UseHttpsRedirection();
+app.UseWebSockets();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
@@ -115,6 +122,12 @@ app.UseWhen(
     branch => branch.UseMiddleware<BasicAuthMiddleware>());
 
 app.MapGet("/admin", () => Results.Redirect("/admin.html"));
+
+app.Map("/ws/metrics", async context =>
+{
+    var handler = context.RequestServices.GetRequiredService<ServerMetricsWebSocketHandler>();
+    await handler.HandleAsync(context);
+});
 
 app.MapControllers();
 app.Run();
