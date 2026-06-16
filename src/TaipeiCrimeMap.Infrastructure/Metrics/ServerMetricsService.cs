@@ -72,8 +72,17 @@ public sealed class ServerMetricsService : IHostedService
         _subscriber = redis?.GetSubscriber();
         _logger = logger;
 
-        _hostId = System.Environment.MachineName;
         _appEnvironment = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
+        var envPrefix = _appEnvironment switch
+        {
+            "Development" => "DEV",
+            "Staging"     => "STG",
+            "Production"  => "PROD",
+            var e         => e.Length >= 4 ? e[..4].ToUpperInvariant() : e.ToUpperInvariant(),
+        };
+        var machineSuffix = System.Environment.MachineName;
+        machineSuffix = machineSuffix.Length >= 5 ? machineSuffix[^5..] : machineSuffix;
+        _hostId = $"{envPrefix}-{machineSuffix}";
 
         _process = Process.GetCurrentProcess();
         _process.Refresh();
