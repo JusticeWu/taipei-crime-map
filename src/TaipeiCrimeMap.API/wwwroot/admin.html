@@ -243,6 +243,7 @@
 
     <div class="tab-bar">
       <button class="tab-btn active" data-tab="maintenance">資料維護</button>
+      <button class="tab-btn" data-tab="bulk-add">資料新增</button>
       <button class="tab-btn" data-tab="monitor">伺服器監控</button>
     </div>
 
@@ -268,6 +269,36 @@
       </form>
 
       <div id="result"></div>
+    </div>
+
+    <!-- Tab: 資料新增 -->
+    <div id="tab-bulk-add" class="tab-panel" style="display:none">
+      <p class="hint">
+        格式：tab 分隔，欄位依序為「編號  案類  發生日期  發生時段  發生地點」<br>
+        範例：<code>12345	住宅竊盜	1150329	06~08	臺北市大安區忠孝東路四段</code>
+      </p>
+      <label for="bulk-input">貼上資料</label>
+      <textarea id="bulk-input" rows="8" placeholder="12345	住宅竊盜	1150329	06~08	臺北市大安區忠孝東路四段&#10;12346	機車竊盜	1150401	10~12	臺北市中山區南京東路二段"></textarea>
+      <button type="button" id="btn-bulk-preview">預覽</button>
+
+      <div id="bulk-preview-area" style="display:none">
+        <table id="bulk-preview-table" style="width:100%;border-collapse:collapse;margin-top:0.75rem;font-size:0.85rem">
+          <thead>
+            <tr style="background:#f3f4f6;text-align:left">
+              <th style="padding:4px 8px;border:1px solid #e5e7eb">#</th>
+              <th style="padding:4px 8px;border:1px solid #e5e7eb">編號</th>
+              <th style="padding:4px 8px;border:1px solid #e5e7eb">案類</th>
+              <th style="padding:4px 8px;border:1px solid #e5e7eb">發生日期</th>
+              <th style="padding:4px 8px;border:1px solid #e5e7eb">發生時段</th>
+              <th style="padding:4px 8px;border:1px solid #e5e7eb">發生地點</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <button type="button" id="btn-bulk-submit" style="margin-top:0.75rem">送出</button>
+      </div>
+
+      <div id="bulk-result"></div>
     </div>
 
     <!-- Tab: 伺服器監控 -->
