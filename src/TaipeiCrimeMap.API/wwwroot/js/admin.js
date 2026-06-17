@@ -444,6 +444,95 @@
     resultEl.textContent = messages.join('\n');
   });
 
+  // ── Bulk add cases ─────────────────────────────────────────────
+  const BULK_API_URL = '/api/admin/cases/bulk';
+  const bulkInput = document.getElementById('bulk-input');
+  const bulkPreviewBtn = document.getElementById('btn-bulk-preview');
+  const bulkPreviewArea = document.getElementById('bulk-preview-area');
+  const bulkPreviewTbody = document.querySelector('#bulk-preview-table tbody');
+  const bulkSubmitBtn = document.getElementById('btn-bulk-submit');
+  const bulkResultEl = document.getElementById('bulk-result');
+
+  let _parsedBulkItems = [];
+
+  function parseBulkInput(text) {
+    return text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .map(line => {
+        const parts = line.split('\t');
+        if (parts.length < 5) return null;
+        return {
+          caseNumber: parseInt(parts[0], 10),
+          caseType: parts[1].trim(),
+          occurrenceDate: parseInt(parts[2], 10),
+          timeSlot: parts[3].trim(),
+          rawLocation: parts[4].trim(),
+        };
+      });
+  }
+
+  bulkPreviewBtn.addEventListener('click', () => {
+    bulkResultEl.textContent = '';
+    const parsed = parseBulkInput(bulkInput.value);
+    _parsedBulkItems = parsed.filter(x => x !== null);
+
+    bulkPreviewTbody.innerHTML = '';
+    parsed.forEach((item, i) => {
+      const tr = document.createElement('tr');
+      if (item === null) {
+        tr.innerHTML = `<td colspan="6" style="padding:4px 8px;border:1px solid #e5e7eb;color:#dc2626">第 ${i + 1} 行格式錯誤（欄位不足 5 個）</td>`;
+      } else {
+        const style = 'padding:4px 8px;border:1px solid #e5e7eb';
+        tr.innerHTML =
+          `<td style="${style}">${i + 1}</td>` +
+          `<td style="${style}">${item.caseNumber}</td>` +
+          `<td style="${style}">${item.caseType}</td>` +
+          `<td style="${style}">${item.occurrenceDate}</td>` +
+          `<td style="${style}">${item.timeSlot}</td>` +
+          `<td style="${style}">${item.rawLocation}</td>`;
+      }
+      bulkPreviewTbody.appendChild(tr);
+    });
+
+    bulkPreviewArea.style.display = _parsedBulkItems.length > 0 ? '' : 'none';
+  });
+
+  bulkSubmitBtn.addEventListener('click', async () => {
+    if (_parsedBulkItems.length === 0) return;
+    const credentials = getStoredCredentials();
+    if (!credentials) { showLogin(); return; }
+
+    bulkResultEl.textContent = '送出中...';
+    bulkSubmitBtn.disabled = true;
+    try {
+      const resp = await fetch(BULK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${credentials}`,
+        },
+        body: JSON.stringify(_parsedBulkItems),
+      });
+      if (resp.status === 401) { bulkResultEl.textContent = '❌ 認證失敗（401），請重新登入'; return; }
+      if (!resp.ok) { bulkResultEl.textContent = `❌ 送出失敗（HTTP ${resp.status}）`; return; }
+
+      const data = await resp.json();
+      let msg = `✅ 成功 ${data.succeeded} 筆，失敗 ${data.failed} 筆`;
+      if (data.failures && data.failures.length > 0) {
+        msg += '\n\n失敗明細：';
+        data.failures.forEach(f => {
+          msg += `\n  第 ${f.index + 1} 筆（編號 ${f.caseNumber}）：${f.reason}`;
+        });
+      }
+      bulkResultEl.textContent = msg;
+    } catch (err) {
+      bulkResultEl.textContent = `❌ 發生錯誤：${err.message}`;
+    } finally {
+      bulkSubmitBtn.disabled = false;
+    }
+  });
+
   window.addEventListener('beforeunload', () => { closeWebSocket(); stopOfflineCheck(); });
 
   init();
