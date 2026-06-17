@@ -43,6 +43,34 @@
   }
 
   /* -----------------------------------------------------------------------
+     Slow-loading hint — appears after 7 s if no data has arrived yet
+  ----------------------------------------------------------------------- */
+  const SLOW_HINT_DELAY_MS = 7000;
+  let _slowHintTimer = null;
+  let elSlowHint;
+
+  function ensureSlowHint() {
+    if (elSlowHint) return;
+    elSlowHint = document.createElement('div');
+    elSlowHint.id = 'slow-loading-hint';
+    document.body.appendChild(elSlowHint);
+    elSlowHint.textContent = '資料載入中，若等待較久表示伺服器正在喚醒，請稍候片刻 ☕';
+  }
+
+  function startSlowHintTimer() {
+    clearSlowHintTimer();
+    ensureSlowHint();
+    _slowHintTimer = setTimeout(function () {
+      elSlowHint.classList.add('visible');
+    }, SLOW_HINT_DELAY_MS);
+  }
+
+  function clearSlowHintTimer() {
+    if (_slowHintTimer) { clearTimeout(_slowHintTimer); _slowHintTimer = null; }
+    if (elSlowHint) elSlowHint.classList.remove('visible');
+  }
+
+  /* -----------------------------------------------------------------------
      Toggle mode enable / disable
   ----------------------------------------------------------------------- */
   function setToggleDisabled(disabled) {
@@ -162,6 +190,7 @@
     const generation = ++_queryGeneration;
 
     setLoading(true);
+    startSlowHintTimer();
     if (elBtnQuery) elBtnQuery.disabled = true;
     setToggleDisabled(true);
 
@@ -178,6 +207,7 @@
       if (!resp.ok) throw new Error(`API ${resp.status}`);
 
       const data = await resp.json();
+      clearSlowHintTimer();
       if (generation !== _queryGeneration) return;
 
       _lastHeatmapData = data;
@@ -193,6 +223,7 @@
       fetchAndRenderCharts();
 
     } catch (err) {
+      clearSlowHintTimer();
       console.error('Heatmap query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
@@ -249,6 +280,7 @@
     const generation = ++_queryGeneration;
 
     setLoading(true);
+    startSlowHintTimer();
     if (elBtnQuery) elBtnQuery.disabled = true;
     setToggleDisabled(true);
 
@@ -270,6 +302,7 @@
     const cacheKey = buildCacheKey();
     const cached = readFromCache(cacheKey);
     if (cached && cached.length > 0 && generation === _queryGeneration) {
+      clearSlowHintTimer();
       console.log(`[點位圖] sessionStorage 命中，跳過 API｜${cached.length} 筆，開始渲染`);
       _lastData = cached;
       // Queue cached data as PAGE_SIZE chunks for progressive rAF rendering
@@ -301,6 +334,7 @@
       if (!resp1.ok) throw new Error(`API ${resp1.status}`);
 
       const first = await resp1.json();
+      clearSlowHintTimer();
       if (generation !== _queryGeneration) return;
 
       const { data: firstData, total, totalPages } = first;
@@ -351,6 +385,7 @@
       fetchAndRenderCharts();
 
     } catch (err) {
+      clearSlowHintTimer();
       console.error('Query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
