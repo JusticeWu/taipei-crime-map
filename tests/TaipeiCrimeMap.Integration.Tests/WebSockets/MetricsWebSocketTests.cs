@@ -18,29 +18,32 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
         _client = factory.CreateClient();
     }
 
-    [Fact]
+    [Fact(Timeout = 15000)]
     public async Task GetWsMetrics_WithoutAuthorization_Returns401()
     {
-        var response = await _client.GetAsync("/ws/metrics");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var response = await _client.GetAsync("/ws/metrics", cts.Token);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    [Fact]
+    [Fact(Timeout = 15000)]
     public async Task GetWsMetrics_WithWrongCredentials_Returns401()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var client = _factory.CreateClient();
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes("wrong:credentials"));
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
-        var response = await client.GetAsync("/ws/metrics");
+        var response = await client.GetAsync("/ws/metrics", cts.Token);
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    [Fact]
+    [Fact(Timeout = 15000)]
     public async Task GetWsMetrics_WithCorrectCredentials_Returns101()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var wsClient = _factory.Server.CreateWebSocketClient();
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(
             $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
@@ -48,13 +51,13 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
             req.Headers["Authorization"] = $"Basic {credentials}";
 
         using var ws = await wsClient.ConnectAsync(
-            new Uri("ws://localhost/ws/metrics"), CancellationToken.None);
+            new Uri("ws://localhost/ws/metrics"), cts.Token);
 
         ws.State.Should().Be(WebSocketState.Open);
-        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
+        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
     }
 
-    [Fact]
+    [Fact(Timeout = 15000)]
     public async Task GetWsMetrics_AfterConnect_ReceivesJsonWithRequiredFields()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -77,6 +80,6 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
         root.TryGetProperty("cpuPercent", out _).Should().BeTrue("cpuPercent 欄位應存在");
         root.TryGetProperty("memoryMb", out _).Should().BeTrue("memoryMb 欄位應存在");
 
-        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
+        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
     }
 }
