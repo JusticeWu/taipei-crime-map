@@ -62,13 +62,19 @@
     }
   }
 
-  function startSlowHintTimer() {
-    cancelSlowHintTimeout();
+  function showSlowHint() {
     ensureSlowHint();
+    if (elSlowHint) elSlowHint.classList.add('visible');
+  }
+
+  function startSlowHintTimer() {
+    if (_slowHintTimer) { clearTimeout(_slowHintTimer); _slowHintTimer = null; }
+    ensureSlowHint();
+    if (elSlowHint) elSlowHint.classList.remove('visible');
     console.log('[hint] timer 已啟動，%d ms 後顯示', SLOW_HINT_DELAY_MS);
     _slowHintTimer = setTimeout(function () {
       console.log('[hint] timer 觸發 → 顯示提示');
-      if (elSlowHint) elSlowHint.classList.add('visible');
+      showSlowHint();
     }, SLOW_HINT_DELAY_MS);
   }
 
@@ -76,13 +82,8 @@
     if (_slowHintTimer) {
       clearTimeout(_slowHintTimer);
       _slowHintTimer = null;
-      console.log('[hint] timer 已取消');
+      console.log('[hint] timer 已取消（資料已到達）');
     }
-  }
-
-  function clearSlowHintTimer() {
-    cancelSlowHintTimeout();
-    if (elSlowHint) elSlowHint.classList.remove('visible');
   }
 
   /* -----------------------------------------------------------------------
@@ -236,14 +237,15 @@
 
       renderStats(computeStatsFromHeatmap(data));
       fetchAndRenderCharts();
+      setLoading(false);
 
     } catch (err) {
+      cancelSlowHintTimeout();
+      showSlowHint();
       console.error('Heatmap query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
       if (generation === _queryGeneration) {
-        clearSlowHintTimer();
-        setLoading(false);
         if (elBtnQuery) elBtnQuery.disabled = false;
         setToggleDisabled(false);
       }
@@ -398,14 +400,15 @@
 
       renderStats(computeStats(_lastData));
       fetchAndRenderCharts();
+      setLoading(false);
 
     } catch (err) {
+      cancelSlowHintTimeout();
+      showSlowHint();
       console.error('Query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
       if (generation === _queryGeneration) {
-        clearSlowHintTimer();
-        setLoading(false);
         if (elBtnQuery) elBtnQuery.disabled = false;
         setToggleDisabled(false);
       }
