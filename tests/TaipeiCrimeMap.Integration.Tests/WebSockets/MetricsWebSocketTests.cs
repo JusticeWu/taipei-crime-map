@@ -54,7 +54,7 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
             new Uri("ws://localhost/ws/metrics"), cts.Token);
 
         ws.State.Should().Be(WebSocketState.Open);
-        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
+        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
     }
 
     [Fact(Timeout = 15000)]
@@ -80,6 +80,6 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
         root.TryGetProperty("cpuPercent", out _).Should().BeTrue("cpuPercent 欄位應存在");
         root.TryGetProperty("memoryMb", out _).Should().BeTrue("memoryMb 欄位應存在");
 
-        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
+        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
     }
 }
