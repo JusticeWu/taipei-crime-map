@@ -35,15 +35,20 @@ jobs:
       - name: API smoke test
         run: |
           BASE="${UAT_URL:-https://taipei-crime-map-uat.ambitioussand-7326440b.japaneast.azurecontainerapps.io}"
+          CURL="curl -sf --max-time 60 --retry 3 --retry-delay 10 --retry-all-errors"
+
           echo "=== GET /api/crime/stats ==="
-          curl -sf "${BASE}/api/crime/stats" | grep -q '"totalCount"'
+          $CURL "${BASE}/api/crime/stats" | grep -q '"totalCount"'
           echo "OK"
+
           echo "=== GET /api/crime/heatmap?caseType=1 ==="
-          curl -sf "${BASE}/api/crime/heatmap?caseType=1" | grep -q '\['
+          $CURL "${BASE}/api/crime/heatmap?caseType=1" | grep -q '\['
           echo "OK"
+
           echo "=== GET /api/crime/points?caseType=1&district=1 ==="
-          curl -sf "${BASE}/api/crime/points?caseType=1&district=1" | grep -q '\['
+          $CURL "${BASE}/api/crime/points?caseType=1&district=1" | grep -q '\['
           echo "OK"
+
           echo "All smoke tests passed."
         env:
           UAT_URL: ${{ secrets.UAT_URL }}
