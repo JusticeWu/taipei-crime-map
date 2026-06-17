@@ -32,6 +32,22 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
+      - name: API smoke test
+        run: |
+          BASE="${UAT_URL:-https://taipei-crime-map-uat.ambitioussand-7326440b.japaneast.azurecontainerapps.io}"
+          echo "=== GET /api/crime/stats ==="
+          curl -sf "${BASE}/api/crime/stats" | grep -q '"totalCount"'
+          echo "OK"
+          echo "=== GET /api/crime/heatmap?caseType=1 ==="
+          curl -sf "${BASE}/api/crime/heatmap?caseType=1" | grep -q '\['
+          echo "OK"
+          echo "=== GET /api/crime/points?caseType=1&district=1 ==="
+          curl -sf "${BASE}/api/crime/points?caseType=1&district=1" | grep -q '\['
+          echo "OK"
+          echo "All smoke tests passed."
+        env:
+          UAT_URL: ${{ secrets.UAT_URL }}
+
       - name: Run Playwright tests
         run: npx playwright test
         env:
