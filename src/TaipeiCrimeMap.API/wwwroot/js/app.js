@@ -43,71 +43,6 @@
   }
 
   /* -----------------------------------------------------------------------
-     Retry banner — shown during automatic retry after 500/timeout
-  ----------------------------------------------------------------------- */
-  let elRetryBanner;
-
-  function ensureRetryBanner() {
-    if (elRetryBanner) return;
-    elRetryBanner = document.getElementById('retry-banner');
-    if (!elRetryBanner) {
-      elRetryBanner = document.createElement('div');
-      elRetryBanner.id = 'retry-banner';
-      document.body.appendChild(elRetryBanner);
-    }
-  }
-
-  function showRetryBanner(msg) {
-    ensureRetryBanner();
-    elRetryBanner.textContent = msg || '伺服器喚醒中，請稍候...';
-    elRetryBanner.classList.add('visible');
-  }
-
-  function hideRetryBanner() {
-    if (elRetryBanner) elRetryBanner.classList.remove('visible');
-  }
-
-  /* -----------------------------------------------------------------------
-     fetchWithRetry — retry once on 500 or timeout, with 3-second delay
-  ----------------------------------------------------------------------- */
-  const FETCH_TIMEOUT_MS = 30000;
-  const RETRY_DELAY_MS   = 3000;
-
-  async function fetchWithRetry(url, options) {
-    async function doFetch() {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-      try {
-        const resp = await fetch(url, { ...options, signal: controller.signal });
-        clearTimeout(timer);
-        return resp;
-      } catch (err) {
-        clearTimeout(timer);
-        throw err;
-      }
-    }
-
-    try {
-      const resp = await doFetch();
-      if (resp.status >= 500) throw new Error(`API ${resp.status}`);
-      return resp;
-    } catch (firstErr) {
-      console.warn('First request failed, retrying in 3s:', firstErr.message);
-      showRetryBanner();
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-      try {
-        const resp = await doFetch();
-        hideRetryBanner();
-        if (resp.status >= 500) throw new Error(`API ${resp.status}`);
-        return resp;
-      } catch (retryErr) {
-        hideRetryBanner();
-        throw retryErr;
-      }
-    }
-  }
-
-  /* -----------------------------------------------------------------------
      Toggle mode enable / disable
   ----------------------------------------------------------------------- */
   function setToggleDisabled(disabled) {
@@ -238,7 +173,7 @@
     }
 
     try {
-      const resp = await fetchWithRetry(`${API_BASE}/heatmap?${buildQueryParams()}`,
+      const resp = await fetch(`${API_BASE}/heatmap?${buildQueryParams()}`,
         { headers: { Accept: 'application/json' } });
       if (!resp.ok) throw new Error(`API ${resp.status}`);
 
@@ -362,7 +297,7 @@
       console.log('[點位圖] 開始發請求');
 
       baseParams.set('page', '1');
-      const resp1 = await fetchWithRetry(`${API_POINTS}?${baseParams}`, { headers: { Accept: 'application/json' } });
+      const resp1 = await fetch(`${API_POINTS}?${baseParams}`, { headers: { Accept: 'application/json' } });
       if (!resp1.ok) throw new Error(`API ${resp1.status}`);
 
       const first = await resp1.json();
