@@ -54,19 +54,34 @@
     elSlowHint = document.createElement('p');
     elSlowHint.id = 'slow-loading-hint';
     elSlowHint.textContent = '資料載入中，若等待較久表示伺服器正在喚醒，請稍候片刻 ☕';
-    if (elLoadingOverlay) elLoadingOverlay.appendChild(elSlowHint);
+    if (elLoadingOverlay) {
+      elLoadingOverlay.appendChild(elSlowHint);
+      console.log('[hint] 元素已掛載到 #loading-overlay');
+    } else {
+      console.warn('[hint] elLoadingOverlay 為 null，元素未掛載');
+    }
   }
 
   function startSlowHintTimer() {
-    clearSlowHintTimer();
+    cancelSlowHintTimeout();
     ensureSlowHint();
+    console.log('[hint] timer 已啟動，%d ms 後顯示', SLOW_HINT_DELAY_MS);
     _slowHintTimer = setTimeout(function () {
-      elSlowHint.classList.add('visible');
+      console.log('[hint] timer 觸發 → 顯示提示');
+      if (elSlowHint) elSlowHint.classList.add('visible');
     }, SLOW_HINT_DELAY_MS);
   }
 
+  function cancelSlowHintTimeout() {
+    if (_slowHintTimer) {
+      clearTimeout(_slowHintTimer);
+      _slowHintTimer = null;
+      console.log('[hint] timer 已取消');
+    }
+  }
+
   function clearSlowHintTimer() {
-    if (_slowHintTimer) { clearTimeout(_slowHintTimer); _slowHintTimer = null; }
+    cancelSlowHintTimeout();
     if (elSlowHint) elSlowHint.classList.remove('visible');
   }
 
@@ -207,7 +222,7 @@
       if (!resp.ok) throw new Error(`API ${resp.status}`);
 
       const data = await resp.json();
-      clearSlowHintTimer();
+      cancelSlowHintTimeout();
       if (generation !== _queryGeneration) return;
 
       _lastHeatmapData = data;
@@ -223,11 +238,11 @@
       fetchAndRenderCharts();
 
     } catch (err) {
-      clearSlowHintTimer();
       console.error('Heatmap query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
       if (generation === _queryGeneration) {
+        clearSlowHintTimer();
         setLoading(false);
         if (elBtnQuery) elBtnQuery.disabled = false;
         setToggleDisabled(false);
@@ -302,7 +317,7 @@
     const cacheKey = buildCacheKey();
     const cached = readFromCache(cacheKey);
     if (cached && cached.length > 0 && generation === _queryGeneration) {
-      clearSlowHintTimer();
+      cancelSlowHintTimeout();
       console.log(`[點位圖] sessionStorage 命中，跳過 API｜${cached.length} 筆，開始渲染`);
       _lastData = cached;
       // Queue cached data as PAGE_SIZE chunks for progressive rAF rendering
@@ -334,7 +349,7 @@
       if (!resp1.ok) throw new Error(`API ${resp1.status}`);
 
       const first = await resp1.json();
-      clearSlowHintTimer();
+      cancelSlowHintTimeout();
       if (generation !== _queryGeneration) return;
 
       const { data: firstData, total, totalPages } = first;
@@ -385,11 +400,11 @@
       fetchAndRenderCharts();
 
     } catch (err) {
-      clearSlowHintTimer();
       console.error('Query failed:', err);
       renderStats({ total: 0, withCoords: 0, topDistrict: '查詢失敗' });
     } finally {
       if (generation === _queryGeneration) {
+        clearSlowHintTimer();
         setLoading(false);
         if (elBtnQuery) elBtnQuery.disabled = false;
         setToggleDisabled(false);
