@@ -34,6 +34,7 @@ if (!string.IsNullOrWhiteSpace(secondaryRedisConnStr))
             AbortOnConnectFail = false,
             ConnectTimeout = 2000,
             SyncTimeout = 2000,
+            ConnectRetry = 0,
         }));
 }
 

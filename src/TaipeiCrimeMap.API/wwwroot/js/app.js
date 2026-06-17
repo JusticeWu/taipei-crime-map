@@ -51,10 +51,10 @@
 
   function ensureSlowHint() {
     if (elSlowHint) return;
-    elSlowHint = document.createElement('div');
+    elSlowHint = document.createElement('p');
     elSlowHint.id = 'slow-loading-hint';
-    document.body.appendChild(elSlowHint);
     elSlowHint.textContent = '資料載入中，若等待較久表示伺服器正在喚醒，請稍候片刻 ☕';
+    if (elLoadingOverlay) elLoadingOverlay.appendChild(elSlowHint);
   }
 
   function startSlowHintTimer() {

@@ -43,16 +43,19 @@ public static class InfrastructureServiceExtensions
             var redisConfigOptions = ConfigurationOptions.Parse(configuration.GetConnectionString("Redis")!);
             redisConfigOptions.ConnectTimeout = 2000;
             redisConfigOptions.SyncTimeout = 2000;
+            redisConfigOptions.ConnectRetry = 0;
             options.ConfigurationOptions = redisConfigOptions;
         });
 
         // 提供 IConnectionMultiplexer，供管理端點（清除快取 FLUSHALL）直接操作 Garnet
         // AbortOnConnectFail = false：Garnet 連線失敗時不讓應用程式啟動失敗
+        // ConnectRetry = 0：避免同步 Connect() 多次重試阻塞啟動（預設 3 次 × DNS 逾時 = 2 分鐘）
         services.AddSingleton<IConnectionMultiplexer>(_ =>
         {
             var redisConfigOptions = ConfigurationOptions.Parse(configuration.GetConnectionString("Redis")!);
             redisConfigOptions.ConnectTimeout = 2000;
             redisConfigOptions.SyncTimeout = 2000;
+            redisConfigOptions.ConnectRetry = 0;
             redisConfigOptions.AbortOnConnectFail = false;
             return ConnectionMultiplexer.Connect(redisConfigOptions);
         });
