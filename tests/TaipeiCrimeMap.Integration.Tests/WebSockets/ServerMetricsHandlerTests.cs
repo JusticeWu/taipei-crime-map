@@ -16,7 +16,7 @@ public class ServerMetricsHandlerTests
             Options.Create(new AdminAuthOptions { Username = "admin", Password = "pass" }),
             NullLogger<ServerMetricsWebSocketHandler>.Instance);
 
-    [Fact]
+    [Fact(Timeout = 15000)]
     public async Task HandleAsync_WithoutToken_Returns401WithoutThrowing()
     {
         var handler = BuildHandler();
