@@ -218,7 +218,7 @@ public class GetCrimesByFilterQueryHandlerTests
     {
         // Arrange
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Car);
-        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
+        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}:{query.SortBy}:{query.SortOrder}";
 
         var preloaded = new PagedResult<TheftCaseDto>(
             new List<TheftCaseDto> { new() { CaseNumber = "cached-001", CaseType = "汽車竊盜", District = "信義區" } },
@@ -248,7 +248,7 @@ public class GetCrimesByFilterQueryHandlerTests
     {
         // Arrange - 預先填入 L1
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Car);
-        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
+        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}:{query.SortBy}:{query.SortOrder}";
 
         var preloaded = new PagedResult<TheftCaseDto>(
             new List<TheftCaseDto> { new() { CaseNumber = "l1-001", CaseType = "汽車竊盜" } },

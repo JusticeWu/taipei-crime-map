@@ -69,7 +69,7 @@
   function showForm() {
     loginSection.hidden = true;
     formSection.hidden = false;
-    ensureChart();
+    try { ensureChart(); } catch (e) { console.warn('[admin] ensureChart failed:', e); }
     openWebSocket();
     startOfflineCheck();
   }
