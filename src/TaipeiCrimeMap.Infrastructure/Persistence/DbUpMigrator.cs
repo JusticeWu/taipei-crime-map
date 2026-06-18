@@ -85,10 +85,19 @@ public class DbUpMigrator
 
     private static void ExecuteScript(SqlConnection conn, string sql)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.CommandTimeout = 60;
-        cmd.ExecuteNonQuery();
+        var batches = System.Text.RegularExpressions.Regex
+            .Split(sql, @"^\s*GO\s*$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        foreach (var batch in batches)
+        {
+            var trimmed = batch.Trim();
+            if (trimmed.Length == 0) continue;
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = trimmed;
+            cmd.CommandTimeout = 60;
+            cmd.ExecuteNonQuery();
+        }
     }
 
     private static void RecordScript(SqlConnection conn, string name)

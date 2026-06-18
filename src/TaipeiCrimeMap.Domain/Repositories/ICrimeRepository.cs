@@ -9,9 +9,9 @@ public interface ICrimeRepository
     Task<int> CountAsync(CancellationToken cancellationToken = default);
     Task AddRangeAsync(IEnumerable<TheftCase> theftCases, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TheftCase>> GetByFilterAsync(CrimeFilter filter, CancellationToken cancellationToken = default);
-    Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(CrimeFilter filter, int page, int pageSize, string? sortBy = null, string? sortOrder = null, CancellationToken cancellationToken = default);
     Task<TheftCase?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
-    Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default);
+    Task<TheftCase?> GetByCaseNumberAsync(int caseNumber, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<TheftCase>> GetByRadiusAsync(GeoCoordinate center, double radiusKm, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(CrimeFilter filter, CancellationToken cancellationToken = default);
 
@@ -45,4 +45,6 @@ public interface ICrimeRepository
     /// 計算座標尚未補齊（Latitude 或 Longitude 為 NULL）的案件數量
     /// </summary>
     Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default);
+
+    Task<int> UpdateCaseFieldsAsync(int caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default);
 }

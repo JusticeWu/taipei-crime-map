@@ -9,4 +9,6 @@ public record GetCrimesByFilterQuery(
     int? YearTo = null,
     string? RawTimeSlot = null,
     int Page = 1,
-    int PageSize = 200);
+    int PageSize = 200,
+    string? SortBy = null,
+    string? SortOrder = null);

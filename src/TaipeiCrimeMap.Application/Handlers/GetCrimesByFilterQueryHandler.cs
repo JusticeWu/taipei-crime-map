@@ -59,7 +59,7 @@ public class GetCrimesByFilterQueryHandler
             yearTo: query.YearTo,
             timeSlot: timeSlot);
 
-        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
+        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}:{query.SortBy}:{query.SortOrder}";
 
         // L1: MemoryCache（1 分鐘）
         // 注意：LogSummary() 必須在 using 區塊結束（StageTimer.Dispose 寫入 _records）之後才能呼叫，
@@ -117,7 +117,7 @@ public class GetCrimesByFilterQueryHandler
         int total;
         using (_timing.Track("DB-Query"))
         {
-            (cases, total) = await _repository.GetPagedByFilterAsync(filter, query.Page, query.PageSize, cancellationToken);
+            (cases, total) = await _repository.GetPagedByFilterAsync(filter, query.Page, query.PageSize, query.SortBy, query.SortOrder, cancellationToken);
         }
         _logger.LogInformation("查詢完成，共 {Total} 筆，本頁 {Count} 筆", total, cases.Count);
 

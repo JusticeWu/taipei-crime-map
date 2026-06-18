@@ -27,7 +27,7 @@ public class SqlServerCrimeRepository : ICrimeRepository
         return row?.ToDomain();
     }
 
-    public async Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default)
+    public async Task<TheftCase?> GetByCaseNumberAsync(int caseNumber, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
         var row = await conn.QueryFirstOrDefaultAsync<TheftCaseRow>(
@@ -47,12 +47,12 @@ public class SqlServerCrimeRepository : ICrimeRepository
 
     public async Task<IReadOnlyList<TheftCase>> GetByFilterAsync(CrimeFilter filter, CancellationToken cancellationToken = default)
     {
-        var (cases, _) = await GetPagedByFilterAsync(filter, page: 1, pageSize: int.MaxValue, cancellationToken);
+        var (cases, _) = await GetPagedByFilterAsync(filter, page: 1, pageSize: int.MaxValue, cancellationToken: cancellationToken);
         return cases;
     }
 
     public async Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
-        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+        CrimeFilter filter, int page, int pageSize, string? sortBy = null, string? sortOrder = null, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
         var rows = (await conn.QueryAsync<TheftCaseRow>(
@@ -66,7 +66,9 @@ public class SqlServerCrimeRepository : ICrimeRepository
                 TimeSlotStart  = filter.TimeSlot?.StartHour,
                 TimeSlotEnd    = filter.TimeSlot?.EndHour,
                 Page           = page,
-                PageSize       = pageSize
+                PageSize       = pageSize,
+                SortBy         = sortBy,
+                SortOrder      = sortOrder
             },
             commandType: CommandType.StoredProcedure)).ToList();
 
@@ -105,13 +107,13 @@ public class SqlServerCrimeRepository : ICrimeRepository
     public async Task AddAsync(TheftCase theftCase, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
-        await conn.ExecuteAsync(InsertSql, ToRow(theftCase));
+        await conn.ExecuteAsync(UpsertSql, ToRow(theftCase));
     }
 
     public async Task AddRangeAsync(IEnumerable<TheftCase> theftCases, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
-        await conn.ExecuteAsync(InsertSql, theftCases.Select(ToRow));
+        await conn.ExecuteAsync(UpsertSql, theftCases.Select(ToRow));
     }
 
     public async Task<int> CountAsync(CancellationToken cancellationToken = default)
@@ -171,6 +173,42 @@ public class SqlServerCrimeRepository : ICrimeRepository
         await using var conn = CreateConnection();
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM theft_cases WHERE latitude IS NULL OR longitude IS NULL");
+    }
+
+    public async Task<int> UpdateCaseFieldsAsync(int caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
+    {
+        await using var conn = CreateConnection();
+        var sets = new List<string>();
+        var param = new DynamicParameters();
+        param.Add("CaseNumber", caseNumber);
+        param.Add("CaseType", caseType);
+
+        if (occurrenceDateRaw is not null)
+        {
+            var td = TaiwanDate.Parse(occurrenceDateRaw);
+            sets.Add("occurred_date_raw = @OccurredDateRaw");
+            sets.Add("occurred_date = @OccurredDate");
+            sets.Add("occurred_year = @OccurredYear");
+            param.Add("OccurredDateRaw", td.RawValue);
+            param.Add("OccurredDate", td.OccurredOn);
+            param.Add("OccurredYear", td.Year);
+        }
+
+        if (timeSlotRaw is not null)
+        {
+            var ts = TimeSlot.Parse(timeSlotRaw);
+            sets.Add("time_slot_raw = @TimeSlotRaw");
+            sets.Add("time_slot_start = @TimeSlotStart");
+            sets.Add("time_slot_end = @TimeSlotEnd");
+            param.Add("TimeSlotRaw", ts.RawValue);
+            param.Add("TimeSlotStart", ts.StartHour);
+            param.Add("TimeSlotEnd", ts.EndHour);
+        }
+
+        if (sets.Count == 0) return 0;
+
+        var sql = $"UPDATE theft_cases SET {string.Join(", ", sets)} WHERE case_number = @CaseNumber AND case_type = @CaseType";
+        return await conn.ExecuteAsync(sql, param);
     }
 
     public async Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
@@ -258,19 +296,32 @@ public class SqlServerCrimeRepository : ICrimeRepository
 
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
-    private const string InsertSql = """
-        INSERT INTO theft_cases (
-            id, case_number, case_type, district,
-            occurred_date_raw, occurred_date, occurred_year,
-            time_slot_raw, time_slot_start, time_slot_end,
-            raw_location, latitude, longitude,
-            imported_at, created_at)
-        VALUES (
-            @Id, @CaseNumber, @CaseType, @District,
-            @OccurredDateRaw, @OccurredDate, @OccurredYear,
-            @TimeSlotRaw, @TimeSlotStart, @TimeSlotEnd,
-            @RawLocation, @Latitude, @Longitude,
-            @ImportedAt, @CreatedAt)
+    private const string UpsertSql = """
+        MERGE theft_cases AS target
+        USING (SELECT @CaseNumber AS case_number, @CaseType AS case_type) AS source
+            ON target.case_number = source.case_number AND target.case_type = source.case_type
+        WHEN MATCHED THEN
+            UPDATE SET
+                district          = @District,
+                occurred_date_raw = @OccurredDateRaw,
+                occurred_date     = @OccurredDate,
+                occurred_year     = @OccurredYear,
+                time_slot_raw     = @TimeSlotRaw,
+                time_slot_start   = @TimeSlotStart,
+                time_slot_end     = @TimeSlotEnd,
+                raw_location      = @RawLocation,
+                imported_at       = @ImportedAt
+        WHEN NOT MATCHED THEN
+            INSERT (id, case_number, case_type, district,
+                    occurred_date_raw, occurred_date, occurred_year,
+                    time_slot_raw, time_slot_start, time_slot_end,
+                    raw_location, latitude, longitude,
+                    imported_at, created_at)
+            VALUES (@Id, @CaseNumber, @CaseType, @District,
+                    @OccurredDateRaw, @OccurredDate, @OccurredYear,
+                    @TimeSlotRaw, @TimeSlotStart, @TimeSlotEnd,
+                    @RawLocation, @Latitude, @Longitude,
+                    @ImportedAt, @CreatedAt);
         """;
 
     // ── Row ↔ Domain 轉換 ────────────────────────────────────────────────
@@ -278,7 +329,7 @@ public class SqlServerCrimeRepository : ICrimeRepository
     private sealed record TheftCaseRow
     {
         public Guid Id { get; init; }
-        public string CaseNumber { get; init; } = string.Empty;
+        public int CaseNumber { get; init; }
         public int TotalCount { get; init; }
         public int? CaseType { get; init; }
         public string? District { get; init; }

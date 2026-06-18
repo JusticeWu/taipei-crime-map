@@ -22,7 +22,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         var theftCase = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -47,7 +47,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
         for (int i = 0; i < 3; i++)
         {
             cases.Add(TheftCase.Create(
-                caseNumber: Guid.NewGuid().ToString(),
+                caseNumber: Random.Shared.Next(100000, 999999),
                 caseType: CaseType.Residential,
                 district: District.ParseFrom("內湖區"),
                 occurredDate: TaiwanDate.Parse("1130101"),
@@ -72,7 +72,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         var residential = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -80,7 +80,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
             rawLocation: "臺北市內湖區成功路五段31號");
 
         var car = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Car,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -103,7 +103,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         var neihu = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -111,7 +111,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
             rawLocation: "臺北市內湖區成功路五段31號");
 
         var daan = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("大安區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -134,7 +134,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange - occurred_year 欄位儲存民國年，但 CrimeFilter 的 YearFrom/YearTo 是西元年
         var case2024 = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"), // 民國113年 = 西元2024年
@@ -142,7 +142,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
             rawLocation: "臺北市內湖區成功路五段31號");
 
         var case2023 = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1120101"), // 民國112年 = 西元2023年
@@ -165,7 +165,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange - 民國113年 = 西元2024年，晚於西元2018年
         var case2024 = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -187,7 +187,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange - 民國113年 = 西元2024年，早於西元2030年
         var case2024 = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -209,7 +209,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         var morning = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -217,7 +217,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
             rawLocation: "臺北市內湖區成功路五段31號");
 
         var evening = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -244,7 +244,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
         for (int i = 0; i < 3; i++)
         {
             cases.Add(TheftCase.Create(
-                caseNumber: Guid.NewGuid().ToString(),
+                caseNumber: Random.Shared.Next(100000, 999999),
                 caseType: CaseType.Residential,
                 district: District.ParseFrom("內湖區"),
                 occurredDate: TaiwanDate.Parse("1130101"),
@@ -270,7 +270,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         var nearbyCase = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -279,7 +279,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
             coordinate: GeoCoordinate.Create(25.0815, 121.6056));
 
         var farCase = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("大安區"),
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -306,7 +306,7 @@ public class CrimeRepositoryTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         var noCoordinate = TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),

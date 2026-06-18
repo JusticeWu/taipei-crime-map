@@ -24,7 +24,7 @@ public class GetCrimesByFilterQueryHandlerTimingTests
         _repository = Substitute.For<ICrimeRepository>();
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         _cache = Substitute.For<IDistributedCache>();
@@ -88,7 +88,7 @@ public class GetCrimesByFilterQueryHandlerTimingTests
         var tracker = new OrderTrackingTimingTracker();
         var handler = CreateHandler(tracker);
         var query = new GetCrimesByFilterQuery();
-        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}";
+        var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}:{query.SortBy}:{query.SortOrder}";
         _memoryCache.Set(cacheKey, new PagedResult<TheftCaseDto>(new List<TheftCaseDto>(), 0, query.Page, query.PageSize, 0));
 
         // Act

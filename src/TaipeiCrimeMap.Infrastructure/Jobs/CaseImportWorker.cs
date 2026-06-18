@@ -1,0 +1,170 @@
+using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using StackExchange.Redis;
+using TaipeiCrimeMap.Domain.Aggregates;
+using TaipeiCrimeMap.Domain.Exceptions;
+using TaipeiCrimeMap.Domain.Repositories;
+using TaipeiCrimeMap.Domain.ValueObjects;
+
+namespace TaipeiCrimeMap.Infrastructure.Jobs;
+
+public sealed class CaseImportWorker : IHostedService, IDisposable
+{
+    private static readonly int[] BackoffSeconds = [2, 5, 12, 28];
+    private const int MaxRetries = 5;
+
+    private readonly ICaseImportJobStore _jobStore;
+    private readonly ICrimeRepository _repository;
+    private readonly ILogger<CaseImportWorker> _logger;
+    private CancellationTokenSource? _cts;
+    private Task? _executeTask;
+
+    public CaseImportWorker(
+        ICaseImportJobStore jobStore,
+        ICrimeRepository repository,
+        ILogger<CaseImportWorker> logger)
+    {
+        _jobStore = jobStore;
+        _repository = repository;
+        _logger = logger;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("CaseImportWorker 已啟動");
+        _cts = new CancellationTokenSource();
+        _executeTask = ExecuteLoopAsync(_cts.Token);
+        return Task.CompletedTask;
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        var cts = _cts;
+        _cts = null;
+        if (cts is not null)
+        {
+            await cts.CancelAsync();
+            cts.Dispose();
+        }
+        if (_executeTask is not null)
+        {
+            try { await _executeTask.ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Dispose();
+    }
+
+    private async Task ExecuteLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var jobs = await _jobStore.GetPendingJobsAsync(DateTimeOffset.UtcNow, ct);
+                foreach (var job in jobs)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    await ProcessJobAsync(job, ct);
+                }
+            }
+            catch (OperationCanceledException) { break; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "CaseImportWorker 主迴圈例外");
+            }
+
+            try { await Task.Delay(3000, ct); }
+            catch (OperationCanceledException) { break; }
+        }
+    }
+
+    private async Task ProcessJobAsync(CaseImportJob job, CancellationToken ct)
+    {
+        try
+        {
+            var caseType = CaseTypeExtensions.FromChineseName(job.CaseType)
+                ?? throw new DomainException($"無法對應案類「{job.CaseType}」");
+
+            var dateStr = job.OccurrenceDate.ToString();
+            if (dateStr.Length != 7)
+                throw new DomainException($"日期格式錯誤：{job.OccurrenceDate}，需為 7 碼民國年月日");
+
+            var taiwanDate = TaiwanDate.Parse(dateStr);
+            var timeSlot = TimeSlot.Parse(job.TimeSlot ?? string.Empty);
+            var district = District.ParseFrom(job.RawLocation ?? string.Empty);
+
+            var theftCase = TheftCase.Create(
+                caseNumber: job.CaseNumber,
+                caseType: caseType,
+                district: district,
+                occurredDate: taiwanDate,
+                timeSlot: timeSlot,
+                rawLocation: job.RawLocation ?? string.Empty);
+
+            await _repository.AddAsync(theftCase, ct);
+
+            var existingCoord = await _repository.FindCoordinateByRawLocationAsync(
+                job.RawLocation ?? string.Empty, ct);
+            if (existingCoord is not null)
+                await _repository.UpdateCoordinateAsync(theftCase.Id, existingCoord, ct);
+
+            job.Status = CaseImportJobStatus.Success;
+            job.UpdatedAt = DateTimeOffset.UtcNow;
+            await _jobStore.UpdateJobAsync(job, ct);
+
+            _logger.LogDebug("Job {JobId} 處理成功，caseNumber={CaseNumber}", job.Id, job.CaseNumber);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            job.UpdatedAt = DateTimeOffset.UtcNow;
+
+            if (IsTransientError(ex))
+            {
+                job.RetryCount++;
+                if (job.RetryCount >= MaxRetries)
+                {
+                    job.Status = CaseImportJobStatus.Failure;
+                    job.LastError = $"超過最大重試次數({MaxRetries})：{ex.Message}";
+                }
+                else
+                {
+                    job.NextRetryAt = CalculateNextRetry(job.RetryCount, DateTimeOffset.UtcNow);
+                    job.LastError = ex.Message;
+                }
+            }
+            else
+            {
+                job.Status = CaseImportJobStatus.Failure;
+                job.LastError = ex.Message;
+            }
+
+            try { await _jobStore.UpdateJobAsync(job, ct); }
+            catch (Exception storeEx)
+            {
+                _logger.LogWarning(storeEx, "更新 job {JobId} 狀態失敗", job.Id);
+            }
+
+            _logger.LogDebug("Job {JobId} 處理失敗：{Error}，status={Status}，retryCount={RetryCount}",
+                job.Id, ex.Message, job.Status, job.RetryCount);
+        }
+    }
+
+    public static DateTimeOffset CalculateNextRetry(int retryCount, DateTimeOffset baseTime)
+    {
+        var index = Math.Clamp(retryCount - 1, 0, BackoffSeconds.Length - 1);
+        return baseTime.AddSeconds(BackoffSeconds[index]);
+    }
+
+    public static bool IsTransientError(Exception ex) => ex switch
+    {
+        SqlException sqlEx => sqlEx.Number == -2 || sqlEx.Class >= 20,
+        RedisConnectionException => true,
+        TimeoutException => true,
+        _ => false,
+    };
+}

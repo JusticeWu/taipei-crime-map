@@ -64,6 +64,8 @@ public class CrimeController : ControllerBase
         [FromQuery] string? rawTimeSlot,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 200,
+        [FromQuery] string? sortBy = null,
+        [FromQuery] string? sortOrder = null,
         CancellationToken cancellationToken = default)
     {
         var query = new GetCrimesByFilterQuery(
@@ -73,7 +75,9 @@ public class CrimeController : ControllerBase
             YearTo: yearTo,
             RawTimeSlot: rawTimeSlot,
             Page: page,
-            PageSize: pageSize);
+            PageSize: pageSize,
+            SortBy: sortBy,
+            SortOrder: sortOrder);
 
         var results = await _queryHandler.HandleAsync(query, cancellationToken);
         return Ok(results);

@@ -56,7 +56,12 @@ public class CsvParser : ICsvParser
                 continue;
             }
 
-            var caseNumber = colunms[0].Trim();
+            if (!int.TryParse(colunms[0].Trim(), out var caseNumber))
+            {
+                skppedCount++;
+                _logger.LogWarning("第 {Row} 列編號非整數，跳過: {Value}", rowNumber, colunms[0]);
+                continue;
+            }
             var rawCaseType = colunms[1].Trim();
             var rawDate = colunms[2].Trim();
             var rawTimeSlot = colunms[3].Trim();

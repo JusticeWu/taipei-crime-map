@@ -62,7 +62,7 @@ public class InMemoryCrimeRepository : ICrimeRepository
     }
 
     public Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
-        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+        CrimeFilter filter, int page, int pageSize, string? sortBy = null, string? sortOrder = null, CancellationToken cancellationToken = default)
     {
         var query = _cases.AsEnumerable();
 
@@ -97,7 +97,7 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult<TheftCase?>(result);
     }
 
-    public Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default)
+    public Task<TheftCase?> GetByCaseNumberAsync(int caseNumber, CancellationToken cancellationToken = default)
     {
         var result = _cases.FirstOrDefault(c => c.CaseNumber == caseNumber);
 
@@ -158,7 +158,7 @@ public class InMemoryCrimeRepository : ICrimeRepository
     {
         var result = _cases
             .Where(c => c.Coordinate is null)
-            .OrderBy(c => c.CaseNumber, StringComparer.Ordinal)
+            .OrderBy(c => c.CaseNumber)
             .Take(batchSize)
             .ToList();
 
@@ -195,6 +195,11 @@ public class InMemoryCrimeRepository : ICrimeRepository
     public Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(_cases.Count(c => c.Coordinate is null));
+    }
+
+    public Task<int> UpdateCaseFieldsAsync(int caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(0);
     }
 
     public Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(

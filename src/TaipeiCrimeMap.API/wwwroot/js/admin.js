@@ -69,6 +69,9 @@
   function showForm() {
     loginSection.hidden = true;
     formSection.hidden = false;
+    try { ensureChart(); } catch (e) { console.warn('[admin] ensureChart failed:', e); }
+    openWebSocket();
+    startOfflineCheck();
   }
 
   async function init() {
@@ -442,6 +445,293 @@
     }
 
     resultEl.textContent = messages.join('\n');
+  });
+
+  // ── Data edit (資料更新) ────────────────────────────────────────
+  const DE_API = '/api/crime';
+  const DE_PATCH_API = '/api/admin/cases';
+  const DE_PAGE_SIZE = 50;
+  const CASE_TYPE_NAMES = { 1: '住宅竊盜', 2: '汽車竊盜', 3: '機車竊盜', 4: '自行車竊盜', 5: '搶奪', 6: '強盜' };
+  const CASE_TYPE_REV = Object.fromEntries(Object.entries(CASE_TYPE_NAMES).map(([k, v]) => [v, k]));
+  let _dePage = 1;
+  let _deTotalPages = 0;
+
+  const deCaseType = document.getElementById('de-case-type');
+  const deDistrict = document.getElementById('de-district');
+  const deSortBy = document.getElementById('de-sort-by');
+  const deSortOrder = document.getElementById('de-sort-order');
+  const deTbody = document.getElementById('de-tbody');
+  const dePageInfo = document.getElementById('de-page-info');
+  const deStatus = document.getElementById('de-status');
+  const deResult = document.getElementById('de-result');
+  const btnDeQuery = document.getElementById('btn-de-query');
+  const btnDePrev = document.getElementById('btn-de-prev');
+  const btnDeNext = document.getElementById('btn-de-next');
+
+  async function loadDataEditPage() {
+    const credentials = getStoredCredentials();
+    if (!credentials) { showLogin(); return; }
+    deStatus.textContent = '查詢中...';
+    deResult.textContent = '';
+    deTbody.innerHTML = '';
+
+    const params = new URLSearchParams({ page: _dePage, pageSize: DE_PAGE_SIZE, sortBy: deSortBy.value, sortOrder: deSortOrder.value });
+    if (deCaseType.value) params.set('caseType', deCaseType.value);
+    if (deDistrict.value) params.set('districtName', deDistrict.value);
+
+    try {
+      const resp = await fetch(`${DE_API}?${params}`, { headers: { Authorization: `Basic ${credentials}` } });
+      if (!resp.ok) { deStatus.textContent = `查詢失敗 (HTTP ${resp.status})`; return; }
+      const data = await resp.json();
+      _deTotalPages = data.totalPages || 0;
+      renderDeTable(data.data || []);
+      dePageInfo.textContent = `第 ${_dePage} / ${_deTotalPages} 頁（共 ${data.total} 筆）`;
+      btnDePrev.disabled = _dePage <= 1;
+      btnDeNext.disabled = _dePage >= _deTotalPages;
+      deStatus.textContent = '';
+    } catch (err) {
+      deStatus.textContent = `錯誤：${err.message}`;
+    }
+  }
+
+  function renderDeTable(rows) {
+    const s = 'padding:4px 6px;border:1px solid #e5e7eb';
+    deTbody.innerHTML = rows.map((r) => {
+      const coord = (r.latitude != null && r.longitude != null)
+        ? `${r.latitude.toFixed(4)},${r.longitude.toFixed(4)}` : '—';
+      const ctInt = CASE_TYPE_REV[r.caseType] || '';
+      return `<tr data-cn="${r.caseNumber}" data-ct="${ctInt}">
+        <td style="${s}">${r.caseNumber}</td>
+        <td style="${s}">${r.caseType || '—'}</td>
+        <td style="${s}" class="de-date">${r.occurredDate || '—'}</td>
+        <td style="${s}" class="de-ts">${r.timeSlot || '—'}</td>
+        <td style="${s}" class="de-loc">${r.rawLocation || '—'}</td>
+        <td style="${s}">${coord}</td>
+        <td style="${s}"><button class="btn-de-edit" style="padding:2px 8px;font-size:0.8rem">編輯</button></td>
+      </tr>`;
+    }).join('');
+
+    deTbody.querySelectorAll('.btn-de-edit').forEach((btn) => {
+      btn.addEventListener('click', () => startInlineEdit(btn.closest('tr')));
+    });
+  }
+
+  function startInlineEdit(tr) {
+    if (tr.querySelector('input')) return;
+    const dateCell = tr.querySelector('.de-date');
+    const tsCell = tr.querySelector('.de-ts');
+    const locCell = tr.querySelector('.de-loc');
+    const btnCell = tr.querySelector('.btn-de-edit').parentElement;
+    const origDate = dateCell.textContent.trim();
+    const origTs = tsCell.textContent.trim();
+    const origLoc = locCell.textContent.trim();
+
+    dateCell.innerHTML = `<input type="text" value="${origDate === '—' ? '' : origDate}" style="width:80px;font-size:0.8rem">`;
+    tsCell.innerHTML = `<input type="text" value="${origTs === '—' ? '' : origTs}" style="width:50px;font-size:0.8rem">`;
+    locCell.innerHTML = `<input type="text" value="${origLoc === '—' ? '' : origLoc}" style="width:140px;font-size:0.8rem">`;
+    btnCell.innerHTML = '<button class="btn-de-save" style="padding:2px 6px;font-size:0.75rem;background:#16a34a;color:#fff;border:none;border-radius:3px;cursor:pointer">儲存</button> <button class="btn-de-cancel" style="padding:2px 6px;font-size:0.75rem;background:#6b7280;color:#fff;border:none;border-radius:3px;cursor:pointer">取消</button>';
+
+    btnCell.querySelector('.btn-de-cancel').addEventListener('click', () => {
+      dateCell.textContent = origDate;
+      tsCell.textContent = origTs;
+      locCell.textContent = origLoc;
+      btnCell.innerHTML = '<button class="btn-de-edit" style="padding:2px 8px;font-size:0.8rem">編輯</button>';
+      btnCell.querySelector('.btn-de-edit').addEventListener('click', () => startInlineEdit(tr));
+    });
+
+    btnCell.querySelector('.btn-de-save').addEventListener('click', async () => {
+      const credentials = getStoredCredentials();
+      if (!credentials) { showLogin(); return; }
+      const caseNumber = tr.dataset.cn;
+      const caseType = tr.dataset.ct;
+      const newDate = dateCell.querySelector('input').value.trim();
+      const newTs = tsCell.querySelector('input').value.trim();
+      const newLoc = locCell.querySelector('input').value.trim();
+      const msgs = [];
+
+      if (newDate !== origDate.replace('—', '') || newTs !== origTs.replace('—', '')) {
+        const body = {};
+        if (newDate) {
+          const m = newDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          body.occurrenceDate = m ? (parseInt(m[1], 10) - 1911) * 10000 + parseInt(m[2], 10) * 100 + parseInt(m[3], 10) : parseInt(newDate, 10);
+        }
+        if (newTs) body.timeSlot = newTs;
+        if (Object.keys(body).length > 0) {
+          try {
+            const r = await fetch(`${DE_PATCH_API}/${caseNumber}/${caseType}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: `Basic ${credentials}` },
+              body: JSON.stringify(body),
+            });
+            msgs.push(r.ok ? '日期/時段已更新' : `日期/時段更新失敗 (${r.status})`);
+          } catch (e) { msgs.push(`日期/時段錯誤：${e.message}`); }
+        }
+      }
+
+      if (newLoc && newLoc !== origLoc.replace('—', '')) {
+        try {
+          const r = await fetch(PATCH_URL, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Basic ${credentials}` },
+            body: JSON.stringify({ rawLocation: newLoc, latitude: 0, longitude: 0 }),
+          });
+          msgs.push(r.ok ? '地點已更新' : `地點更新失敗 (${r.status})`);
+        } catch (e) { msgs.push(`地點錯誤：${e.message}`); }
+      }
+
+      deResult.textContent = msgs.length > 0 ? msgs.join('; ') : '無變更';
+      loadDataEditPage();
+    });
+  }
+
+  btnDeQuery.addEventListener('click', () => { _dePage = 1; loadDataEditPage(); });
+  document.getElementById('btn-de-clear-cache').addEventListener('click', async () => {
+    const credentials = getStoredCredentials();
+    if (!credentials) { showLogin(); return; }
+    deResult.textContent = '清除快取中...';
+    try {
+      const r = await fetch(CACHE_CLEAR_URL, { method: 'POST', headers: { Authorization: `Basic ${credentials}` } });
+      if (!r.ok) { deResult.textContent = `清除快取失敗 (HTTP ${r.status})`; return; }
+      const d = await r.json();
+      deResult.textContent = `快取清除完成：L1 ${d.l1Cleared ? '✅' : '❌'}，L2 ${d.l2Cleared ? '✅' : '❌'}`;
+    } catch (e) { deResult.textContent = `錯誤：${e.message}`; }
+  });
+  btnDePrev.addEventListener('click', () => { if (_dePage > 1) { _dePage--; loadDataEditPage(); } });
+  btnDeNext.addEventListener('click', () => { if (_dePage < _deTotalPages) { _dePage++; loadDataEditPage(); } });
+
+  const deGotoInput = document.getElementById('de-goto-page');
+  function gotoPage() {
+    const p = parseInt(deGotoInput.value, 10);
+    if (p >= 1 && p <= _deTotalPages) { _dePage = p; loadDataEditPage(); }
+  }
+  document.getElementById('btn-de-goto').addEventListener('click', gotoPage);
+  deGotoInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') gotoPage(); });
+
+  // ── Bulk add cases ─────────────────────────────────────────────
+  const BULK_API_URL = '/api/admin/cases/bulk';
+  const bulkInput = document.getElementById('bulk-input');
+  const bulkPreviewBtn = document.getElementById('btn-bulk-preview');
+  const bulkPreviewArea = document.getElementById('bulk-preview-area');
+  const bulkPreviewTbody = document.querySelector('#bulk-preview-table tbody');
+  const bulkSubmitBtn = document.getElementById('btn-bulk-submit');
+  const bulkResultEl = document.getElementById('bulk-result');
+
+  let _parsedBulkItems = [];
+
+  function parseBulkInput(text) {
+    return text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .map(line => {
+        const parts = line.split('\t');
+        if (parts.length < 5) return null;
+        return {
+          caseNumber: parseInt(parts[0], 10),
+          caseType: parts[1].trim(),
+          occurrenceDate: parseInt(parts[2], 10),
+          timeSlot: parts[3].trim(),
+          rawLocation: parts[4].trim(),
+        };
+      });
+  }
+
+  bulkPreviewBtn.addEventListener('click', () => {
+    bulkResultEl.textContent = '';
+    const parsed = parseBulkInput(bulkInput.value);
+    _parsedBulkItems = parsed.filter(x => x !== null);
+
+    bulkPreviewTbody.innerHTML = '';
+    parsed.forEach((item, i) => {
+      const tr = document.createElement('tr');
+      if (item === null) {
+        tr.innerHTML = `<td colspan="6" style="padding:4px 8px;border:1px solid #e5e7eb;color:#dc2626">第 ${i + 1} 行格式錯誤（欄位不足 5 個）</td>`;
+      } else {
+        const style = 'padding:4px 8px;border:1px solid #e5e7eb';
+        tr.innerHTML =
+          `<td style="${style}">${i + 1}</td>` +
+          `<td style="${style}">${item.caseNumber}</td>` +
+          `<td style="${style}">${item.caseType}</td>` +
+          `<td style="${style}">${item.occurrenceDate}</td>` +
+          `<td style="${style}">${item.timeSlot}</td>` +
+          `<td style="${style}">${item.rawLocation}</td>`;
+      }
+      bulkPreviewTbody.appendChild(tr);
+    });
+
+    bulkPreviewArea.style.display = _parsedBulkItems.length > 0 ? '' : 'none';
+  });
+
+  let _batchPollTimer = null;
+
+  function pollBatchStatus(batchId, credentials) {
+    if (_batchPollTimer) clearInterval(_batchPollTimer);
+    const progressEl = document.getElementById('bulk-progress');
+    const barEl = document.getElementById('bulk-progress-bar');
+    if (progressEl) progressEl.style.display = '';
+
+    _batchPollTimer = setInterval(async () => {
+      try {
+        const resp = await fetch(`/api/admin/cases/batch/${batchId}/status`, {
+          headers: { Authorization: `Basic ${credentials}` },
+        });
+        if (!resp.ok) return;
+        const s = await resp.json();
+        const total = s.pending + s.success + s.failure;
+        const pct = total > 0 ? Math.round(((s.success + s.failure) / total) * 100) : 0;
+        if (barEl) barEl.style.width = `${pct}%`;
+
+        let msg = `⏳ 進度 ${pct}%：待處理 ${s.pending}　成功 ${s.success}　失敗 ${s.failure}`;
+        if (s.failures && s.failures.length > 0) {
+          msg += '\n\n失敗明細：';
+          s.failures.forEach(f => { msg += `\n  編號 ${f.caseNumber}：${f.error}`; });
+        }
+        bulkResultEl.textContent = msg;
+
+        if (s.pending === 0) {
+          clearInterval(_batchPollTimer);
+          _batchPollTimer = null;
+          bulkSubmitBtn.disabled = false;
+          if (progressEl) progressEl.style.display = 'none';
+          const icon = s.failure > 0 ? '⚠️' : '✅';
+          let final = `${icon} 完成！成功 ${s.success} 筆，失敗 ${s.failure} 筆`;
+          if (s.failures && s.failures.length > 0) {
+            final += '\n\n失敗明細：';
+            s.failures.forEach(f => { final += `\n  編號 ${f.caseNumber}：${f.error}`; });
+          }
+          bulkResultEl.textContent = final;
+        }
+      } catch (err) {
+        console.warn('[admin] poll batch status error:', err);
+      }
+    }, 2000);
+  }
+
+  bulkSubmitBtn.addEventListener('click', async () => {
+    if (_parsedBulkItems.length === 0) return;
+    const credentials = getStoredCredentials();
+    if (!credentials) { showLogin(); return; }
+
+    bulkResultEl.textContent = '送出中...';
+    bulkSubmitBtn.disabled = true;
+    try {
+      const resp = await fetch(BULK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${credentials}`,
+        },
+        body: JSON.stringify(_parsedBulkItems),
+      });
+      if (resp.status === 401) { bulkResultEl.textContent = '❌ 認證失敗（401），請重新登入'; bulkSubmitBtn.disabled = false; return; }
+      if (!resp.ok) { bulkResultEl.textContent = `❌ 送出失敗（HTTP ${resp.status}）`; bulkSubmitBtn.disabled = false; return; }
+
+      const data = await resp.json();
+      bulkResultEl.textContent = `⏳ 已排入佇列：批次 ${data.batchId}，共 ${data.totalCount} 筆，處理中...`;
+      pollBatchStatus(data.batchId, credentials);
+    } catch (err) {
+      bulkResultEl.textContent = `❌ 發生錯誤：${err.message}`;
+      bulkSubmitBtn.disabled = false;
+    }
   });
 
   window.addEventListener('beforeunload', () => { closeWebSocket(); stopOfflineCheck(); });
