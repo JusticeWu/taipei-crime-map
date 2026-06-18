@@ -25,32 +25,37 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 // Rate Limiting
-var publicApiLimit = builder.Configuration.GetValue("RateLimiting:PublicApi", 60);
-var adminApiLimit = builder.Configuration.GetValue("RateLimiting:AdminApi", 20);
-
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
     options.AddPolicy("public-api", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
+    {
+        var limit = context.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:PublicApi", 60);
+        return RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = publicApiLimit,
+                PermitLimit = limit,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
-            }));
+            });
+    });
 
     options.AddPolicy("admin-api", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
+    {
+        var limit = context.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:AdminApi", 20);
+        return RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = adminApiLimit,
+                PermitLimit = limit,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
-            }));
+            });
+    });
 });
 
 // Secondary Redis（選配，用於跨環境訂閱其他 Server 的指標）
