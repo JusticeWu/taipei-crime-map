@@ -58,7 +58,7 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task BulkAddCases_WithValidData_ShouldReturnBatchId()
+    public async Task BulkAddCases_WithValidData_FallbackSync_ShouldSucceed()
     {
         var client = CreateAuthorizedClient(
             CustomWebApplicationFactory.AdminUsername,
@@ -78,12 +78,13 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
-        doc.RootElement.GetProperty("batchId").GetString().Should().NotBeNullOrEmpty();
-        doc.RootElement.GetProperty("totalCount").GetInt32().Should().Be(1);
+        doc.RootElement.GetProperty("mode").GetString().Should().Be("sync");
+        doc.RootElement.GetProperty("successCount").GetInt32().Should().Be(1);
+        doc.RootElement.GetProperty("failureCount").GetInt32().Should().Be(0);
     }
 
     [Fact]
-    public async Task BulkAddCases_WithMultipleItems_ShouldReturnCorrectTotalCount()
+    public async Task BulkAddCases_WithInvalidCaseType_FallbackSync_ShouldReturnFailure()
     {
         var client = CreateAuthorizedClient(
             CustomWebApplicationFactory.AdminUsername,
@@ -104,7 +105,11 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
-        doc.RootElement.GetProperty("totalCount").GetInt32().Should().Be(2);
+        doc.RootElement.GetProperty("mode").GetString().Should().Be("sync");
+        doc.RootElement.GetProperty("successCount").GetInt32().Should().Be(1);
+        doc.RootElement.GetProperty("failureCount").GetInt32().Should().Be(1);
+        doc.RootElement.GetProperty("failures")[0]
+            .GetProperty("reason").GetString().Should().Contain("不存在的案類");
     }
 
     [Fact]
