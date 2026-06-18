@@ -17,7 +17,7 @@ public class ServerMetricsHandlerTests
             NullLogger<ServerMetricsWebSocketHandler>.Instance);
 
     [Fact(Timeout = 15000)]
-    public async Task HandleAsync_WithoutToken_Returns401WithoutThrowing()
+    public async Task HandleAsync_NonWebSocketRequest_Returns400()
     {
         var handler = BuildHandler();
         var context = new DefaultHttpContext();
@@ -25,6 +25,6 @@ public class ServerMetricsHandlerTests
         var act = async () => await handler.HandleAsync(context);
 
         await act.Should().NotThrowAsync();
-        context.Response.StatusCode.Should().Be(StatusCodes.Status401Unauthorized);
+        context.Response.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
     }
 }

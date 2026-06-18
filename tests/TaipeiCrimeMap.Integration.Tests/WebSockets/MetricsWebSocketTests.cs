@@ -1,5 +1,3 @@
-using System.Net;
-using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -10,64 +8,73 @@ namespace TaipeiCrimeMap.Integration.Tests.WebSockets;
 public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
 {
     private readonly CustomWebApplicationFactory _factory;
-    private readonly HttpClient _client;
 
     public MetricsWebSocketTests(CustomWebApplicationFactory factory)
     {
         _factory = factory;
-        _client = factory.CreateClient();
     }
 
     [Fact(Timeout = 15000)]
-    public async Task GetWsMetrics_WithoutAuthorization_Returns401()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var response = await _client.GetAsync("/ws/metrics", cts.Token);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact(Timeout = 15000)]
-    public async Task GetWsMetrics_WithWrongCredentials_Returns401()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        using var client = _factory.CreateClient();
-        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes("wrong:credentials"));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
-
-        var response = await client.GetAsync("/ws/metrics", cts.Token);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact(Timeout = 15000)]
-    public async Task GetWsMetrics_WithCorrectCredentials_Returns101()
+    public async Task WsMetrics_WithWrongToken_ClosesWithPolicyViolation()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var wsClient = _factory.Server.CreateWebSocketClient();
-        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-            $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
-        wsClient.ConfigureRequest = req =>
-            req.Headers["Authorization"] = $"Basic {credentials}";
+        using var ws = await wsClient.ConnectAsync(new Uri("ws://localhost/ws/metrics"), cts.Token);
 
-        using var ws = await wsClient.ConnectAsync(
-            new Uri("ws://localhost/ws/metrics"), cts.Token);
+        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes("wrong:credentials"));
+        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { token }));
+        await ws.SendAsync(new ArraySegment<byte>(msg), WebSocketMessageType.Text, true, cts.Token);
+
+        var buffer = new byte[1024];
+        var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cts.Token);
+        result.MessageType.Should().Be(WebSocketMessageType.Close);
+        ws.CloseStatus.Should().Be(WebSocketCloseStatus.PolicyViolation);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task WsMetrics_WithNoToken_ClosesOnTimeout()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        using var ws = await wsClient.ConnectAsync(new Uri("ws://localhost/ws/metrics"), cts.Token);
+
+        var buffer = new byte[1024];
+        var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cts.Token);
+        result.MessageType.Should().Be(WebSocketMessageType.Close);
+        ws.CloseStatus.Should().Be(WebSocketCloseStatus.PolicyViolation);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task WsMetrics_WithCorrectToken_StaysOpen()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        using var ws = await wsClient.ConnectAsync(new Uri("ws://localhost/ws/metrics"), cts.Token);
+
+        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
+        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { token }));
+        await ws.SendAsync(new ArraySegment<byte>(msg), WebSocketMessageType.Text, true, cts.Token);
+
+        var buffer = new byte[8192];
+        var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cts.Token);
+        result.MessageType.Should().Be(WebSocketMessageType.Text);
 
         ws.State.Should().Be(WebSocketState.Open);
         await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "done", cts.Token);
     }
 
     [Fact(Timeout = 15000)]
-    public async Task GetWsMetrics_AfterConnect_ReceivesJsonWithRequiredFields()
+    public async Task WsMetrics_AfterAuth_ReceivesJsonWithRequiredFields()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var wsClient = _factory.Server.CreateWebSocketClient();
-        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-            $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
-        wsClient.ConfigureRequest = req =>
-            req.Headers["Authorization"] = $"Basic {credentials}";
-
         using var ws = await wsClient.ConnectAsync(new Uri("ws://localhost/ws/metrics"), cts.Token);
+
+        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
+        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { token }));
+        await ws.SendAsync(new ArraySegment<byte>(msg), WebSocketMessageType.Text, true, cts.Token);
 
         var buffer = new byte[8192];
         var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cts.Token);
