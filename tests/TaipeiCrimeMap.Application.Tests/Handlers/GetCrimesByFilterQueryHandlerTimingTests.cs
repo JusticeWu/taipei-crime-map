@@ -24,7 +24,7 @@ public class GetCrimesByFilterQueryHandlerTimingTests
         _repository = Substitute.For<ICrimeRepository>();
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         _cache = Substitute.For<IDistributedCache>();

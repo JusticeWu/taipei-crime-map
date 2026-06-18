@@ -65,7 +65,7 @@ public class GetCrimesByFilterQueryHandlerTests
         };
 
         _repository.GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)cases, cases.Count));
 
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Residential);
@@ -102,7 +102,7 @@ public class GetCrimesByFilterQueryHandlerTests
     {
         // Arrange
         _repository.GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery();
@@ -112,7 +112,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class GetCrimesByFilterQueryHandlerTests
     {
         // Arrange
         _repository.GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery(DistrictName: "大安區");
@@ -131,7 +131,7 @@ public class GetCrimesByFilterQueryHandlerTests
         // Assert
         await _repository.Received(1).GetPagedByFilterAsync(
             Arg.Is<CrimeFilter>(f => f.District != null && f.District.Name == "大安區"),
-            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public class GetCrimesByFilterQueryHandlerTests
         };
 
         _repository.GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)cases, cases.Count));
 
         var query = new GetCrimesByFilterQuery(CaseType: CaseType.Residential);
@@ -162,7 +162,7 @@ public class GetCrimesByFilterQueryHandlerTests
         // Assert
         secondResult.Should().BeEquivalentTo(firstResult);
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class GetCrimesByFilterQueryHandlerTests
     {
         // Arrange
         _repository.GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query1 = new GetCrimesByFilterQuery(DistrictName: "大安區");
@@ -182,7 +182,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         await _repository.Received(2).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -198,7 +198,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery();
@@ -210,7 +210,7 @@ public class GetCrimesByFilterQueryHandlerTests
         // Assert
         result.Subject.Should().NotBeNull();
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public class GetCrimesByFilterQueryHandlerTests
         result.Data.Should().HaveCount(1);
         result.Data[0].CaseNumber.Should().Be("cached-001");
         await _repository.DidNotReceive().GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     // ──────────────────────────────────────────────
@@ -261,7 +261,7 @@ public class GetCrimesByFilterQueryHandlerTests
         // Assert
         result.Should().BeEquivalentTo(preloaded);
         await _repository.DidNotReceive().GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -274,7 +274,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var query = new GetCrimesByFilterQuery();
@@ -286,7 +286,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert - Repository 只被呼叫一次
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -306,7 +306,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
@@ -322,7 +322,7 @@ public class GetCrimesByFilterQueryHandlerTests
         // Assert
         result.Should().NotBeNull();
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     // ──────────────────────────────────────────────
@@ -368,7 +368,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
@@ -384,7 +384,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -426,7 +426,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
@@ -442,7 +442,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -471,7 +471,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
@@ -493,7 +493,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         await _repository.Received(1).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -520,7 +520,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         _repository
             .GetPagedByFilterAsync(
-                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+                Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Returns(((IReadOnlyList<TheftCase>)new List<TheftCase>(), 0));
 
         var handler = new GetCrimesByFilterQueryHandler(
@@ -536,6 +536,6 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         await _repository.Received(2).GetPagedByFilterAsync(
-            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
+            Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 }

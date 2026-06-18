@@ -121,7 +121,35 @@ public class AdminController : ControllerBase
         return Ok(new BulkAddResult(succeeded, failures.Count, failures));
     }
 
+    [HttpPatch("cases/{caseNumber}/{caseType:int}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateCase(
+        string caseNumber,
+        int caseType,
+        [FromBody] UpdateCaseRequest request,
+        CancellationToken cancellationToken)
+    {
+        string? dateRaw = request.OccurrenceDate.HasValue
+            ? request.OccurrenceDate.Value.ToString()
+            : null;
+        string? timeSlotRaw = request.TimeSlot;
+
+        if (dateRaw is null && timeSlotRaw is null)
+            return BadRequest("至少需要提供 occurrenceDate 或 timeSlot。");
+
+        if (dateRaw is not null && dateRaw.Length != 7)
+            return BadRequest($"日期格式錯誤：{dateRaw}，需為 7 碼民國年月日。");
+
+        var affected = await _repository.UpdateCaseFieldsAsync(
+            caseNumber, caseType, dateRaw, timeSlotRaw, cancellationToken);
+
+        return affected == 0 ? NotFound() : Ok(new { affected });
+    }
+
     public record BulkCaseItem(int CaseNumber, string CaseType, int OccurrenceDate, string? TimeSlot, string? RawLocation);
     public record BulkFailure(int Index, int CaseNumber, string Reason);
     public record BulkAddResult(int Succeeded, int Failed, List<BulkFailure> Failures);
+    public record UpdateCaseRequest(int? OccurrenceDate, string? TimeSlot);
 }

@@ -47,12 +47,12 @@ public class SqlServerCrimeRepository : ICrimeRepository
 
     public async Task<IReadOnlyList<TheftCase>> GetByFilterAsync(CrimeFilter filter, CancellationToken cancellationToken = default)
     {
-        var (cases, _) = await GetPagedByFilterAsync(filter, page: 1, pageSize: int.MaxValue, cancellationToken);
+        var (cases, _) = await GetPagedByFilterAsync(filter, page: 1, pageSize: int.MaxValue, cancellationToken: cancellationToken);
         return cases;
     }
 
     public async Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
-        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+        CrimeFilter filter, int page, int pageSize, string? sortBy = null, string? sortOrder = null, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
         var rows = (await conn.QueryAsync<TheftCaseRow>(
@@ -66,7 +66,9 @@ public class SqlServerCrimeRepository : ICrimeRepository
                 TimeSlotStart  = filter.TimeSlot?.StartHour,
                 TimeSlotEnd    = filter.TimeSlot?.EndHour,
                 Page           = page,
-                PageSize       = pageSize
+                PageSize       = pageSize,
+                SortBy         = sortBy,
+                SortOrder      = sortOrder
             },
             commandType: CommandType.StoredProcedure)).ToList();
 
@@ -171,6 +173,42 @@ public class SqlServerCrimeRepository : ICrimeRepository
         await using var conn = CreateConnection();
         return await conn.ExecuteScalarAsync<int>(
             "SELECT COUNT(*) FROM theft_cases WHERE latitude IS NULL OR longitude IS NULL");
+    }
+
+    public async Task<int> UpdateCaseFieldsAsync(string caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
+    {
+        await using var conn = CreateConnection();
+        var sets = new List<string>();
+        var param = new DynamicParameters();
+        param.Add("CaseNumber", caseNumber);
+        param.Add("CaseType", caseType);
+
+        if (occurrenceDateRaw is not null)
+        {
+            var td = TaiwanDate.Parse(occurrenceDateRaw);
+            sets.Add("occurred_date_raw = @OccurredDateRaw");
+            sets.Add("occurred_date = @OccurredDate");
+            sets.Add("occurred_year = @OccurredYear");
+            param.Add("OccurredDateRaw", td.RawValue);
+            param.Add("OccurredDate", td.OccurredOn);
+            param.Add("OccurredYear", td.Year);
+        }
+
+        if (timeSlotRaw is not null)
+        {
+            var ts = TimeSlot.Parse(timeSlotRaw);
+            sets.Add("time_slot_raw = @TimeSlotRaw");
+            sets.Add("time_slot_start = @TimeSlotStart");
+            sets.Add("time_slot_end = @TimeSlotEnd");
+            param.Add("TimeSlotRaw", ts.RawValue);
+            param.Add("TimeSlotStart", ts.StartHour);
+            param.Add("TimeSlotEnd", ts.EndHour);
+        }
+
+        if (sets.Count == 0) return 0;
+
+        var sql = $"UPDATE theft_cases SET {string.Join(", ", sets)} WHERE case_number = @CaseNumber AND case_type = @CaseType";
+        return await conn.ExecuteAsync(sql, param);
     }
 
     public async Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(

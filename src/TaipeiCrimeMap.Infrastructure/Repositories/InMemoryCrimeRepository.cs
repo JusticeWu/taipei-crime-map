@@ -62,7 +62,7 @@ public class InMemoryCrimeRepository : ICrimeRepository
     }
 
     public Task<(IReadOnlyList<TheftCase> Cases, int Total)> GetPagedByFilterAsync(
-        CrimeFilter filter, int page, int pageSize, CancellationToken cancellationToken = default)
+        CrimeFilter filter, int page, int pageSize, string? sortBy = null, string? sortOrder = null, CancellationToken cancellationToken = default)
     {
         var query = _cases.AsEnumerable();
 
@@ -195,6 +195,11 @@ public class InMemoryCrimeRepository : ICrimeRepository
     public Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(_cases.Count(c => c.Coordinate is null));
+    }
+
+    public Task<int> UpdateCaseFieldsAsync(string caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(0);
     }
 
     public Task<IReadOnlyList<(string District, int Count)>> GetDistrictCountsAsync(
