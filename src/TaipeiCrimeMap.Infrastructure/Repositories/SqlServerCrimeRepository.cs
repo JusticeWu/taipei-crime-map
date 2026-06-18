@@ -107,13 +107,13 @@ public class SqlServerCrimeRepository : ICrimeRepository
     public async Task AddAsync(TheftCase theftCase, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
-        await conn.ExecuteAsync(InsertSql, ToRow(theftCase));
+        await conn.ExecuteAsync(UpsertSql, ToRow(theftCase));
     }
 
     public async Task AddRangeAsync(IEnumerable<TheftCase> theftCases, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
-        await conn.ExecuteAsync(InsertSql, theftCases.Select(ToRow));
+        await conn.ExecuteAsync(UpsertSql, theftCases.Select(ToRow));
     }
 
     public async Task<int> CountAsync(CancellationToken cancellationToken = default)
@@ -296,19 +296,32 @@ public class SqlServerCrimeRepository : ICrimeRepository
 
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
-    private const string InsertSql = """
-        INSERT INTO theft_cases (
-            id, case_number, case_type, district,
-            occurred_date_raw, occurred_date, occurred_year,
-            time_slot_raw, time_slot_start, time_slot_end,
-            raw_location, latitude, longitude,
-            imported_at, created_at)
-        VALUES (
-            @Id, @CaseNumber, @CaseType, @District,
-            @OccurredDateRaw, @OccurredDate, @OccurredYear,
-            @TimeSlotRaw, @TimeSlotStart, @TimeSlotEnd,
-            @RawLocation, @Latitude, @Longitude,
-            @ImportedAt, @CreatedAt)
+    private const string UpsertSql = """
+        MERGE theft_cases AS target
+        USING (SELECT @CaseNumber AS case_number, @CaseType AS case_type) AS source
+            ON target.case_number = source.case_number AND target.case_type = source.case_type
+        WHEN MATCHED THEN
+            UPDATE SET
+                district          = @District,
+                occurred_date_raw = @OccurredDateRaw,
+                occurred_date     = @OccurredDate,
+                occurred_year     = @OccurredYear,
+                time_slot_raw     = @TimeSlotRaw,
+                time_slot_start   = @TimeSlotStart,
+                time_slot_end     = @TimeSlotEnd,
+                raw_location      = @RawLocation,
+                imported_at       = @ImportedAt
+        WHEN NOT MATCHED THEN
+            INSERT (id, case_number, case_type, district,
+                    occurred_date_raw, occurred_date, occurred_year,
+                    time_slot_raw, time_slot_start, time_slot_end,
+                    raw_location, latitude, longitude,
+                    imported_at, created_at)
+            VALUES (@Id, @CaseNumber, @CaseType, @District,
+                    @OccurredDateRaw, @OccurredDate, @OccurredYear,
+                    @TimeSlotRaw, @TimeSlotStart, @TimeSlotEnd,
+                    @RawLocation, @Latitude, @Longitude,
+                    @ImportedAt, @CreatedAt);
         """;
 
     // ── Row ↔ Domain 轉換 ────────────────────────────────────────────────
