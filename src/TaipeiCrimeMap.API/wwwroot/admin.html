@@ -242,13 +242,14 @@
     </div>
 
     <div class="tab-bar">
-      <button class="tab-btn active" data-tab="maintenance">資料維護</button>
+      <button class="tab-btn active" data-tab="monitor">伺服器監控</button>
+      <button class="tab-btn" data-tab="maintenance">座標更新</button>
       <button class="tab-btn" data-tab="bulk-add">資料新增</button>
-      <button class="tab-btn" data-tab="monitor">伺服器監控</button>
+      <button class="tab-btn" data-tab="data-edit">資料更新</button>
     </div>
 
-    <!-- Tab: 資料維護 -->
-    <div id="tab-maintenance" class="tab-panel">
+    <!-- Tab: 座標更新 -->
+    <div id="tab-maintenance" class="tab-panel" style="display:none">
       <form id="update-form">
         <label for="rawLocation">發生地點</label>
         <textarea id="rawLocation" name="rawLocation" required
@@ -301,8 +302,49 @@
       <div id="bulk-result"></div>
     </div>
 
+    <!-- Tab: 資料更新 -->
+    <div id="tab-data-edit" class="tab-panel" style="display:none">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:0.75rem">
+        <select id="de-case-type" style="padding:4px"><option value="">全部案類</option>
+          <option value="1">住宅竊盜</option><option value="2">汽車竊盜</option><option value="3">機車竊盜</option>
+          <option value="4">自行車竊盜</option><option value="5">搶奪</option><option value="6">強盜</option>
+        </select>
+        <select id="de-district" style="padding:4px"><option value="">全部行政區</option>
+          <option>松山區</option><option>信義區</option><option>大安區</option><option>中山區</option>
+          <option>中正區</option><option>大同區</option><option>萬華區</option><option>文山區</option>
+          <option>南港區</option><option>內湖區</option><option>士林區</option><option>北投區</option>
+        </select>
+        <select id="de-sort-by" style="padding:4px">
+          <option value="caseNumber">依編號</option><option value="occurrenceDate">依日期</option><option value="district">依行政區</option>
+        </select>
+        <select id="de-sort-order" style="padding:4px">
+          <option value="asc">升序</option><option value="desc">降序</option>
+        </select>
+        <button type="button" id="btn-de-query" style="padding:4px 12px">查詢</button>
+      </div>
+      <div id="de-status" class="hint"></div>
+      <table id="de-table" style="width:100%;border-collapse:collapse;font-size:0.82rem">
+        <thead><tr style="background:#f3f4f6;text-align:left">
+          <th style="padding:4px 6px;border:1px solid #e5e7eb">編號</th>
+          <th style="padding:4px 6px;border:1px solid #e5e7eb">案類</th>
+          <th style="padding:4px 6px;border:1px solid #e5e7eb">發生日期</th>
+          <th style="padding:4px 6px;border:1px solid #e5e7eb">發生時段</th>
+          <th style="padding:4px 6px;border:1px solid #e5e7eb">發生地點</th>
+          <th style="padding:4px 6px;border:1px solid #e5e7eb">座標</th>
+          <th style="padding:4px 6px;border:1px solid #e5e7eb">操作</th>
+        </tr></thead>
+        <tbody id="de-tbody"></tbody>
+      </table>
+      <div style="margin-top:0.5rem;display:flex;gap:8px;align-items:center">
+        <button type="button" id="btn-de-prev" disabled>上一頁</button>
+        <span id="de-page-info">-</span>
+        <button type="button" id="btn-de-next" disabled>下一頁</button>
+      </div>
+      <div id="de-result" style="margin-top:0.5rem"></div>
+    </div>
+
     <!-- Tab: 伺服器監控 -->
-    <div id="tab-monitor" class="tab-panel" style="display:none">
+    <div id="tab-monitor" class="tab-panel">
       <p class="ws-status" id="ws-status">⬤ 未連線</p>
 
       <!-- 靜態硬體資訊列（第一次收到資料後顯示，顯示自機資訊） -->

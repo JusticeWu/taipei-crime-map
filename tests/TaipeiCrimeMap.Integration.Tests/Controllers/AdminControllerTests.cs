@@ -108,4 +108,47 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
         doc.RootElement.GetProperty("failures")[0]
             .GetProperty("reason").GetString().Should().Contain("不存在的案類");
     }
+
+    [Fact]
+    public async Task UpdateCase_WithoutAuth_ShouldReturn401()
+    {
+        var body = new StringContent(
+            JsonSerializer.Serialize(new { occurrenceDate = 1150401 }),
+            Encoding.UTF8, "application/json");
+        var req = new HttpRequestMessage(HttpMethod.Patch, "/api/admin/cases/99901/1") { Content = body };
+        var response = await _client.SendAsync(req);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task UpdateCase_WithNoFields_ShouldReturn400()
+    {
+        var client = CreateAuthorizedClient(
+            CustomWebApplicationFactory.AdminUsername,
+            CustomWebApplicationFactory.AdminPassword);
+
+        var body = new StringContent(
+            JsonSerializer.Serialize(new { }),
+            Encoding.UTF8, "application/json");
+        var req = new HttpRequestMessage(HttpMethod.Patch, "/api/admin/cases/99901/1") { Content = body };
+        client.DefaultRequestHeaders.ToList().ForEach(h => req.Headers.TryAddWithoutValidation(h.Key, h.Value));
+        var response = await client.SendAsync(req);
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task GetCrimes_WithSortParams_ShouldReturn200()
+    {
+        var client = CreateAuthorizedClient(
+            CustomWebApplicationFactory.AdminUsername,
+            CustomWebApplicationFactory.AdminPassword);
+
+        var response = await client.GetAsync("/api/crime?pageSize=5&sortBy=caseNumber&sortOrder=desc");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        doc.RootElement.GetProperty("data").GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        doc.RootElement.GetProperty("totalPages").ValueKind.Should().Be(JsonValueKind.Number);
+    }
 }

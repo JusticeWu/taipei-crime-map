@@ -117,7 +117,7 @@ public class GetCrimesByFilterQueryHandler
         int total;
         using (_timing.Track("DB-Query"))
         {
-            (cases, total) = await _repository.GetPagedByFilterAsync(filter, query.Page, query.PageSize, cancellationToken);
+            (cases, total) = await _repository.GetPagedByFilterAsync(filter, query.Page, query.PageSize, query.SortBy, query.SortOrder, cancellationToken);
         }
         _logger.LogInformation("查詢完成，共 {Total} 筆，本頁 {Count} 筆", total, cases.Count);
 

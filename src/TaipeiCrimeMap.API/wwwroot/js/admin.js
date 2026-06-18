@@ -69,6 +69,9 @@
   function showForm() {
     loginSection.hidden = true;
     formSection.hidden = false;
+    ensureChart();
+    openWebSocket();
+    startOfflineCheck();
   }
 
   async function init() {
@@ -443,6 +446,147 @@
 
     resultEl.textContent = messages.join('\n');
   });
+
+  // ── Data edit (資料更新) ────────────────────────────────────────
+  const DE_API = '/api/crime';
+  const DE_PATCH_API = '/api/admin/cases';
+  const DE_PAGE_SIZE = 50;
+  const CASE_TYPE_NAMES = { 1: '住宅竊盜', 2: '汽車竊盜', 3: '機車竊盜', 4: '自行車竊盜', 5: '搶奪', 6: '強盜' };
+  const CASE_TYPE_REV = Object.fromEntries(Object.entries(CASE_TYPE_NAMES).map(([k, v]) => [v, k]));
+  let _dePage = 1;
+  let _deTotalPages = 0;
+
+  const deCaseType = document.getElementById('de-case-type');
+  const deDistrict = document.getElementById('de-district');
+  const deSortBy = document.getElementById('de-sort-by');
+  const deSortOrder = document.getElementById('de-sort-order');
+  const deTbody = document.getElementById('de-tbody');
+  const dePageInfo = document.getElementById('de-page-info');
+  const deStatus = document.getElementById('de-status');
+  const deResult = document.getElementById('de-result');
+  const btnDeQuery = document.getElementById('btn-de-query');
+  const btnDePrev = document.getElementById('btn-de-prev');
+  const btnDeNext = document.getElementById('btn-de-next');
+
+  async function loadDataEditPage() {
+    const credentials = getStoredCredentials();
+    if (!credentials) { showLogin(); return; }
+    deStatus.textContent = '查詢中...';
+    deResult.textContent = '';
+    deTbody.innerHTML = '';
+
+    const params = new URLSearchParams({ page: _dePage, pageSize: DE_PAGE_SIZE, sortBy: deSortBy.value, sortOrder: deSortOrder.value });
+    if (deCaseType.value) params.set('caseType', deCaseType.value);
+    if (deDistrict.value) params.set('districtName', deDistrict.value);
+
+    try {
+      const resp = await fetch(`${DE_API}?${params}`, { headers: { Authorization: `Basic ${credentials}` } });
+      if (!resp.ok) { deStatus.textContent = `查詢失敗 (HTTP ${resp.status})`; return; }
+      const data = await resp.json();
+      _deTotalPages = data.totalPages || 0;
+      renderDeTable(data.data || []);
+      dePageInfo.textContent = `第 ${_dePage} / ${_deTotalPages} 頁（共 ${data.total} 筆）`;
+      btnDePrev.disabled = _dePage <= 1;
+      btnDeNext.disabled = _dePage >= _deTotalPages;
+      deStatus.textContent = '';
+    } catch (err) {
+      deStatus.textContent = `錯誤：${err.message}`;
+    }
+  }
+
+  function renderDeTable(rows) {
+    const s = 'padding:4px 6px;border:1px solid #e5e7eb';
+    deTbody.innerHTML = rows.map((r) => {
+      const coord = (r.latitude != null && r.longitude != null)
+        ? `${r.latitude.toFixed(4)},${r.longitude.toFixed(4)}` : '—';
+      const ctInt = CASE_TYPE_REV[r.caseType] || '';
+      return `<tr data-cn="${r.caseNumber}" data-ct="${ctInt}">
+        <td style="${s}">${r.caseNumber}</td>
+        <td style="${s}">${r.caseType || '—'}</td>
+        <td style="${s}" class="de-date">${r.occurredDate || '—'}</td>
+        <td style="${s}" class="de-ts">${r.timeSlot || '—'}</td>
+        <td style="${s}" class="de-loc">${r.rawLocation || '—'}</td>
+        <td style="${s}">${coord}</td>
+        <td style="${s}"><button class="btn-de-edit" style="padding:2px 8px;font-size:0.8rem">編輯</button></td>
+      </tr>`;
+    }).join('');
+
+    deTbody.querySelectorAll('.btn-de-edit').forEach((btn) => {
+      btn.addEventListener('click', () => startInlineEdit(btn.closest('tr')));
+    });
+  }
+
+  function startInlineEdit(tr) {
+    if (tr.querySelector('input')) return;
+    const dateCell = tr.querySelector('.de-date');
+    const tsCell = tr.querySelector('.de-ts');
+    const locCell = tr.querySelector('.de-loc');
+    const btnCell = tr.querySelector('.btn-de-edit').parentElement;
+    const origDate = dateCell.textContent.trim();
+    const origTs = tsCell.textContent.trim();
+    const origLoc = locCell.textContent.trim();
+
+    dateCell.innerHTML = `<input type="text" value="${origDate === '—' ? '' : origDate}" style="width:80px;font-size:0.8rem">`;
+    tsCell.innerHTML = `<input type="text" value="${origTs === '—' ? '' : origTs}" style="width:50px;font-size:0.8rem">`;
+    locCell.innerHTML = `<input type="text" value="${origLoc === '—' ? '' : origLoc}" style="width:140px;font-size:0.8rem">`;
+    btnCell.innerHTML = '<button class="btn-de-save" style="padding:2px 6px;font-size:0.75rem;background:#16a34a;color:#fff;border:none;border-radius:3px;cursor:pointer">儲存</button> <button class="btn-de-cancel" style="padding:2px 6px;font-size:0.75rem;background:#6b7280;color:#fff;border:none;border-radius:3px;cursor:pointer">取消</button>';
+
+    btnCell.querySelector('.btn-de-cancel').addEventListener('click', () => {
+      dateCell.textContent = origDate;
+      tsCell.textContent = origTs;
+      locCell.textContent = origLoc;
+      btnCell.innerHTML = '<button class="btn-de-edit" style="padding:2px 8px;font-size:0.8rem">編輯</button>';
+      btnCell.querySelector('.btn-de-edit').addEventListener('click', () => startInlineEdit(tr));
+    });
+
+    btnCell.querySelector('.btn-de-save').addEventListener('click', async () => {
+      const credentials = getStoredCredentials();
+      if (!credentials) { showLogin(); return; }
+      const caseNumber = tr.dataset.cn;
+      const caseType = tr.dataset.ct;
+      const newDate = dateCell.querySelector('input').value.trim();
+      const newTs = tsCell.querySelector('input').value.trim();
+      const newLoc = locCell.querySelector('input').value.trim();
+      const msgs = [];
+
+      if (newDate !== origDate.replace('—', '') || newTs !== origTs.replace('—', '')) {
+        const body = {};
+        if (newDate) {
+          const m = newDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+          body.occurrenceDate = m ? (parseInt(m[1], 10) - 1911) * 10000 + parseInt(m[2], 10) * 100 + parseInt(m[3], 10) : parseInt(newDate, 10);
+        }
+        if (newTs) body.timeSlot = newTs;
+        if (Object.keys(body).length > 0) {
+          try {
+            const r = await fetch(`${DE_PATCH_API}/${caseNumber}/${caseType}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: `Basic ${credentials}` },
+              body: JSON.stringify(body),
+            });
+            msgs.push(r.ok ? '日期/時段已更新' : `日期/時段更新失敗 (${r.status})`);
+          } catch (e) { msgs.push(`日期/時段錯誤：${e.message}`); }
+        }
+      }
+
+      if (newLoc && newLoc !== origLoc.replace('—', '')) {
+        try {
+          const r = await fetch(PATCH_URL, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Basic ${credentials}` },
+            body: JSON.stringify({ rawLocation: newLoc, latitude: 0, longitude: 0 }),
+          });
+          msgs.push(r.ok ? '地點已更新' : `地點更新失敗 (${r.status})`);
+        } catch (e) { msgs.push(`地點錯誤：${e.message}`); }
+      }
+
+      deResult.textContent = msgs.length > 0 ? msgs.join('; ') : '無變更';
+      loadDataEditPage();
+    });
+  }
+
+  btnDeQuery.addEventListener('click', () => { _dePage = 1; loadDataEditPage(); });
+  btnDePrev.addEventListener('click', () => { if (_dePage > 1) { _dePage--; loadDataEditPage(); } });
+  btnDeNext.addEventListener('click', () => { if (_dePage < _deTotalPages) { _dePage++; loadDataEditPage(); } });
 
   // ── Bulk add cases ─────────────────────────────────────────────
   const BULK_API_URL = '/api/admin/cases/bulk';
