@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using TaipeiCrimeMap.Application.Options;
 using TaipeiCrimeMap.Infrastructure.Metrics;
@@ -8,6 +9,8 @@ namespace TaipeiCrimeMap.API.WebSockets;
 
 public sealed class ServerMetricsWebSocketHandler
 {
+    private static readonly TimeSpan AuthTimeout = TimeSpan.FromSeconds(5);
+
     private readonly ServerMetricsService _metricsService;
     private readonly AdminAuthOptions _authOptions;
     private readonly ILogger<ServerMetricsWebSocketHandler> _logger;
@@ -24,12 +27,6 @@ public sealed class ServerMetricsWebSocketHandler
 
     public async Task HandleAsync(HttpContext context)
     {
-        if (!IsAuthenticated(context))
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
-
         if (!context.WebSockets.IsWebSocketRequest)
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -37,6 +34,16 @@ public sealed class ServerMetricsWebSocketHandler
         }
 
         using var ws = await context.WebSockets.AcceptWebSocketAsync();
+
+        if (!await AuthenticateViaMessageAsync(ws, context.RequestAborted))
+        {
+            await ws.CloseAsync(
+                WebSocketCloseStatus.PolicyViolation,
+                "Authentication failed",
+                CancellationToken.None);
+            return;
+        }
+
         _metricsService.AddConnection();
 
         var (channelId, reader) = _metricsService.RegisterClientChannel();
@@ -64,18 +71,35 @@ public sealed class ServerMetricsWebSocketHandler
         }
     }
 
-    private bool IsAuthenticated(HttpContext context)
+    private async Task<bool> AuthenticateViaMessageAsync(WebSocket ws, CancellationToken requestAborted)
     {
-        var token = context.Request.Query["token"].ToString();
-        if (!string.IsNullOrEmpty(token))
-            return ValidateBase64(token);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        cts.CancelAfter(AuthTimeout);
 
-        var header = context.Request.Headers.Authorization.ToString();
-        if (!string.IsNullOrEmpty(header)
-            && header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
-            return ValidateBase64(header["Basic ".Length..].Trim());
+        try
+        {
+            var buffer = new byte[2048];
+            var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cts.Token);
 
-        return false;
+            if (result.MessageType != WebSocketMessageType.Text)
+                return false;
+
+            var json = Encoding.UTF8.GetString(buffer, 0, result.Count);
+            using var doc = JsonDocument.Parse(json);
+            var token = doc.RootElement.GetProperty("token").GetString();
+
+            return !string.IsNullOrEmpty(token) && ValidateBase64(token);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogDebug("WebSocket 認證逾時（{Timeout}s）", AuthTimeout.TotalSeconds);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "WebSocket 認證訊息解析失敗");
+            return false;
+        }
     }
 
     private bool ValidateBase64(string base64)
