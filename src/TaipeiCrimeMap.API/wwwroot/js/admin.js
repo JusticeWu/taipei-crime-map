@@ -729,8 +729,19 @@
       if (!resp.ok) { bulkResultEl.textContent = `❌ 送出失敗（HTTP ${resp.status}）`; bulkSubmitBtn.disabled = false; return; }
 
       const data = await resp.json();
-      bulkResultEl.textContent = `⏳ 已排入佇列：批次 ${data.batchId}，共 ${data.totalCount} 筆，處理中...`;
-      pollBatchStatus(data.batchId, credentials);
+      if (data.mode === 'sync') {
+        const icon = data.failureCount > 0 ? '⚠️' : '✅';
+        let msg = `${icon} 同步寫入完成：成功 ${data.successCount} 筆，失敗 ${data.failureCount} 筆`;
+        if (data.failures && data.failures.length > 0) {
+          msg += '\n\n失敗明細：';
+          data.failures.forEach(f => { msg += `\n  第 ${f.index + 1} 筆（編號 ${f.caseNumber}）：${f.reason}`; });
+        }
+        bulkResultEl.textContent = msg;
+        bulkSubmitBtn.disabled = false;
+      } else {
+        bulkResultEl.textContent = `⏳ 已排入佇列：批次 ${data.batchId}，共 ${data.totalCount} 筆，處理中...`;
+        pollBatchStatus(data.batchId, credentials);
+      }
     } catch (err) {
       bulkResultEl.textContent = `❌ 發生錯誤：${err.message}`;
       bulkSubmitBtn.disabled = false;
