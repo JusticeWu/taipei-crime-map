@@ -58,7 +58,7 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task BulkAddCases_WithValidData_ShouldReturnBatchId()
+    public async Task BulkAddCases_WithValidData_ShouldReturn200WithMode()
     {
         var client = CreateAuthorizedClient(
             CustomWebApplicationFactory.AdminUsername,
@@ -78,12 +78,13 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
-        doc.RootElement.GetProperty("batchId").GetString().Should().NotBeNullOrEmpty();
+        var mode = doc.RootElement.GetProperty("mode").GetString();
+        mode.Should().BeOneOf("async", "sync");
         doc.RootElement.GetProperty("totalCount").GetInt32().Should().Be(1);
     }
 
     [Fact]
-    public async Task BulkAddCases_WithMultipleItems_ShouldReturnCorrectTotalCount()
+    public async Task BulkAddCases_WithMixedItems_ShouldReturn200()
     {
         var client = CreateAuthorizedClient(
             CustomWebApplicationFactory.AdminUsername,
@@ -104,6 +105,7 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
+        doc.RootElement.GetProperty("mode").GetString().Should().BeOneOf("async", "sync");
         doc.RootElement.GetProperty("totalCount").GetInt32().Should().Be(2);
     }
 

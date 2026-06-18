@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
+using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Repositories;
+using TaipeiCrimeMap.Domain.ValueObjects;
 using TaipeiCrimeMap.Infrastructure.Jobs;
 
 namespace TaipeiCrimeMap.API.Controllers;
@@ -61,7 +63,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpPost("cases/bulk")]
-    [ProducesResponseType(typeof(BulkEnqueueResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> BulkAddCases(
         [FromBody] List<BulkCaseItem> items,
@@ -70,26 +72,81 @@ public class AdminController : ControllerBase
         if (items is null || items.Count == 0)
             return BadRequest("至少需要一筆資料。");
 
-        var batchId = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow;
-        var jobs = items.Select(item => new CaseImportJob
+        try
         {
-            Id = Guid.NewGuid(),
-            BatchId = batchId,
-            CaseNumber = item.CaseNumber,
-            CaseType = item.CaseType,
-            OccurrenceDate = item.OccurrenceDate,
-            TimeSlot = item.TimeSlot,
-            RawLocation = item.RawLocation,
-            Status = CaseImportJobStatus.Pending,
-            NextRetryAt = now,
-            CreatedAt = now,
-            UpdatedAt = now,
-        }).ToList();
+            var batchId = Guid.NewGuid();
+            var now = DateTimeOffset.UtcNow;
+            var jobs = items.Select(item => new CaseImportJob
+            {
+                Id = Guid.NewGuid(),
+                BatchId = batchId,
+                CaseNumber = item.CaseNumber,
+                CaseType = item.CaseType,
+                OccurrenceDate = item.OccurrenceDate,
+                TimeSlot = item.TimeSlot,
+                RawLocation = item.RawLocation,
+                Status = CaseImportJobStatus.Pending,
+                NextRetryAt = now,
+                CreatedAt = now,
+                UpdatedAt = now,
+            }).ToList();
 
-        await _jobStore.EnqueueBatchAsync(jobs, cancellationToken);
+            await _jobStore.EnqueueBatchAsync(jobs, cancellationToken);
 
-        return Ok(new BulkEnqueueResult(batchId, jobs.Count));
+            return Ok(new BulkEnqueueResult(batchId, jobs.Count, "async"));
+        }
+        catch (Exception ex) when (ex is RedisConnectionException or RedisTimeoutException)
+        {
+            _logger.LogWarning(ex, "Garnet 不可用，fallback 到同步寫入 DB");
+            return Ok(await BulkAddSync(items, cancellationToken));
+        }
+    }
+
+    private async Task<BulkSyncResult> BulkAddSync(List<BulkCaseItem> items, CancellationToken ct)
+    {
+        var succeeded = 0;
+        var failures = new List<BulkSyncFailure>();
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            try
+            {
+                var caseType = CaseTypeExtensions.FromChineseName(item.CaseType)
+                    ?? throw new ArgumentException($"無法對應案類「{item.CaseType}」");
+
+                var dateStr = item.OccurrenceDate.ToString();
+                if (dateStr.Length != 7)
+                    throw new ArgumentException($"日期格式錯誤：{item.OccurrenceDate}，需為 7 碼民國年月日");
+
+                var taiwanDate = TaiwanDate.Parse(dateStr);
+                var timeSlot = TimeSlot.Parse(item.TimeSlot ?? string.Empty);
+                var district = District.ParseFrom(item.RawLocation ?? string.Empty);
+
+                var theftCase = TheftCase.Create(
+                    caseNumber: item.CaseNumber,
+                    caseType: caseType,
+                    district: district,
+                    occurredDate: taiwanDate,
+                    timeSlot: timeSlot,
+                    rawLocation: item.RawLocation ?? string.Empty);
+
+                await _repository.AddAsync(theftCase, ct);
+
+                var coord = await _repository.FindCoordinateByRawLocationAsync(
+                    item.RawLocation ?? string.Empty, ct);
+                if (coord is not null)
+                    await _repository.UpdateCoordinateAsync(theftCase.Id, coord, ct);
+
+                succeeded++;
+            }
+            catch (Exception ex)
+            {
+                failures.Add(new BulkSyncFailure(i, item.CaseNumber, ex.Message));
+            }
+        }
+
+        return new BulkSyncResult(Guid.Empty, items.Count, succeeded, failures.Count, "sync", failures);
     }
 
     [HttpGet("cases/batch/{batchId:guid}/status")]
@@ -137,7 +194,9 @@ public class AdminController : ControllerBase
     }
 
     public record BulkCaseItem(int CaseNumber, string CaseType, int OccurrenceDate, string? TimeSlot, string? RawLocation);
-    public record BulkEnqueueResult(Guid BatchId, int TotalCount);
+    public record BulkEnqueueResult(Guid BatchId, int TotalCount, string Mode);
+    public record BulkSyncResult(Guid BatchId, int TotalCount, int SuccessCount, int FailureCount, string Mode, List<BulkSyncFailure> Failures);
+    public record BulkSyncFailure(int Index, int CaseNumber, string Reason);
     public record BatchStatusResult(int Pending, int Success, int Failure, List<BatchJobFailure> Failures);
     public record BatchJobFailure(Guid JobId, int CaseNumber, string Error);
     public record UpdateCaseRequest(int? OccurrenceDate, string? TimeSlot);
