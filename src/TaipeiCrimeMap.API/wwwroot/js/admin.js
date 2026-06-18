@@ -114,11 +114,14 @@
     _hwInfoShown = false;
 
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${location.host}/ws/metrics?token=${encodeURIComponent(credentials)}`;
+    const url = `${proto}//${location.host}/ws/metrics`;
 
     setWsStatus('connecting');
     ws = new WebSocket(url);
-    ws.addEventListener('open', () => setWsStatus('connected'));
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ token: credentials }));
+      setWsStatus('connected');
+    });
     ws.addEventListener('message', (event) => {
       try {
         const data = JSON.parse(event.data);
