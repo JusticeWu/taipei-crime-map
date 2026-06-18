@@ -1,7 +1,12 @@
 using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using StackExchange.Redis;
 using TaipeiCrimeMap.Domain.Exceptions;
+using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Infrastructure.Jobs;
+
 
 namespace TaipeiCrimeMap.Infrastructure.Tests.Jobs;
 
@@ -56,5 +61,39 @@ public class CaseImportWorkerTests
     public void IsTransientError_ArgumentException_ReturnsFalse()
     {
         CaseImportWorker.IsTransientError(new ArgumentException("bad")).Should().BeFalse();
+    }
+
+    private static CaseImportWorker BuildWorker(Dictionary<string, string?>? settings = null)
+    {
+        var builder = new ConfigurationBuilder();
+        if (settings is not null)
+            builder.AddInMemoryCollection(settings);
+        return new CaseImportWorker(
+            Substitute.For<ICaseImportJobStore>(),
+            Substitute.For<ICrimeRepository>(),
+            builder.Build(),
+            NullLogger<CaseImportWorker>.Instance);
+    }
+
+    [Fact]
+    public void Constructor_ReadsBatchSizeFromConfig()
+    {
+        var worker = BuildWorker(new() { ["CaseImportWorker:BatchSize"] = "25" });
+        worker.BatchSize.Should().Be(25);
+    }
+
+    [Fact]
+    public void Constructor_ReadsMaxConcurrencyFromConfig()
+    {
+        var worker = BuildWorker(new() { ["CaseImportWorker:MaxConcurrency"] = "1" });
+        worker.MaxConcurrency.Should().Be(1);
+    }
+
+    [Fact]
+    public void Constructor_DefaultValues_WhenConfigMissing()
+    {
+        var worker = BuildWorker();
+        worker.BatchSize.Should().Be(50);
+        worker.MaxConcurrency.Should().Be(5);
     }
 }
