@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using TaipeiCrimeMap.Application.DTOs;
 using TaipeiCrimeMap.Domain.Aggregates;
 
@@ -82,13 +85,26 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
     [Fact]
     public async Task GetCrimes_ExceedingRateLimit_ShouldReturn429()
     {
-        for (var i = 0; i < 60; i++)
+        await using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(b =>
+            {
+                b.UseEnvironment("Testing");
+                b.ConfigureAppConfiguration((_, config) =>
+                    config.AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["RateLimiting:PublicApi"] = "3",
+                        ["RateLimiting:AdminApi"] = "3",
+                    }));
+            });
+        var client = factory.CreateClient();
+
+        for (var i = 0; i < 3; i++)
         {
-            var r = await _client.GetAsync("/api/crime/stats");
+            var r = await client.GetAsync("/api/crime/stats");
             r.StatusCode.Should().NotBe((HttpStatusCode)429, $"request {i + 1} should not be rate-limited");
         }
 
-        var response = await _client.GetAsync("/api/crime/stats");
+        var response = await client.GetAsync("/api/crime/stats");
         response.StatusCode.Should().Be((HttpStatusCode)429);
     }
 }
