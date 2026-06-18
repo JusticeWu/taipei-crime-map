@@ -27,7 +27,7 @@ public class CsvParserTests
 
         // Assert
         results.Cases.Should().HaveCount(3);
-        results.Cases[0].CaseNumber.Should().Be("1");
+        results.Cases[0].CaseNumber.Should().Be(1);
         results.Cases[0].CaseType.Should().Be(CaseType.Residential);
         results.Cases[0].OccurredDate.Should().NotBeNull();
         results.Cases[0].OccurredDate.Year.Should().Be(113);
@@ -86,7 +86,7 @@ public class CsvParserTests
 
         // Assert
         results.Cases.Should().HaveCount(1);
-        results.Cases[0].CaseNumber.Should().Be("2");
+        results.Cases[0].CaseNumber.Should().Be(2);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class CsvParserTests
         // Assert
         results.Cases.Should().HaveCount(2);
         results.Cases[0].CaseType.Should().Be(CaseType.Snatching);
-        results.Cases[0].CaseNumber.Should().Be("1");
+        results.Cases[0].CaseNumber.Should().Be(1);
     }
 
     [Fact]

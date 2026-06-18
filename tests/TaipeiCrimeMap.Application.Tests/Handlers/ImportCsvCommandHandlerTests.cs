@@ -38,7 +38,7 @@ public class ImportCsvCommandHandlerTests
         for (int i = 0; i < 3; i++)
         {
             cases.Add(TheftCase.Create(
-                caseNumber: Guid.NewGuid().ToString(),
+                caseNumber: Random.Shared.Next(100000, 999999),
                 caseType: CaseType.Residential,
                 district: District.ParseFrom("內湖區"),
                 occurredDate: TaiwanDate.Parse("1130101"),
@@ -102,7 +102,7 @@ public class ImportCsvCommandHandlerTests
         for (int i = 0; i < 3; i++)
         {
             cases.Add(TheftCase.Create(
-                caseNumber: Guid.NewGuid().ToString(),
+                caseNumber: Random.Shared.Next(100000, 999999),
                 caseType: CaseType.Residential,
                 district: District.ParseFrom("內湖區"),
                 occurredDate: TaiwanDate.Parse("1130101"),

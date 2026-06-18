@@ -96,7 +96,7 @@ public class AdminController : ControllerBase
                 var district = District.ParseFrom(item.RawLocation ?? string.Empty);
 
                 var theftCase = TheftCase.Create(
-                    caseNumber: item.CaseNumber.ToString(),
+                    caseNumber: item.CaseNumber,
                     caseType: caseType,
                     district: district,
                     occurredDate: taiwanDate,
@@ -121,12 +121,12 @@ public class AdminController : ControllerBase
         return Ok(new BulkAddResult(succeeded, failures.Count, failures));
     }
 
-    [HttpPatch("cases/{caseNumber}/{caseType:int}")]
+    [HttpPatch("cases/{caseNumber:int}/{caseType:int}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateCase(
-        string caseNumber,
+        int caseNumber,
         int caseType,
         [FromBody] UpdateCaseRequest request,
         CancellationToken cancellationToken)

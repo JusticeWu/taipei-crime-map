@@ -13,7 +13,7 @@ public class TheftCaseTests
     public void IsDataComplete_WithValidInputs_ReturnsTrue()
     {
         var theftCase = TheftCase.Create(
-            caseNumber: "A123",
+            caseNumber: 123,
             caseType: CaseType.Residential,
             district: District.ParseFrom(ValidLocation)!,
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -28,7 +28,7 @@ public class TheftCaseTests
     public void IsDataComplete_WithNullDistrict_ReturnsFalse()
     {
         var theftCase = TheftCase.Create(
-            caseNumber: "A123",
+            caseNumber: 123,
             caseType: CaseType.Residential,
             district: null,
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -43,7 +43,7 @@ public class TheftCaseTests
     public void IsDataComplete_WithInvalidOccurredDate_ReturnsFalse()
     {
         var theftCase = TheftCase.Create(
-            caseNumber: "A123",
+            caseNumber: 123,
             caseType: CaseType.Residential,
             district: District.ParseFrom(ValidLocation)!,
             occurredDate: TaiwanDate.Parse("invalid"),
@@ -58,7 +58,7 @@ public class TheftCaseTests
     public void IsDataComplete_WithInvalidTimeSlot_ReturnsFalse()
     {
         var theftCase = TheftCase.Create(
-            caseNumber: "A123",
+            caseNumber: 123,
             caseType: CaseType.Residential,
             district: District.ParseFrom(ValidLocation)!,
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -73,7 +73,7 @@ public class TheftCaseTests
     public void IsDataComplete_WithNullCaseType_ReturnsFalse()
     {
         var theftCase = TheftCase.Create(
-            caseNumber: "A123",
+            caseNumber: 123,
             caseType: null,
             district: District.ParseFrom(ValidLocation)!,
             occurredDate: TaiwanDate.Parse("1130101"),
@@ -89,7 +89,7 @@ public class TheftCaseTests
     {
         Assert.Throws<DomainException>(() =>
             TheftCase.Create(
-                caseNumber: "A123",
+                caseNumber: 123,
                 caseType: CaseType.Residential,
                 district: District.ParseFrom(ValidLocation)!,
                 occurredDate: null!,
@@ -103,7 +103,7 @@ public class TheftCaseTests
     {
         Assert.Throws<DomainException>(() =>
             TheftCase.Create(
-                caseNumber: "A123",
+                caseNumber: 123,
                 caseType: CaseType.Residential,
                 district: District.ParseFrom(ValidLocation),
                 occurredDate: TaiwanDate.Parse("1130101"),

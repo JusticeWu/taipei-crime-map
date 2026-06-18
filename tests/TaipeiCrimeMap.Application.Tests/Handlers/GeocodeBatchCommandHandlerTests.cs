@@ -27,7 +27,7 @@ public class GeocodeBatchCommandHandlerTests
             NullLogger<GeocodeBatchCommandHandler>.Instance);
     }
 
-    private static TheftCase CreateCase(string caseNumber, string rawLocation) => TheftCase.Create(
+    private static TheftCase CreateCase(int caseNumber, string rawLocation) => TheftCase.Create(
         caseNumber: caseNumber,
         caseType: CaseType.Residential,
         district: District.ParseFrom("內湖區"),
@@ -42,7 +42,7 @@ public class GeocodeBatchCommandHandlerTests
     public async Task HandleAsync_WhenRawLocationHasExistingCoordinate_ShouldReuseWithoutCallingApi()
     {
         // Arrange
-        var theftCase = CreateCase("CASE-001", "臺北市內湖區成功路五段31號");
+        var theftCase = CreateCase(1001, "臺北市內湖區成功路五段31號");
         var existingCoordinate = GeoCoordinate.Create(25.07, 121.57);
 
         _repository.GetCasesWithMissingCoordinatesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
@@ -82,7 +82,7 @@ public class GeocodeBatchCommandHandlerTests
     public async Task HandleAsync_WhenNoExistingCoordinate_ShouldCallApiAndUpdate()
     {
         // Arrange
-        var theftCase = CreateCase("CASE-002", "臺北市信義區市府路1號");
+        var theftCase = CreateCase(1002, "臺北市信義區市府路1號");
         var apiCoordinate = GeoCoordinate.Create(25.03, 121.56);
 
         _repository.GetCasesWithMissingCoordinatesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
@@ -122,8 +122,8 @@ public class GeocodeBatchCommandHandlerTests
     public async Task HandleAsync_WhenGeocodingFails_ShouldSkipAndContinue()
     {
         // Arrange
-        var failedCase = CreateCase("CASE-003", "無法定位的地址");
-        var successCase = CreateCase("CASE-004", "臺北市信義區市府路1號");
+        var failedCase = CreateCase(1003, "無法定位的地址");
+        var successCase = CreateCase(1004, "臺北市信義區市府路1號");
         var apiCoordinate = GeoCoordinate.Create(25.03, 121.56);
 
         _repository.GetCasesWithMissingCoordinatesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())

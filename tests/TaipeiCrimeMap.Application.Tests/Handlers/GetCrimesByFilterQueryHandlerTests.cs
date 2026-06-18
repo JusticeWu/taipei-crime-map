@@ -56,7 +56,7 @@ public class GetCrimesByFilterQueryHandlerTests
         var cases = new List<TheftCase>
         {
             TheftCase.Create(
-                caseNumber: "001",
+                caseNumber: 1,
                 caseType: CaseType.Residential,
                 district: District.ParseFrom("內湖區"),
                 occurredDate: TaiwanDate.Parse("1130101"),
@@ -76,7 +76,7 @@ public class GetCrimesByFilterQueryHandlerTests
         // Assert
         result.Data.Should().HaveCount(1);
         result.Total.Should().Be(1);
-        result.Data[0].CaseNumber.Should().Be("001");
+        result.Data[0].CaseNumber.Should().Be(1);
         result.Data[0].CaseType.Should().Be("住宅竊盜");
         result.Data[0].District.Should().Be("內湖區");
         result.Data[0].OccurredDate.Should().Be("2024-01-01");
@@ -141,7 +141,7 @@ public class GetCrimesByFilterQueryHandlerTests
         var cases = new List<TheftCase>
         {
             TheftCase.Create(
-                caseNumber: "001",
+                caseNumber: 1,
                 caseType: CaseType.Residential,
                 district: District.ParseFrom("內湖區"),
                 occurredDate: TaiwanDate.Parse("1130101"),
@@ -221,7 +221,7 @@ public class GetCrimesByFilterQueryHandlerTests
         var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}:{query.SortBy}:{query.SortOrder}";
 
         var preloaded = new PagedResult<TheftCaseDto>(
-            new List<TheftCaseDto> { new() { CaseNumber = "cached-001", CaseType = "汽車竊盜", District = "信義區" } },
+            new List<TheftCaseDto> { new() { CaseNumber = 90001, CaseType = "汽車竊盜", District = "信義區" } },
             Total: 1, Page: 1, PageSize: 200, TotalPages: 1);
         var preloadedBytes = JsonSerializer.SerializeToUtf8Bytes(preloaded);
 
@@ -234,7 +234,7 @@ public class GetCrimesByFilterQueryHandlerTests
 
         // Assert
         result.Data.Should().HaveCount(1);
-        result.Data[0].CaseNumber.Should().Be("cached-001");
+        result.Data[0].CaseNumber.Should().Be(90001);
         await _repository.DidNotReceive().GetPagedByFilterAsync(
             Arg.Any<CrimeFilter>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
@@ -251,7 +251,7 @@ public class GetCrimesByFilterQueryHandlerTests
         var cacheKey = $"crimes:filter:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}:{query.RawTimeSlot}:{query.Page}:{query.PageSize}:{query.SortBy}:{query.SortOrder}";
 
         var preloaded = new PagedResult<TheftCaseDto>(
-            new List<TheftCaseDto> { new() { CaseNumber = "l1-001", CaseType = "汽車竊盜" } },
+            new List<TheftCaseDto> { new() { CaseNumber = 80001, CaseType = "汽車竊盜" } },
             Total: 1, Page: 1, PageSize: 200, TotalPages: 1);
         _memoryCache.Set(cacheKey, preloaded, TimeSpan.FromMinutes(1));
 

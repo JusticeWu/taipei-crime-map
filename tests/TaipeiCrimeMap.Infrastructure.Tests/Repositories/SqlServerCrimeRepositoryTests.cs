@@ -14,7 +14,7 @@ public class SqlServerCrimeRepositoryTests
         ICrimeRepository repository = new InMemoryCrimeRepository();
 
         var case1 = TheftCase.Create(
-            caseNumber: "T001",
+            caseNumber: 1001,
             caseType: CaseType.Residential,
             district: District.ParseFrom("臺北市大安區"),
             occurredDate: TaiwanDate.Parse("1150329"),
@@ -22,7 +22,7 @@ public class SqlServerCrimeRepositoryTests
             rawLocation: "臺北市大安區忠孝東路");
 
         var case2 = TheftCase.Create(
-            caseNumber: "T002",
+            caseNumber: 1002,
             caseType: CaseType.Car,
             district: District.ParseFrom("臺北市中山區"),
             occurredDate: TaiwanDate.Parse("1150401"),
@@ -48,9 +48,9 @@ public class SqlServerCrimeRepositoryTests
     {
         ICrimeRepository repository = new InMemoryCrimeRepository();
 
-        var case1 = TheftCase.Create("T003", CaseType.Residential, District.ParseFrom("臺北市大安區"),
+        var case1 = TheftCase.Create(1003, CaseType.Residential, District.ParseFrom("臺北市大安區"),
             TaiwanDate.Parse("1150329"), TimeSlot.Parse("06~08"), "臺北市大安區");
-        var case2 = TheftCase.Create("T004", CaseType.Car, District.ParseFrom("臺北市中山區"),
+        var case2 = TheftCase.Create(1004, CaseType.Car, District.ParseFrom("臺北市中山區"),
             TaiwanDate.Parse("1150401"), TimeSlot.Parse("10~12"), "臺北市中山區");
 
         await repository.AddAsync(case1);

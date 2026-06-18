@@ -585,6 +585,17 @@
   }
 
   btnDeQuery.addEventListener('click', () => { _dePage = 1; loadDataEditPage(); });
+  document.getElementById('btn-de-clear-cache').addEventListener('click', async () => {
+    const credentials = getStoredCredentials();
+    if (!credentials) { showLogin(); return; }
+    deResult.textContent = '清除快取中...';
+    try {
+      const r = await fetch(CACHE_CLEAR_URL, { method: 'POST', headers: { Authorization: `Basic ${credentials}` } });
+      if (!r.ok) { deResult.textContent = `清除快取失敗 (HTTP ${r.status})`; return; }
+      const d = await r.json();
+      deResult.textContent = `快取清除完成：L1 ${d.l1Cleared ? '✅' : '❌'}，L2 ${d.l2Cleared ? '✅' : '❌'}`;
+    } catch (e) { deResult.textContent = `錯誤：${e.message}`; }
+  });
   btnDePrev.addEventListener('click', () => { if (_dePage > 1) { _dePage--; loadDataEditPage(); } });
   btnDeNext.addEventListener('click', () => { if (_dePage < _deTotalPages) { _dePage++; loadDataEditPage(); } });
 
