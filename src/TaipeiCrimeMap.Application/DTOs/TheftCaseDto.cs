@@ -3,7 +3,7 @@ namespace TaipeiCrimeMap.Application.DTOs;
 public record TheftCaseDto
 {
     public Guid Id { get; init; }
-    public string CaseNumber { get; init; } = string.Empty;
+    public int CaseNumber { get; init; }
     public string? CaseType { get; init; }
     public string? District { get; init; }
     public string? OccurredDate { get; init; }

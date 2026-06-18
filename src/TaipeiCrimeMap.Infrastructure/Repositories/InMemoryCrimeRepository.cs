@@ -97,7 +97,7 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult<TheftCase?>(result);
     }
 
-    public Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default)
+    public Task<TheftCase?> GetByCaseNumberAsync(int caseNumber, CancellationToken cancellationToken = default)
     {
         var result = _cases.FirstOrDefault(c => c.CaseNumber == caseNumber);
 
@@ -158,7 +158,7 @@ public class InMemoryCrimeRepository : ICrimeRepository
     {
         var result = _cases
             .Where(c => c.Coordinate is null)
-            .OrderBy(c => c.CaseNumber, StringComparer.Ordinal)
+            .OrderBy(c => c.CaseNumber)
             .Take(batchSize)
             .ToList();
 
@@ -197,7 +197,7 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult(_cases.Count(c => c.Coordinate is null));
     }
 
-    public Task<int> UpdateCaseFieldsAsync(string caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
+    public Task<int> UpdateCaseFieldsAsync(int caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(0);
     }

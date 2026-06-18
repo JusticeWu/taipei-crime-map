@@ -24,7 +24,7 @@ public class GetCrimeByIdQueryHandlerTests
     {
         // Arrange
         var theftCase = TheftCase.Create(
-            caseNumber: "001",
+            caseNumber: 1,
             caseType: CaseType.Residential,
             district: District.ParseFrom("內湖區"),
             occurredDate: TaiwanDate.Parse("1130101"),

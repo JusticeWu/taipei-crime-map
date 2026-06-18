@@ -9,7 +9,7 @@ public class InMemoryCrimeRepositoryTests
 {
     private static TheftCase MakeCase(CaseType caseType, string district, string timeSlot, string date = "1130101") =>
         TheftCase.Create(
-            caseNumber: Guid.NewGuid().ToString(),
+            caseNumber: Random.Shared.Next(100000, 999999),
             caseType: caseType,
             district: District.ParseFrom(district),
             occurredDate: TaiwanDate.Parse(date),

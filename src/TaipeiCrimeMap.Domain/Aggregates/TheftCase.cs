@@ -7,7 +7,7 @@ namespace TaipeiCrimeMap.Domain.Aggregates;
 
 public sealed class TheftCase : AggregateRoot
 {
-    public string CaseNumber { get; private set; }
+    public int CaseNumber { get; private set; }
     public CaseType? CaseType { get; private set; }
     public District? District { get; private set; }
     public TaiwanDate OccurredDate { get; private set; }
@@ -28,7 +28,7 @@ public sealed class TheftCase : AggregateRoot
     // Parameterless ctor for EF / serialisation
     private TheftCase()
     {
-        CaseNumber = string.Empty;
+        CaseNumber = 0;
         RawLocation = string.Empty;
         District = null!;
         OccurredDate = null!;
@@ -37,7 +37,7 @@ public sealed class TheftCase : AggregateRoot
 
     private TheftCase(
         Guid id,
-        string caseNumber,
+        int caseNumber,
         CaseType? caseType,
         District? district,
         TaiwanDate occurredDate,
@@ -58,7 +58,7 @@ public sealed class TheftCase : AggregateRoot
     }
 
     public static TheftCase Create(
-        string caseNumber,
+        int caseNumber,
         CaseType? caseType,
         District? district,
         TaiwanDate occurredDate,
@@ -90,7 +90,7 @@ public sealed class TheftCase : AggregateRoot
 
     public static TheftCase Reconstitute(
     Guid id,
-    string caseNumber,
+    int caseNumber,
     CaseType? caseType,
     District? district,
     TaiwanDate occurredDate,

@@ -27,7 +27,7 @@ public class SqlServerCrimeRepository : ICrimeRepository
         return row?.ToDomain();
     }
 
-    public async Task<TheftCase?> GetByCaseNumberAsync(string caseNumber, CancellationToken cancellationToken = default)
+    public async Task<TheftCase?> GetByCaseNumberAsync(int caseNumber, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
         var row = await conn.QueryFirstOrDefaultAsync<TheftCaseRow>(
@@ -175,7 +175,7 @@ public class SqlServerCrimeRepository : ICrimeRepository
             "SELECT COUNT(*) FROM theft_cases WHERE latitude IS NULL OR longitude IS NULL");
     }
 
-    public async Task<int> UpdateCaseFieldsAsync(string caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
+    public async Task<int> UpdateCaseFieldsAsync(int caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default)
     {
         await using var conn = CreateConnection();
         var sets = new List<string>();
@@ -329,7 +329,7 @@ public class SqlServerCrimeRepository : ICrimeRepository
     private sealed record TheftCaseRow
     {
         public Guid Id { get; init; }
-        public string CaseNumber { get; init; } = string.Empty;
+        public int CaseNumber { get; init; }
         public int TotalCount { get; init; }
         public int? CaseType { get; init; }
         public string? District { get; init; }
