@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
@@ -9,6 +10,7 @@ namespace TaipeiCrimeMap.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("admin-api")]
 public class AdminController : ControllerBase
 {
     private readonly IMemoryCache _memoryCache;

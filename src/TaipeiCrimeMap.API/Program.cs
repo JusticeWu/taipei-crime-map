@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using StackExchange.Redis;
 using TaipeiCrimeMap.API.Middleware;
@@ -22,6 +23,32 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
+
+// Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("public-api", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
+    options.AddPolicy("admin-api", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+});
 
 // Secondary Redis（選配，用於跨環境訂閱其他 Server 的指標）
 var secondaryRedisConnStr = builder.Configuration.GetConnectionString("SecondaryRedis");
@@ -140,6 +167,7 @@ app.UseExceptionHandler();
 app.UseMiddleware<ObservabilityMiddleware>();
 app.UseMiddleware<TimingMiddleware>();
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseWebSockets();
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -155,7 +183,7 @@ app.Map("/ws/metrics", async context =>
 {
     var handler = context.RequestServices.GetRequiredService<ServerMetricsWebSocketHandler>();
     await handler.HandleAsync(context);
-});
+}).RequireRateLimiting("admin-api");
 
 app.MapControllers();
 app.Run();

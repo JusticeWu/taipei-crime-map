@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using TaipeiCrimeMap.Application.Commands;
 using TaipeiCrimeMap.Application.DTOs;
 using TaipeiCrimeMap.Application.Handlers;
@@ -9,6 +10,7 @@ namespace TaipeiCrimeMap.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting("public-api")]
 public class CrimeController : ControllerBase
 {
     private readonly ImportCsvCommandHandler _importHandler;
