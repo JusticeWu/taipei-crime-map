@@ -24,6 +24,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             {
                 ["AdminAuth:Username"] = AdminUsername,
                 ["AdminAuth:Password"] = AdminPassword,
+                ["RateLimiting:PublicApi"] = "10000",
+                ["RateLimiting:AdminApi"] = "10000",
             });
         });
     }
