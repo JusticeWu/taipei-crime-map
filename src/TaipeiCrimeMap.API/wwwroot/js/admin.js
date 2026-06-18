@@ -599,6 +599,14 @@
   btnDePrev.addEventListener('click', () => { if (_dePage > 1) { _dePage--; loadDataEditPage(); } });
   btnDeNext.addEventListener('click', () => { if (_dePage < _deTotalPages) { _dePage++; loadDataEditPage(); } });
 
+  const deGotoInput = document.getElementById('de-goto-page');
+  function gotoPage() {
+    const p = parseInt(deGotoInput.value, 10);
+    if (p >= 1 && p <= _deTotalPages) { _dePage = p; loadDataEditPage(); }
+  }
+  document.getElementById('btn-de-goto').addEventListener('click', gotoPage);
+  deGotoInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') gotoPage(); });
+
   // ── Bulk add cases ─────────────────────────────────────────────
   const BULK_API_URL = '/api/admin/cases/bulk';
   const bulkInput = document.getElementById('bulk-input');
