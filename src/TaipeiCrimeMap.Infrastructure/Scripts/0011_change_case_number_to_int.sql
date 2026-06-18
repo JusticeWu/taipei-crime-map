@@ -9,6 +9,8 @@ ALTER COLUMN case_number INT NOT NULL;
 CREATE UNIQUE INDEX UX_TheftCases_CaseType_CaseNumber
     ON theft_cases (case_type, case_number);
 
+GO
+
 -- 重建 SP：case_number 現在是 INT，排序直接用欄位名
 CREATE OR ALTER PROCEDURE sp_get_theft_cases_by_filter
     @CaseType       INT             = NULL,
