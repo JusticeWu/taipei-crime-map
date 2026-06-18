@@ -7,7 +7,7 @@ namespace TaipeiCrimeMap.Infrastructure.Jobs;
 public interface ICaseImportJobStore
 {
     Task EnqueueBatchAsync(IReadOnlyList<CaseImportJob> jobs, CancellationToken ct = default);
-    Task<IReadOnlyList<CaseImportJob>> GetPendingJobsAsync(DateTimeOffset asOf, CancellationToken ct = default);
+    Task<IReadOnlyList<CaseImportJob>> GetPendingJobsAsync(DateTimeOffset asOf, int count = int.MaxValue, CancellationToken ct = default);
     Task UpdateJobAsync(CaseImportJob job, CancellationToken ct = default);
     Task<IReadOnlyList<CaseImportJob>> GetJobsByBatchIdAsync(Guid batchId, CancellationToken ct = default);
 }
@@ -58,10 +58,10 @@ public sealed class CaseImportJobStore : ICaseImportJobStore
         _logger.LogDebug("已排入 {Count} 筆 job，batchId: {BatchId}", jobs.Count, jobs.Count > 0 ? jobs[0].BatchId : Guid.Empty);
     }
 
-    public async Task<IReadOnlyList<CaseImportJob>> GetPendingJobsAsync(DateTimeOffset asOf, CancellationToken ct = default)
+    public async Task<IReadOnlyList<CaseImportJob>> GetPendingJobsAsync(DateTimeOffset asOf, int count = int.MaxValue, CancellationToken ct = default)
     {
         var db = _redis.GetDatabase();
-        var members = await db.SortedSetRangeByScoreAsync("pending-jobs", stop: asOf.ToUnixTimeMilliseconds());
+        var members = await db.SortedSetRangeByScoreAsync("pending-jobs", stop: asOf.ToUnixTimeMilliseconds(), take: count);
 
         if (members.Length == 0) return [];
 

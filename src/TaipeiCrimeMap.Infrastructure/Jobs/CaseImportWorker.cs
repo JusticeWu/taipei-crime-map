@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
@@ -17,22 +18,30 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
     private readonly ICaseImportJobStore _jobStore;
     private readonly ICrimeRepository _repository;
     private readonly ILogger<CaseImportWorker> _logger;
+    private readonly int _batchSize;
+    private readonly int _maxConcurrency;
     private CancellationTokenSource? _cts;
     private Task? _executeTask;
 
     public CaseImportWorker(
         ICaseImportJobStore jobStore,
         ICrimeRepository repository,
+        IConfiguration configuration,
         ILogger<CaseImportWorker> logger)
     {
         _jobStore = jobStore;
         _repository = repository;
         _logger = logger;
+        _batchSize = configuration.GetValue("CaseImportWorker:BatchSize", 50);
+        _maxConcurrency = configuration.GetValue("CaseImportWorker:MaxConcurrency", 5);
     }
+
+    public int BatchSize => _batchSize;
+    public int MaxConcurrency => _maxConcurrency;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("CaseImportWorker 已啟動");
+        _logger.LogInformation("CaseImportWorker 已啟動，BatchSize={BatchSize}，MaxConcurrency={MaxConcurrency}", _batchSize, _maxConcurrency);
         _cts = new CancellationTokenSource();
         _executeTask = ExecuteLoopAsync(_cts.Token);
         return Task.CompletedTask;
@@ -65,11 +74,17 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
         {
             try
             {
-                var jobs = await _jobStore.GetPendingJobsAsync(DateTimeOffset.UtcNow, ct);
-                foreach (var job in jobs)
+                var jobs = await _jobStore.GetPendingJobsAsync(DateTimeOffset.UtcNow, _batchSize, ct);
+                if (jobs.Count > 0)
                 {
-                    if (ct.IsCancellationRequested) break;
-                    await ProcessJobAsync(job, ct);
+                    using var semaphore = new SemaphoreSlim(_maxConcurrency);
+                    var tasks = jobs.Select(async job =>
+                    {
+                        await semaphore.WaitAsync(ct);
+                        try { await ProcessJobAsync(job, ct); }
+                        finally { semaphore.Release(); }
+                    });
+                    await Task.WhenAll(tasks);
                 }
             }
             catch (OperationCanceledException) { break; }
