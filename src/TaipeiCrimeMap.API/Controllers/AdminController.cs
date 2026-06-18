@@ -2,9 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
-using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Repositories;
-using TaipeiCrimeMap.Domain.ValueObjects;
+using TaipeiCrimeMap.Infrastructure.Jobs;
 
 namespace TaipeiCrimeMap.API.Controllers;
 
@@ -15,23 +14,23 @@ public class AdminController : ControllerBase
     private readonly IMemoryCache _memoryCache;
     private readonly IConnectionMultiplexer _redis;
     private readonly ICrimeRepository _repository;
+    private readonly ICaseImportJobStore _jobStore;
     private readonly ILogger<AdminController> _logger;
 
     public AdminController(
         IMemoryCache memoryCache,
         IConnectionMultiplexer redis,
         ICrimeRepository repository,
+        ICaseImportJobStore jobStore,
         ILogger<AdminController> logger)
     {
         _memoryCache = memoryCache;
         _redis = redis;
         _repository = repository;
+        _jobStore = jobStore;
         _logger = logger;
     }
 
-    /// <summary>
-    /// 清除所有快取：L1（IMemoryCache）+ L2（Garnet/Redis，FLUSHALL）（管理用途，需 Basic Authentication）
-    /// </summary>
     [HttpPost("cache/clear")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -60,7 +59,7 @@ public class AdminController : ControllerBase
     }
 
     [HttpPost("cases/bulk")]
-    [ProducesResponseType(typeof(BulkAddResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(BulkEnqueueResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> BulkAddCases(
         [FromBody] List<BulkCaseItem> items,
@@ -69,56 +68,43 @@ public class AdminController : ControllerBase
         if (items is null || items.Count == 0)
             return BadRequest("至少需要一筆資料。");
 
-        var succeeded = 0;
-        var failures = new List<BulkFailure>();
-
-        for (var i = 0; i < items.Count; i++)
+        var batchId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var jobs = items.Select(item => new CaseImportJob
         {
-            var item = items[i];
-            try
-            {
-                var caseType = CaseTypeExtensions.FromChineseName(item.CaseType);
-                if (caseType is null)
-                {
-                    failures.Add(new BulkFailure(i, item.CaseNumber, $"無法對應案類「{item.CaseType}」"));
-                    continue;
-                }
+            Id = Guid.NewGuid(),
+            BatchId = batchId,
+            CaseNumber = item.CaseNumber,
+            CaseType = item.CaseType,
+            OccurrenceDate = item.OccurrenceDate,
+            TimeSlot = item.TimeSlot,
+            RawLocation = item.RawLocation,
+            Status = CaseImportJobStatus.Pending,
+            NextRetryAt = now,
+            CreatedAt = now,
+            UpdatedAt = now,
+        }).ToList();
 
-                var dateStr = item.OccurrenceDate.ToString();
-                if (dateStr.Length != 7)
-                {
-                    failures.Add(new BulkFailure(i, item.CaseNumber, $"日期格式錯誤：{item.OccurrenceDate}，需為 7 碼民國年月日"));
-                    continue;
-                }
+        await _jobStore.EnqueueBatchAsync(jobs, cancellationToken);
 
-                var taiwanDate = TaiwanDate.Parse(dateStr);
-                var timeSlot = TimeSlot.Parse(item.TimeSlot ?? string.Empty);
-                var district = District.ParseFrom(item.RawLocation ?? string.Empty);
+        return Ok(new BulkEnqueueResult(batchId, jobs.Count));
+    }
 
-                var theftCase = TheftCase.Create(
-                    caseNumber: item.CaseNumber,
-                    caseType: caseType,
-                    district: district,
-                    occurredDate: taiwanDate,
-                    timeSlot: timeSlot,
-                    rawLocation: item.RawLocation ?? string.Empty);
+    [HttpGet("cases/batch/{batchId:guid}/status")]
+    [ProducesResponseType(typeof(BatchStatusResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBatchStatus(Guid batchId, CancellationToken cancellationToken)
+    {
+        var jobs = await _jobStore.GetJobsByBatchIdAsync(batchId, cancellationToken);
 
-                await _repository.AddAsync(theftCase, cancellationToken);
+        var pending = jobs.Count(j => j.Status == CaseImportJobStatus.Pending);
+        var success = jobs.Count(j => j.Status == CaseImportJobStatus.Success);
+        var failure = jobs.Count(j => j.Status == CaseImportJobStatus.Failure);
+        var failures = jobs
+            .Where(j => j.Status == CaseImportJobStatus.Failure)
+            .Select(j => new BatchJobFailure(j.Id, j.CaseNumber, j.LastError ?? "未知錯誤"))
+            .ToList();
 
-                var existingCoord = await _repository.FindCoordinateByRawLocationAsync(
-                    item.RawLocation ?? string.Empty, cancellationToken);
-                if (existingCoord is not null)
-                    await _repository.UpdateCoordinateAsync(theftCase.Id, existingCoord, cancellationToken);
-
-                succeeded++;
-            }
-            catch (Exception ex)
-            {
-                failures.Add(new BulkFailure(i, item.CaseNumber, ex.Message));
-            }
-        }
-
-        return Ok(new BulkAddResult(succeeded, failures.Count, failures));
+        return Ok(new BatchStatusResult(pending, success, failure, failures));
     }
 
     [HttpPatch("cases/{caseNumber:int}/{caseType:int}")]
@@ -149,7 +135,8 @@ public class AdminController : ControllerBase
     }
 
     public record BulkCaseItem(int CaseNumber, string CaseType, int OccurrenceDate, string? TimeSlot, string? RawLocation);
-    public record BulkFailure(int Index, int CaseNumber, string Reason);
-    public record BulkAddResult(int Succeeded, int Failed, List<BulkFailure> Failures);
+    public record BulkEnqueueResult(Guid BatchId, int TotalCount);
+    public record BatchStatusResult(int Pending, int Success, int Failure, List<BatchJobFailure> Failures);
+    public record BatchJobFailure(Guid JobId, int CaseNumber, string Error);
     public record UpdateCaseRequest(int? OccurrenceDate, string? TimeSlot);
 }

@@ -6,6 +6,7 @@ using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Application.Interfaces;
 using TaipeiCrimeMap.Application.Options;
 using TaipeiCrimeMap.Infrastructure.Extensions;
+using TaipeiCrimeMap.Infrastructure.Jobs;
 using TaipeiCrimeMap.Infrastructure.Metrics;
 using TaipeiCrimeMap.Infrastructure.Persistence;
 using TaipeiCrimeMap.Infrastructure.Timing;
@@ -51,6 +52,10 @@ builder.Services.AddSingleton<ServerMetricsWebSocketHandler>();
 // Domain / Infrastructure services
 builder.Services.AddMemoryCache();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// Case import background job system
+builder.Services.AddSingleton<ICaseImportJobStore, CaseImportJobStore>();
+builder.Services.AddHostedService<CaseImportWorker>();
 
 // Application handlers
 builder.Services.AddScoped<ImportCsvCommandHandler>();

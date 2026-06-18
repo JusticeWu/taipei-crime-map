@@ -661,6 +661,51 @@
     bulkPreviewArea.style.display = _parsedBulkItems.length > 0 ? '' : 'none';
   });
 
+  let _batchPollTimer = null;
+
+  function pollBatchStatus(batchId, credentials) {
+    if (_batchPollTimer) clearInterval(_batchPollTimer);
+    const progressEl = document.getElementById('bulk-progress');
+    const barEl = document.getElementById('bulk-progress-bar');
+    if (progressEl) progressEl.style.display = '';
+
+    _batchPollTimer = setInterval(async () => {
+      try {
+        const resp = await fetch(`/api/admin/cases/batch/${batchId}/status`, {
+          headers: { Authorization: `Basic ${credentials}` },
+        });
+        if (!resp.ok) return;
+        const s = await resp.json();
+        const total = s.pending + s.success + s.failure;
+        const pct = total > 0 ? Math.round(((s.success + s.failure) / total) * 100) : 0;
+        if (barEl) barEl.style.width = `${pct}%`;
+
+        let msg = `⏳ 進度 ${pct}%：待處理 ${s.pending}　成功 ${s.success}　失敗 ${s.failure}`;
+        if (s.failures && s.failures.length > 0) {
+          msg += '\n\n失敗明細：';
+          s.failures.forEach(f => { msg += `\n  編號 ${f.caseNumber}：${f.error}`; });
+        }
+        bulkResultEl.textContent = msg;
+
+        if (s.pending === 0) {
+          clearInterval(_batchPollTimer);
+          _batchPollTimer = null;
+          bulkSubmitBtn.disabled = false;
+          if (progressEl) progressEl.style.display = 'none';
+          const icon = s.failure > 0 ? '⚠️' : '✅';
+          let final = `${icon} 完成！成功 ${s.success} 筆，失敗 ${s.failure} 筆`;
+          if (s.failures && s.failures.length > 0) {
+            final += '\n\n失敗明細：';
+            s.failures.forEach(f => { final += `\n  編號 ${f.caseNumber}：${f.error}`; });
+          }
+          bulkResultEl.textContent = final;
+        }
+      } catch (err) {
+        console.warn('[admin] poll batch status error:', err);
+      }
+    }, 2000);
+  }
+
   bulkSubmitBtn.addEventListener('click', async () => {
     if (_parsedBulkItems.length === 0) return;
     const credentials = getStoredCredentials();
@@ -677,21 +722,14 @@
         },
         body: JSON.stringify(_parsedBulkItems),
       });
-      if (resp.status === 401) { bulkResultEl.textContent = '❌ 認證失敗（401），請重新登入'; return; }
-      if (!resp.ok) { bulkResultEl.textContent = `❌ 送出失敗（HTTP ${resp.status}）`; return; }
+      if (resp.status === 401) { bulkResultEl.textContent = '❌ 認證失敗（401），請重新登入'; bulkSubmitBtn.disabled = false; return; }
+      if (!resp.ok) { bulkResultEl.textContent = `❌ 送出失敗（HTTP ${resp.status}）`; bulkSubmitBtn.disabled = false; return; }
 
       const data = await resp.json();
-      let msg = `✅ 成功 ${data.succeeded} 筆，失敗 ${data.failed} 筆`;
-      if (data.failures && data.failures.length > 0) {
-        msg += '\n\n失敗明細：';
-        data.failures.forEach(f => {
-          msg += `\n  第 ${f.index + 1} 筆（編號 ${f.caseNumber}）：${f.reason}`;
-        });
-      }
-      bulkResultEl.textContent = msg;
+      bulkResultEl.textContent = `⏳ 已排入佇列：批次 ${data.batchId}，共 ${data.totalCount} 筆，處理中...`;
+      pollBatchStatus(data.batchId, credentials);
     } catch (err) {
       bulkResultEl.textContent = `❌ 發生錯誤：${err.message}`;
-    } finally {
       bulkSubmitBtn.disabled = false;
     }
   });

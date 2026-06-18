@@ -58,7 +58,7 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
-    public async Task BulkAddCases_WithValidData_ShouldReturnSucceeded()
+    public async Task BulkAddCases_WithValidData_ShouldReturnBatchId()
     {
         var client = CreateAuthorizedClient(
             CustomWebApplicationFactory.AdminUsername,
@@ -78,12 +78,12 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
-        doc.RootElement.GetProperty("succeeded").GetInt32().Should().Be(1);
-        doc.RootElement.GetProperty("failed").GetInt32().Should().Be(0);
+        doc.RootElement.GetProperty("batchId").GetString().Should().NotBeNullOrEmpty();
+        doc.RootElement.GetProperty("totalCount").GetInt32().Should().Be(1);
     }
 
     [Fact]
-    public async Task BulkAddCases_WithInvalidCaseType_ShouldReturnFailure()
+    public async Task BulkAddCases_WithMultipleItems_ShouldReturnCorrectTotalCount()
     {
         var client = CreateAuthorizedClient(
             CustomWebApplicationFactory.AdminUsername,
@@ -92,6 +92,7 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
         var items = new[]
         {
             new { caseNumber = 99902, caseType = "不存在的案類", occurrenceDate = 1150329, timeSlot = "06~08", rawLocation = "臺北市大安區" },
+            new { caseNumber = 99903, caseType = "住宅竊盜", occurrenceDate = 1150401, timeSlot = "10~12", rawLocation = "臺北市中山區" },
         };
 
         var content = new StringContent(
@@ -103,10 +104,7 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
-        doc.RootElement.GetProperty("succeeded").GetInt32().Should().Be(0);
-        doc.RootElement.GetProperty("failed").GetInt32().Should().Be(1);
-        doc.RootElement.GetProperty("failures")[0]
-            .GetProperty("reason").GetString().Should().Contain("不存在的案類");
+        doc.RootElement.GetProperty("totalCount").GetInt32().Should().Be(2);
     }
 
     [Fact]
