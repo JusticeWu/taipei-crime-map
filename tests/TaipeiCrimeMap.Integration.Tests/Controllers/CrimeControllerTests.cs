@@ -78,4 +78,17 @@ public class CrimeControllerTests : IClassFixture<CustomWebApplicationFactory>
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task GetCrimes_ExceedingRateLimit_ShouldReturn429()
+    {
+        for (var i = 0; i < 60; i++)
+        {
+            var r = await _client.GetAsync("/api/crime/stats");
+            r.StatusCode.Should().NotBe((HttpStatusCode)429, $"request {i + 1} should not be rate-limited");
+        }
+
+        var response = await _client.GetAsync("/api/crime/stats");
+        response.StatusCode.Should().Be((HttpStatusCode)429);
+    }
 }
