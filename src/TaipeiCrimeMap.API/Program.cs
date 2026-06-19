@@ -90,7 +90,8 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 // Case import background job system
 builder.Services.AddSingleton<ICaseImportJobStore, CaseImportJobStore>();
-builder.Services.AddHostedService<CaseImportWorker>();
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<CaseImportWorker>();
 
 // Application handlers
 builder.Services.AddScoped<ImportCsvCommandHandler>();
