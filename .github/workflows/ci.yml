@@ -61,12 +61,14 @@ jobs:
         run: dotnet build TaipeiCrimeMap.slnx --no-restore --configuration Release
 
       - name: Test
+        timeout-minutes: 3
         run: dotnet test TaipeiCrimeMap.slnx --no-restore --configuration Release --logger "console;verbosity=minimal"
         env:
           ConnectionStrings__DefaultConnection: "Server=localhost,1433;Database=taipei_crime_map;User Id=sa;Password=Test1234!Strong;Encrypt=True;TrustServerCertificate=True;"
           ConnectionStrings__Redis: "localhost:6379"
 
       - name: Frontend tests
+        timeout-minutes: 3
         run: |
           npm install
           npm test

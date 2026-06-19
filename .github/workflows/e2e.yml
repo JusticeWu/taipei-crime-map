@@ -33,6 +33,7 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: API smoke test
+        timeout-minutes: 3
         run: |
           BASE="${UAT_URL:-https://taipei-crime-map-uat.ambitioussand-7326440b.japaneast.azurecontainerapps.io}"
 
@@ -65,6 +66,7 @@ jobs:
           UAT_URL: ${{ secrets.UAT_URL }}
 
       - name: Run Playwright tests
+        timeout-minutes: 5
         run: npx playwright test
         env:
           UAT_URL: ${{ secrets.UAT_URL }}
