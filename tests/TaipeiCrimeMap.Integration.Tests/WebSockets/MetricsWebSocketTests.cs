@@ -2,6 +2,8 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using TaipeiCrimeMap.Infrastructure.Metrics;
 
 namespace TaipeiCrimeMap.Integration.Tests.WebSockets;
 
@@ -12,6 +14,28 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
     public MetricsWebSocketTests(CustomWebApplicationFactory factory)
     {
         _factory = factory;
+    }
+
+    private async Task<WebSocket> ConnectAndAuthAsync(CancellationToken ct)
+    {
+        var wsClient = _factory.Server.CreateWebSocketClient();
+        var ws = await wsClient.ConnectAsync(new Uri("ws://localhost/ws/metrics"), ct);
+
+        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
+        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { token }));
+        await ws.SendAsync(new ArraySegment<byte>(msg), WebSocketMessageType.Text, true, ct);
+
+        await Task.Delay(200, ct);
+        return ws;
+    }
+
+    private void TriggerBroadcast()
+    {
+        var svc = _factory.Services.GetRequiredService<ServerMetricsService>();
+        var metrics = svc.GetMetrics(0);
+        svc.BroadcastToClients(JsonSerializer.Serialize(metrics,
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
     }
 
     [Fact(Timeout = 15000)]
@@ -48,13 +72,9 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
     public async Task WsMetrics_WithCorrectToken_StaysOpen()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var wsClient = _factory.Server.CreateWebSocketClient();
-        using var ws = await wsClient.ConnectAsync(new Uri("ws://localhost/ws/metrics"), cts.Token);
+        using var ws = await ConnectAndAuthAsync(cts.Token);
 
-        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-            $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
-        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { token }));
-        await ws.SendAsync(new ArraySegment<byte>(msg), WebSocketMessageType.Text, true, cts.Token);
+        TriggerBroadcast();
 
         var buffer = new byte[8192];
         var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cts.Token);
@@ -68,13 +88,9 @@ public class MetricsWebSocketTests : IClassFixture<CustomWebApplicationFactory>
     public async Task WsMetrics_AfterAuth_ReceivesJsonWithRequiredFields()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var wsClient = _factory.Server.CreateWebSocketClient();
-        using var ws = await wsClient.ConnectAsync(new Uri("ws://localhost/ws/metrics"), cts.Token);
+        using var ws = await ConnectAndAuthAsync(cts.Token);
 
-        var token = Convert.ToBase64String(Encoding.UTF8.GetBytes(
-            $"{CustomWebApplicationFactory.AdminUsername}:{CustomWebApplicationFactory.AdminPassword}"));
-        var msg = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { token }));
-        await ws.SendAsync(new ArraySegment<byte>(msg), WebSocketMessageType.Text, true, cts.Token);
+        TriggerBroadcast();
 
         var buffer = new byte[8192];
         var result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), cts.Token);

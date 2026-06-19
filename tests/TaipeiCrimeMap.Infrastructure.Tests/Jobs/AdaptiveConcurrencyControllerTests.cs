@@ -58,8 +58,8 @@ public class AdaptiveConcurrencyControllerTests
         cc.CurrentLimit.Should().Be(1);
     }
 
-    [Fact]
-    public void ThreadSafety_ConcurrentOnSuccessAndOnFailure()
+    [Fact(Timeout = 15000)]
+    public async Task ThreadSafety_ConcurrentOnSuccessAndOnFailure()
     {
         var cc = new AdaptiveConcurrencyController(10, minLimit: 1, maxLimit: 100);
 
@@ -72,7 +72,7 @@ public class AdaptiveConcurrencyControllerTests
                     cc.OnSuccess();
             }));
 
-        Task.WhenAll(tasks).GetAwaiter().GetResult();
+        await Task.WhenAll(tasks);
 
         cc.CurrentLimit.Should().BeInRange(1, 100);
     }
