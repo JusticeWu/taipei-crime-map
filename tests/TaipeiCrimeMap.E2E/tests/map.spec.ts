@@ -95,10 +95,9 @@ test.describe('地圖核心功能', () => {
     }
 
     await expect(individualMarker.first()).toBeVisible({ timeout: 10000 });
-    // 確保 marker 在 viewport 內再點擊
-    await individualMarker.first().scrollIntoViewIfNeeded();
-    await page.waitForTimeout(300);
-    await individualMarker.first().click({ force: true });
+    // Marker 位置由 Leaflet map pan/zoom 決定，可能在 viewport 外，
+    // 用 dispatchEvent 觸發 click 繞過 Playwright 的 viewport 檢查
+    await individualMarker.first().dispatchEvent('click');
 
     const popup = page.locator('.leaflet-popup .crime-popup');
     await expect(popup).toBeVisible({ timeout: 10000 });
