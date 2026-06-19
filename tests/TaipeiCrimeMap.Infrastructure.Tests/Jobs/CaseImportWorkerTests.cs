@@ -68,10 +68,13 @@ public class CaseImportWorkerTests
         var builder = new ConfigurationBuilder();
         if (settings is not null)
             builder.AddInMemoryCollection(settings);
+        var config = builder.Build();
+        var maxC = config.GetValue("CaseImportWorker:MaxConcurrency", 5);
         return new CaseImportWorker(
             Substitute.For<ICaseImportJobStore>(),
             Substitute.For<ICrimeRepository>(),
-            builder.Build(),
+            new AdaptiveConcurrencyController(maxC, 1, Math.Max(maxC * 2, 20)),
+            config,
             NullLogger<CaseImportWorker>.Instance);
     }
 
@@ -121,7 +124,8 @@ public class CaseImportWorkerTests
             });
 
         var config = new ConfigurationBuilder().Build();
-        var worker = new CaseImportWorker(jobStore, Substitute.For<ICrimeRepository>(), config, NullLogger<CaseImportWorker>.Instance);
+        var cc = new AdaptiveConcurrencyController(5, 1, 20);
+        var worker = new CaseImportWorker(jobStore, Substitute.For<ICrimeRepository>(), cc, config, NullLogger<CaseImportWorker>.Instance);
 
         await worker.StartAsync(cts.Token);
         await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
