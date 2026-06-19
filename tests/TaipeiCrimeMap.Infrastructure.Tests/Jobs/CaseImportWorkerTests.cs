@@ -97,40 +97,38 @@ public class CaseImportWorkerTests
         worker.MaxConcurrency.Should().Be(5);
     }
 
-    [Fact(Timeout = 10000)]
+    [Fact(Timeout = 15000)]
     public async Task ExecuteLoop_WithPendingJobs_ProcessesWithoutDelay()
     {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var jobStore = Substitute.For<ICaseImportJobStore>();
-        var callCount = 0;
         var callTimestamps = new List<long>();
+        var done = new TaskCompletionSource();
 
         jobStore.GetPendingJobsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
                 callTimestamps.Add(System.Diagnostics.Stopwatch.GetTimestamp());
-                callCount++;
-                if (callCount <= 2)
+                if (callTimestamps.Count <= 2)
                 {
                     return (IReadOnlyList<CaseImportJob>)new List<CaseImportJob>
                     {
                         new() { Id = Guid.NewGuid(), CaseType = "住宅竊盜", OccurrenceDate = 1150329, RawLocation = "臺北市大安區" }
                     };
                 }
-                throw new OperationCanceledException();
+                done.TrySetResult();
+                return (IReadOnlyList<CaseImportJob>)Array.Empty<CaseImportJob>();
             });
 
         var config = new ConfigurationBuilder().Build();
         var worker = new CaseImportWorker(jobStore, Substitute.For<ICrimeRepository>(), config, NullLogger<CaseImportWorker>.Instance);
 
-        await worker.StartAsync(CancellationToken.None);
-        await Task.Delay(2000);
+        await worker.StartAsync(cts.Token);
+        await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
         await worker.StopAsync(CancellationToken.None);
 
-        callCount.Should().BeGreaterThanOrEqualTo(2);
-        if (callTimestamps.Count >= 2)
-        {
-            var elapsedMs = (callTimestamps[1] - callTimestamps[0]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-            elapsedMs.Should().BeLessThan(2000, "should not wait 3s between batches when jobs exist");
-        }
+        callTimestamps.Count.Should().BeGreaterThanOrEqualTo(2);
+        var elapsedMs = (callTimestamps[1] - callTimestamps[0]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        elapsedMs.Should().BeLessThan(2000, "should not wait 3s between batches when jobs exist");
     }
 }
