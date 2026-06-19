@@ -96,4 +96,41 @@ public class CaseImportWorkerTests
         worker.BatchSize.Should().Be(50);
         worker.MaxConcurrency.Should().Be(5);
     }
+
+    [Fact(Timeout = 10000)]
+    public async Task ExecuteLoop_WithPendingJobs_ProcessesWithoutDelay()
+    {
+        var jobStore = Substitute.For<ICaseImportJobStore>();
+        var callCount = 0;
+        var callTimestamps = new List<long>();
+
+        jobStore.GetPendingJobsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                callTimestamps.Add(System.Diagnostics.Stopwatch.GetTimestamp());
+                callCount++;
+                if (callCount <= 2)
+                {
+                    return (IReadOnlyList<CaseImportJob>)new List<CaseImportJob>
+                    {
+                        new() { Id = Guid.NewGuid(), CaseType = "住宅竊盜", OccurrenceDate = 1150329, RawLocation = "臺北市大安區" }
+                    };
+                }
+                throw new OperationCanceledException();
+            });
+
+        var config = new ConfigurationBuilder().Build();
+        var worker = new CaseImportWorker(jobStore, Substitute.For<ICrimeRepository>(), config, NullLogger<CaseImportWorker>.Instance);
+
+        await worker.StartAsync(CancellationToken.None);
+        await Task.Delay(2000);
+        await worker.StopAsync(CancellationToken.None);
+
+        callCount.Should().BeGreaterThanOrEqualTo(2);
+        if (callTimestamps.Count >= 2)
+        {
+            var elapsedMs = (callTimestamps[1] - callTimestamps[0]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            elapsedMs.Should().BeLessThan(2000, "should not wait 3s between batches when jobs exist");
+        }
+    }
 }
