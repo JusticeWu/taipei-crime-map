@@ -81,7 +81,8 @@ builder.Services.AddSingleton<ServerMetricsService>(sp =>
         sp.GetService<IConnectionMultiplexer>(),
         sp.GetKeyedService<IConnectionMultiplexer>("SecondaryRedis"),
         sp.GetRequiredService<ILogger<ServerMetricsService>>()));
-builder.Services.AddHostedService(sp => sp.GetRequiredService<ServerMetricsService>());
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<ServerMetricsService>());
 builder.Services.AddSingleton<ServerMetricsWebSocketHandler>();
 
 // Domain / Infrastructure services
