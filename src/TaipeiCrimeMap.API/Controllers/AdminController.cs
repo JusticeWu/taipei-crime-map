@@ -2,10 +2,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
+using TaipeiCrimeMap.Application.Commands;
+using TaipeiCrimeMap.Application.DTOs;
+using TaipeiCrimeMap.Application.Handlers;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.ValueObjects;
+using TaipeiCrimeMap.Infrastructure.Geocoding;
 using TaipeiCrimeMap.Infrastructure.Jobs;
 
 namespace TaipeiCrimeMap.API.Controllers;
@@ -19,6 +24,8 @@ public class AdminController : ControllerBase
     private readonly IConnectionMultiplexer _redis;
     private readonly ICrimeRepository _repository;
     private readonly ICaseImportJobStore _jobStore;
+    private readonly GeocodeMissingCommandHandler _geocodeMissingHandler;
+    private readonly GoogleMapsOptions _googleMapsOptions;
     private readonly ILogger<AdminController> _logger;
 
     public AdminController(
@@ -26,12 +33,16 @@ public class AdminController : ControllerBase
         IConnectionMultiplexer redis,
         ICrimeRepository repository,
         ICaseImportJobStore jobStore,
+        GeocodeMissingCommandHandler geocodeMissingHandler,
+        IOptions<GoogleMapsOptions> googleMapsOptions,
         ILogger<AdminController> logger)
     {
         _memoryCache = memoryCache;
         _redis = redis;
         _repository = repository;
         _jobStore = jobStore;
+        _geocodeMissingHandler = geocodeMissingHandler;
+        _googleMapsOptions = googleMapsOptions.Value;
         _logger = logger;
     }
 
@@ -203,6 +214,33 @@ public class AdminController : ControllerBase
             caseNumber, caseType, dateRaw, timeSlotRaw, cancellationToken);
 
         return affected == 0 ? NotFound() : Ok(new { affected });
+    }
+
+    [HttpGet("cases/missing-coordinates")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetMissingCoordinates(CancellationToken cancellationToken)
+    {
+        var cases = await _repository.GetCasesWithMissingCoordinatesAsync(int.MaxValue, cancellationToken);
+        var items = cases.Select(c => new MissingCoordinatesCaseDto
+        {
+            Id = c.Id,
+            CaseType = c.CaseType?.ToChineseName(),
+            CaseNumber = c.CaseNumber,
+            RawLocation = c.RawLocation,
+        }).ToList();
+
+        return Ok(new { totalCount = items.Count, items });
+    }
+
+    [HttpPost("cases/geocode-missing")]
+    [ProducesResponseType(typeof(GeocodeMissingResult), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GeocodeMissing(
+        [FromQuery] int? maxCount,
+        CancellationToken cancellationToken)
+    {
+        var command = new GeocodeMissingCommand(maxCount, _googleMapsOptions.BatchDelayMs);
+        var result = await _geocodeMissingHandler.HandleAsync(command, cancellationToken);
+        return Ok(result);
     }
 
     public record BulkCaseItem(int CaseNumber, string CaseType, int OccurrenceDate, string? TimeSlot, string? RawLocation);
