@@ -297,7 +297,7 @@ public sealed class ServerMetricsService : IHostedService
         }
     }
 
-    private void BroadcastToClients(string message)
+    public void BroadcastToClients(string message)
     {
         var bytes = Encoding.UTF8.GetBytes(message);
         foreach (var writer in _clientChannels.Values)
