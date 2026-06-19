@@ -20,6 +20,7 @@ public sealed class CaseImportJob
     public string? TimeSlot { get; set; }
     public string? RawLocation { get; set; }
     public CaseImportJobStatus Status { get; set; } = CaseImportJobStatus.Pending;
+    public bool HasCoordinate { get; set; }
     public int RetryCount { get; set; }
     public DateTimeOffset NextRetryAt { get; set; }
     public string? LastError { get; set; }

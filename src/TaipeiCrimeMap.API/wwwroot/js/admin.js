@@ -702,6 +702,12 @@
             final += '\n\n失敗明細：';
             s.failures.forEach(f => { final += `\n  編號 ${f.caseNumber}：${f.error}`; });
           }
+          if (s.missingCoordinateCount > 0) {
+            final += `\n\n⚠️ 其中 ${s.missingCoordinateCount} 筆座標查詢失敗，可至「座標更新」頁籤使用補齊座標功能重新處理`;
+            if (s.missingCoordinates && s.missingCoordinates.length > 0) {
+              s.missingCoordinates.forEach(m => { final += `\n  編號 ${m.caseNumber}：${m.rawLocation}`; });
+            }
+          }
           bulkResultEl.textContent = final;
         }
       } catch (err) {

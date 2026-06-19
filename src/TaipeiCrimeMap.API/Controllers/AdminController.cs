@@ -186,7 +186,14 @@ public class AdminController : ControllerBase
             .Select(j => new BatchJobFailure(j.Id, j.CaseNumber, j.LastError ?? "未知錯誤"))
             .ToList();
 
-        return Ok(new BatchStatusResult(pending, success, failure, failures));
+        var missingCoordJobs = jobs
+            .Where(j => j.Status == CaseImportJobStatus.Success && !j.HasCoordinate)
+            .ToList();
+        var missingCoordinates = missingCoordJobs
+            .Select(j => new BatchMissingCoordinate(j.CaseNumber, j.RawLocation ?? string.Empty))
+            .ToList();
+
+        return Ok(new BatchStatusResult(pending, success, failure, failures, missingCoordJobs.Count, missingCoordinates));
     }
 
     [HttpPatch("cases/{caseNumber:int}/{caseType:int}")]
@@ -247,7 +254,8 @@ public class AdminController : ControllerBase
     public record BulkEnqueueResult(Guid BatchId, int TotalCount, string Mode);
     public record BulkSyncResult(Guid BatchId, int TotalCount, int SuccessCount, int FailureCount, string Mode, List<BulkSyncFailure> Failures);
     public record BulkSyncFailure(int Index, int CaseNumber, string Reason);
-    public record BatchStatusResult(int Pending, int Success, int Failure, List<BatchJobFailure> Failures);
+    public record BatchStatusResult(int Pending, int Success, int Failure, List<BatchJobFailure> Failures, int MissingCoordinateCount, List<BatchMissingCoordinate> MissingCoordinates);
     public record BatchJobFailure(Guid JobId, int CaseNumber, string Error);
+    public record BatchMissingCoordinate(int CaseNumber, string RawLocation);
     public record UpdateCaseRequest(int? OccurrenceDate, string? TimeSlot);
 }

@@ -5,6 +5,8 @@ using NSubstitute;
 using StackExchange.Redis;
 using TaipeiCrimeMap.Domain.Exceptions;
 using TaipeiCrimeMap.Domain.Repositories;
+using TaipeiCrimeMap.Domain.Services;
+using TaipeiCrimeMap.Domain.ValueObjects;
 using TaipeiCrimeMap.Infrastructure.Jobs;
 
 
@@ -63,7 +65,11 @@ public class CaseImportWorkerTests
         CaseImportWorker.IsTransientError(new ArgumentException("bad")).Should().BeFalse();
     }
 
-    private static CaseImportWorker BuildWorker(Dictionary<string, string?>? settings = null)
+    private static CaseImportWorker BuildWorker(
+        Dictionary<string, string?>? settings = null,
+        ICaseImportJobStore? jobStore = null,
+        ICrimeRepository? repository = null,
+        IGeocodingService? geocodingService = null)
     {
         var builder = new ConfigurationBuilder();
         if (settings is not null)
@@ -71,8 +77,9 @@ public class CaseImportWorkerTests
         var config = builder.Build();
         var maxC = config.GetValue("CaseImportWorker:MaxConcurrency", 5);
         return new CaseImportWorker(
-            Substitute.For<ICaseImportJobStore>(),
-            Substitute.For<ICrimeRepository>(),
+            jobStore ?? Substitute.For<ICaseImportJobStore>(),
+            repository ?? Substitute.For<ICrimeRepository>(),
+            geocodingService ?? Substitute.For<IGeocodingService>(),
             new AdaptiveConcurrencyController(maxC, 1, Math.Max(maxC * 2, 20)),
             config,
             NullLogger<CaseImportWorker>.Instance);
@@ -125,7 +132,7 @@ public class CaseImportWorkerTests
 
         var config = new ConfigurationBuilder().Build();
         var cc = new AdaptiveConcurrencyController(5, 1, 20);
-        var worker = new CaseImportWorker(jobStore, Substitute.For<ICrimeRepository>(), cc, config, NullLogger<CaseImportWorker>.Instance);
+        var worker = new CaseImportWorker(jobStore, Substitute.For<ICrimeRepository>(), Substitute.For<IGeocodingService>(), cc, config, NullLogger<CaseImportWorker>.Instance);
 
         await worker.StartAsync(cts.Token);
         await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
@@ -134,5 +141,203 @@ public class CaseImportWorkerTests
         callTimestamps.Count.Should().BeGreaterThanOrEqualTo(2);
         var elapsedMs = (callTimestamps[1] - callTimestamps[0]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         elapsedMs.Should().BeLessThan(2000, "should not wait 3s between batches when jobs exist");
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task ProcessJob_GeocodingSuccess_SetsHasCoordinateTrue()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var jobStore = Substitute.For<ICaseImportJobStore>();
+        var repository = Substitute.For<ICrimeRepository>();
+        var geocoding = Substitute.For<IGeocodingService>();
+        var coord = GeoCoordinate.Create(25.03, 121.56);
+        CaseImportJob? updatedJob = null;
+        var done = new TaskCompletionSource();
+
+        var job = new CaseImportJob
+        {
+            Id = Guid.NewGuid(),
+            CaseType = "住宅竊盜",
+            OccurrenceDate = 1150329,
+            TimeSlot = "06~08",
+            RawLocation = "臺北市大安區忠孝東路四段"
+        };
+
+        var callCount = 0;
+        jobStore.GetPendingJobsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                if (Interlocked.Increment(ref callCount) == 1)
+                    return (IReadOnlyList<CaseImportJob>)new List<CaseImportJob> { job };
+                done.TrySetResult();
+                return (IReadOnlyList<CaseImportJob>)Array.Empty<CaseImportJob>();
+            });
+
+        repository.FindCoordinateByRawLocationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((GeoCoordinate?)null);
+        geocoding.GeocodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(coord);
+
+        jobStore.UpdateJobAsync(Arg.Any<CaseImportJob>(), Arg.Any<CancellationToken>())
+            .Returns(ci => { updatedJob = ci.Arg<CaseImportJob>(); return Task.CompletedTask; });
+
+        var worker = BuildWorker(jobStore: jobStore, repository: repository, geocodingService: geocoding);
+        await worker.StartAsync(cts.Token);
+        await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
+        await worker.StopAsync(CancellationToken.None);
+
+        updatedJob.Should().NotBeNull();
+        updatedJob!.Status.Should().Be(CaseImportJobStatus.Success);
+        updatedJob.HasCoordinate.Should().BeTrue();
+        updatedJob.LastError.Should().BeNull();
+
+        await repository.Received(1).UpdateCoordinateAsync(Arg.Any<Guid>(), coord, Arg.Any<CancellationToken>());
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task ProcessJob_GeocodingFails_SetsHasCoordinateFalseButStatusSuccess()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var jobStore = Substitute.For<ICaseImportJobStore>();
+        var repository = Substitute.For<ICrimeRepository>();
+        var geocoding = Substitute.For<IGeocodingService>();
+        CaseImportJob? updatedJob = null;
+        var done = new TaskCompletionSource();
+
+        var job = new CaseImportJob
+        {
+            Id = Guid.NewGuid(),
+            CaseType = "住宅竊盜",
+            OccurrenceDate = 1150329,
+            TimeSlot = "06~08",
+            RawLocation = "無法定位的地址"
+        };
+
+        var callCount = 0;
+        jobStore.GetPendingJobsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                if (Interlocked.Increment(ref callCount) == 1)
+                    return (IReadOnlyList<CaseImportJob>)new List<CaseImportJob> { job };
+                done.TrySetResult();
+                return (IReadOnlyList<CaseImportJob>)Array.Empty<CaseImportJob>();
+            });
+
+        repository.FindCoordinateByRawLocationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((GeoCoordinate?)null);
+        geocoding.GeocodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((GeoCoordinate?)null);
+
+        jobStore.UpdateJobAsync(Arg.Any<CaseImportJob>(), Arg.Any<CancellationToken>())
+            .Returns(ci => { updatedJob = ci.Arg<CaseImportJob>(); return Task.CompletedTask; });
+
+        var worker = BuildWorker(jobStore: jobStore, repository: repository, geocodingService: geocoding);
+        await worker.StartAsync(cts.Token);
+        await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
+        await worker.StopAsync(CancellationToken.None);
+
+        updatedJob.Should().NotBeNull();
+        updatedJob!.Status.Should().Be(CaseImportJobStatus.Success);
+        updatedJob.HasCoordinate.Should().BeFalse();
+        updatedJob.LastError.Should().Contain("座標查詢失敗");
+
+        await repository.DidNotReceive().UpdateCoordinateAsync(Arg.Any<Guid>(), Arg.Any<GeoCoordinate>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task ProcessJob_GeocodingThrows_SetsHasCoordinateFalseButStatusSuccess()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var jobStore = Substitute.For<ICaseImportJobStore>();
+        var repository = Substitute.For<ICrimeRepository>();
+        var geocoding = Substitute.For<IGeocodingService>();
+        CaseImportJob? updatedJob = null;
+        var done = new TaskCompletionSource();
+
+        var job = new CaseImportJob
+        {
+            Id = Guid.NewGuid(),
+            CaseType = "住宅竊盜",
+            OccurrenceDate = 1150329,
+            TimeSlot = "06~08",
+            RawLocation = "臺北市大安區"
+        };
+
+        var callCount = 0;
+        jobStore.GetPendingJobsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                if (Interlocked.Increment(ref callCount) == 1)
+                    return (IReadOnlyList<CaseImportJob>)new List<CaseImportJob> { job };
+                done.TrySetResult();
+                return (IReadOnlyList<CaseImportJob>)Array.Empty<CaseImportJob>();
+            });
+
+        repository.FindCoordinateByRawLocationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns((GeoCoordinate?)null);
+        geocoding.GeocodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<GeoCoordinate?>(_ => throw new HttpRequestException("Google API 連線失敗"));
+
+        jobStore.UpdateJobAsync(Arg.Any<CaseImportJob>(), Arg.Any<CancellationToken>())
+            .Returns(ci => { updatedJob = ci.Arg<CaseImportJob>(); return Task.CompletedTask; });
+
+        var worker = BuildWorker(jobStore: jobStore, repository: repository, geocodingService: geocoding);
+        await worker.StartAsync(cts.Token);
+        await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
+        await worker.StopAsync(CancellationToken.None);
+
+        updatedJob.Should().NotBeNull();
+        updatedJob!.Status.Should().Be(CaseImportJobStatus.Success);
+        updatedJob.HasCoordinate.Should().BeFalse();
+        updatedJob.LastError.Should().Contain("座標查詢失敗");
+        updatedJob.LastError.Should().Contain("Google API 連線失敗");
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task ProcessJob_ExistingCoordinate_SetsHasCoordinateTrue_SkipsGeocoding()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var jobStore = Substitute.For<ICaseImportJobStore>();
+        var repository = Substitute.For<ICrimeRepository>();
+        var geocoding = Substitute.For<IGeocodingService>();
+        var coord = GeoCoordinate.Create(25.03, 121.56);
+        CaseImportJob? updatedJob = null;
+        var done = new TaskCompletionSource();
+
+        var job = new CaseImportJob
+        {
+            Id = Guid.NewGuid(),
+            CaseType = "住宅竊盜",
+            OccurrenceDate = 1150329,
+            TimeSlot = "06~08",
+            RawLocation = "臺北市大安區忠孝東路四段"
+        };
+
+        var callCount = 0;
+        jobStore.GetPendingJobsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                if (Interlocked.Increment(ref callCount) == 1)
+                    return (IReadOnlyList<CaseImportJob>)new List<CaseImportJob> { job };
+                done.TrySetResult();
+                return (IReadOnlyList<CaseImportJob>)Array.Empty<CaseImportJob>();
+            });
+
+        repository.FindCoordinateByRawLocationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(coord);
+
+        jobStore.UpdateJobAsync(Arg.Any<CaseImportJob>(), Arg.Any<CancellationToken>())
+            .Returns(ci => { updatedJob = ci.Arg<CaseImportJob>(); return Task.CompletedTask; });
+
+        var worker = BuildWorker(jobStore: jobStore, repository: repository, geocodingService: geocoding);
+        await worker.StartAsync(cts.Token);
+        await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
+        await worker.StopAsync(CancellationToken.None);
+
+        updatedJob.Should().NotBeNull();
+        updatedJob!.Status.Should().Be(CaseImportJobStatus.Success);
+        updatedJob.HasCoordinate.Should().BeTrue();
+
+        await geocoding.DidNotReceive().GeocodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }
