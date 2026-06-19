@@ -564,6 +564,7 @@
       injectStyles();
 
       _map = L.map(containerId, { center: TAIPEI_CENTER, zoom: DEFAULT_ZOOM, zoomControl: false });
+      window._leafletMap = _map;
 
       // Build base layers and add default
       const tileLayers = {};

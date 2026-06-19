@@ -19,29 +19,32 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
     private readonly ICrimeRepository _repository;
     private readonly ILogger<CaseImportWorker> _logger;
     private readonly int _batchSize;
-    private readonly int _maxConcurrency;
+    private readonly AdaptiveConcurrencyController _concurrency;
     private CancellationTokenSource? _cts;
     private Task? _executeTask;
 
     public CaseImportWorker(
         ICaseImportJobStore jobStore,
         ICrimeRepository repository,
+        AdaptiveConcurrencyController concurrency,
         IConfiguration configuration,
         ILogger<CaseImportWorker> logger)
     {
         _jobStore = jobStore;
         _repository = repository;
+        _concurrency = concurrency;
         _logger = logger;
         _batchSize = configuration.GetValue("CaseImportWorker:BatchSize", 50);
-        _maxConcurrency = configuration.GetValue("CaseImportWorker:MaxConcurrency", 5);
     }
 
     public int BatchSize => _batchSize;
-    public int MaxConcurrency => _maxConcurrency;
+    public int MaxConcurrency => _concurrency.CurrentLimit;
+    public AdaptiveConcurrencyController ConcurrencyController => _concurrency;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("CaseImportWorker 已啟動，BatchSize={BatchSize}，MaxConcurrency={MaxConcurrency}", _batchSize, _maxConcurrency);
+        _logger.LogInformation("CaseImportWorker 已啟動，BatchSize={BatchSize}，InitialConcurrency={Concurrency}",
+            _batchSize, _concurrency.CurrentLimit);
         _cts = new CancellationTokenSource();
         _executeTask = ExecuteLoopAsync(_cts.Token);
         return Task.CompletedTask;
@@ -72,12 +75,17 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
     {
         while (!ct.IsCancellationRequested)
         {
+            var processed = 0;
             try
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var jobs = await _jobStore.GetPendingJobsAsync(DateTimeOffset.UtcNow, _batchSize, ct);
-                if (jobs.Count > 0)
+                processed = jobs.Count;
+
+                if (processed > 0)
                 {
-                    using var semaphore = new SemaphoreSlim(_maxConcurrency);
+                    var limit = _concurrency.CurrentLimit;
+                    using var semaphore = new SemaphoreSlim(limit);
                     var tasks = jobs.Select(async job =>
                     {
                         await semaphore.WaitAsync(ct);
@@ -86,6 +94,11 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
                     });
                     await Task.WhenAll(tasks);
                 }
+
+                sw.Stop();
+                _logger.LogDebug("本輪處理 {Count} 筆，耗時 {Ms}ms，並行上限 {Limit}，{Action}",
+                    processed, sw.ElapsedMilliseconds, _concurrency.CurrentLimit,
+                    processed > 0 ? "立即處理下一批" : "等待 3 秒");
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
@@ -93,8 +106,11 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
                 _logger.LogWarning(ex, "CaseImportWorker 主迴圈例外");
             }
 
-            try { await Task.Delay(3000, ct); }
-            catch (OperationCanceledException) { break; }
+            if (processed == 0)
+            {
+                try { await Task.Delay(3000, ct); }
+                catch (OperationCanceledException) { break; }
+            }
         }
     }
 
@@ -132,14 +148,19 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
             job.UpdatedAt = DateTimeOffset.UtcNow;
             await _jobStore.UpdateJobAsync(job, ct);
 
-            _logger.LogDebug("Job {JobId} 處理成功，caseNumber={CaseNumber}", job.Id, job.CaseNumber);
+            var newLimit = _concurrency.OnSuccess();
+            _logger.LogDebug("Job {JobId} 成功，並行上限 → {Limit}", job.Id, newLimit);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             job.UpdatedAt = DateTimeOffset.UtcNow;
+            var isTransient = IsTransientError(ex);
 
-            if (IsTransientError(ex))
+            if (isTransient)
             {
+                var newLimit = _concurrency.OnTransientFailure();
+                _logger.LogDebug("Job {JobId} 暫時性錯誤，並行上限 → {Limit}", job.Id, newLimit);
+
                 job.RetryCount++;
                 if (job.RetryCount >= MaxRetries)
                 {
@@ -163,9 +184,6 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
             {
                 _logger.LogWarning(storeEx, "更新 job {JobId} 狀態失敗", job.Id);
             }
-
-            _logger.LogDebug("Job {JobId} 處理失敗：{Error}，status={Status}，retryCount={RetryCount}",
-                job.Id, ex.Message, job.Status, job.RetryCount);
         }
     }
 

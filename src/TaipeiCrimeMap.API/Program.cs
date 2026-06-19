@@ -90,7 +90,10 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 // Case import background job system
 builder.Services.AddSingleton<ICaseImportJobStore, CaseImportJobStore>();
-builder.Services.AddHostedService<CaseImportWorker>();
+var maxConcurrency = builder.Configuration.GetValue("CaseImportWorker:MaxConcurrency", 5);
+builder.Services.AddSingleton(new AdaptiveConcurrencyController(maxConcurrency, minLimit: 1, maxLimit: Math.Max(maxConcurrency * 2, 20)));
+if (!builder.Environment.IsEnvironment("Testing"))
+    builder.Services.AddHostedService<CaseImportWorker>();
 
 // Application handlers
 builder.Services.AddScoped<ImportCsvCommandHandler>();

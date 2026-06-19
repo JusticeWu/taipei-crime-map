@@ -149,6 +149,18 @@ public class AdminController : ControllerBase
         return new BulkSyncResult(Guid.Empty, items.Count, succeeded, failures.Count, "sync", failures);
     }
 
+    [HttpGet("cases/worker/status")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetWorkerStatus([FromServices] AdaptiveConcurrencyController? concurrency)
+    {
+        return Ok(new
+        {
+            currentConcurrencyLimit = concurrency?.CurrentLimit ?? 0,
+            minLimit = concurrency?.MinLimit ?? 0,
+            maxLimit = concurrency?.MaxLimit ?? 0,
+        });
+    }
+
     [HttpGet("cases/batch/{batchId:guid}/status")]
     [ProducesResponseType(typeof(BatchStatusResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetBatchStatus(Guid batchId, CancellationToken cancellationToken)

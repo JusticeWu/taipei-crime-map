@@ -68,10 +68,13 @@ public class CaseImportWorkerTests
         var builder = new ConfigurationBuilder();
         if (settings is not null)
             builder.AddInMemoryCollection(settings);
+        var config = builder.Build();
+        var maxC = config.GetValue("CaseImportWorker:MaxConcurrency", 5);
         return new CaseImportWorker(
             Substitute.For<ICaseImportJobStore>(),
             Substitute.For<ICrimeRepository>(),
-            builder.Build(),
+            new AdaptiveConcurrencyController(maxC, 1, Math.Max(maxC * 2, 20)),
+            config,
             NullLogger<CaseImportWorker>.Instance);
     }
 
@@ -95,5 +98,41 @@ public class CaseImportWorkerTests
         var worker = BuildWorker();
         worker.BatchSize.Should().Be(50);
         worker.MaxConcurrency.Should().Be(5);
+    }
+
+    [Fact(Timeout = 15000)]
+    public async Task ExecuteLoop_WithPendingJobs_ProcessesWithoutDelay()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var jobStore = Substitute.For<ICaseImportJobStore>();
+        var callTimestamps = new List<long>();
+        var done = new TaskCompletionSource();
+
+        jobStore.GetPendingJobsAsync(Arg.Any<DateTimeOffset>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                callTimestamps.Add(System.Diagnostics.Stopwatch.GetTimestamp());
+                if (callTimestamps.Count <= 2)
+                {
+                    return (IReadOnlyList<CaseImportJob>)new List<CaseImportJob>
+                    {
+                        new() { Id = Guid.NewGuid(), CaseType = "住宅竊盜", OccurrenceDate = 1150329, RawLocation = "臺北市大安區" }
+                    };
+                }
+                done.TrySetResult();
+                return (IReadOnlyList<CaseImportJob>)Array.Empty<CaseImportJob>();
+            });
+
+        var config = new ConfigurationBuilder().Build();
+        var cc = new AdaptiveConcurrencyController(5, 1, 20);
+        var worker = new CaseImportWorker(jobStore, Substitute.For<ICrimeRepository>(), cc, config, NullLogger<CaseImportWorker>.Instance);
+
+        await worker.StartAsync(cts.Token);
+        await Task.WhenAny(done.Task, Task.Delay(Timeout.Infinite, cts.Token));
+        await worker.StopAsync(CancellationToken.None);
+
+        callTimestamps.Count.Should().BeGreaterThanOrEqualTo(2);
+        var elapsedMs = (callTimestamps[1] - callTimestamps[0]) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        elapsedMs.Should().BeLessThan(2000, "should not wait 3s between batches when jobs exist");
     }
 }

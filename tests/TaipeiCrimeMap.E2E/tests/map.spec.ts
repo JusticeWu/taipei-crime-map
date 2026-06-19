@@ -82,12 +82,22 @@ test.describe('地圖核心功能', () => {
       if (await cluster.count() === 0) break;
 
       await cluster.click();
-      await page.waitForTimeout(800); // 等待群集放大動畫與重新渲染
+      // 等待地圖 zoom/pan 動畫完成（moveend 事件）
+      await page.evaluate(() => new Promise<void>((resolve) => {
+        const map = (window as any)._leafletMap;
+        if (!map) { setTimeout(resolve, 1000); return; }
+        const handler = () => { map.off('moveend', handler); resolve(); };
+        map.on('moveend', handler);
+        setTimeout(resolve, 2000); // fallback
+      }));
+      await page.waitForTimeout(300); // 讓 DOM 重新渲染完成
       individualMarker = page.locator('.leaflet-marker-icon:not(.marker-cluster)');
     }
 
     await expect(individualMarker.first()).toBeVisible({ timeout: 10000 });
-    await individualMarker.first().click();
+    // Marker 位置由 Leaflet map pan/zoom 決定，可能在 viewport 外，
+    // 用 dispatchEvent 觸發 click 繞過 Playwright 的 viewport 檢查
+    await individualMarker.first().dispatchEvent('click');
 
     const popup = page.locator('.leaflet-popup .crime-popup');
     await expect(popup).toBeVisible({ timeout: 10000 });

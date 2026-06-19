@@ -43,6 +43,10 @@ jobs:
             HTTP=$(echo "$BODY" | tail -1)
             BODY=$(echo "$BODY" | sed '$d')
             echo "HTTP ${HTTP} | body(100): ${BODY:0:100}"
+            if [ "$HTTP" = "429" ]; then
+              echo "OK (rate-limited but server is alive)"
+              return 0
+            fi
             if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
               echo "FAIL: expected 2xx, got ${HTTP}" && return 1
             fi
