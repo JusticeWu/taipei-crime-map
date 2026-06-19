@@ -72,10 +72,14 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
     {
         while (!ct.IsCancellationRequested)
         {
+            var processed = 0;
             try
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 var jobs = await _jobStore.GetPendingJobsAsync(DateTimeOffset.UtcNow, _batchSize, ct);
-                if (jobs.Count > 0)
+                processed = jobs.Count;
+
+                if (processed > 0)
                 {
                     using var semaphore = new SemaphoreSlim(_maxConcurrency);
                     var tasks = jobs.Select(async job =>
@@ -86,6 +90,11 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
                     });
                     await Task.WhenAll(tasks);
                 }
+
+                sw.Stop();
+                _logger.LogDebug("本輪處理 {Count} 筆，耗時 {Ms}ms，{Action}",
+                    processed, sw.ElapsedMilliseconds,
+                    processed > 0 ? "立即處理下一批" : "等待 3 秒");
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
@@ -93,8 +102,11 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
                 _logger.LogWarning(ex, "CaseImportWorker 主迴圈例外");
             }
 
-            try { await Task.Delay(3000, ct); }
-            catch (OperationCanceledException) { break; }
+            if (processed == 0)
+            {
+                try { await Task.Delay(3000, ct); }
+                catch (OperationCanceledException) { break; }
+            }
         }
     }
 
