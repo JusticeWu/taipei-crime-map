@@ -151,4 +151,53 @@ public class AdminControllerTests : IClassFixture<CustomWebApplicationFactory>
         doc.RootElement.GetProperty("data").GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         doc.RootElement.GetProperty("totalPages").ValueKind.Should().Be(JsonValueKind.Number);
     }
+
+    [Fact]
+    public async Task MissingCoordinates_WithoutAuth_ShouldReturn401()
+    {
+        var response = await _client.GetAsync("/api/admin/cases/missing-coordinates");
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task MissingCoordinates_WithAuth_ShouldReturn200WithTotalCount()
+    {
+        var client = CreateAuthorizedClient(
+            CustomWebApplicationFactory.AdminUsername,
+            CustomWebApplicationFactory.AdminPassword);
+
+        var response = await client.GetAsync("/api/admin/cases/missing-coordinates");
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        doc.RootElement.GetProperty("totalCount").ValueKind.Should().Be(JsonValueKind.Number);
+        doc.RootElement.GetProperty("items").ValueKind.Should().Be(JsonValueKind.Array);
+    }
+
+    [Fact]
+    public async Task GeocodeMissing_WithoutAuth_ShouldReturn401()
+    {
+        var response = await _client.PostAsync("/api/admin/cases/geocode-missing", null);
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task GeocodeMissing_WithAuth_ShouldReturn200WithItemResults()
+    {
+        var client = CreateAuthorizedClient(
+            CustomWebApplicationFactory.AdminUsername,
+            CustomWebApplicationFactory.AdminPassword);
+
+        var response = await client.PostAsync("/api/admin/cases/geocode-missing?maxCount=3", null);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        doc.RootElement.GetProperty("totalProcessed").ValueKind.Should().Be(JsonValueKind.Number);
+        doc.RootElement.GetProperty("successCount").ValueKind.Should().Be(JsonValueKind.Number);
+        doc.RootElement.GetProperty("failedCount").ValueKind.Should().Be(JsonValueKind.Number);
+        doc.RootElement.GetProperty("remainingCount").ValueKind.Should().Be(JsonValueKind.Number);
+        doc.RootElement.GetProperty("items").ValueKind.Should().Be(JsonValueKind.Array);
+    }
 }

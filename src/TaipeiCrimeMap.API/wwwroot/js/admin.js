@@ -72,6 +72,7 @@
     try { ensureChart(); } catch (e) { console.warn('[admin] ensureChart failed:', e); }
     openWebSocket();
     startOfflineCheck();
+    loadMissingCount();
   }
 
   async function init() {
@@ -701,6 +702,12 @@
             final += '\n\n失敗明細：';
             s.failures.forEach(f => { final += `\n  編號 ${f.caseNumber}：${f.error}`; });
           }
+          if (s.missingCoordinateCount > 0) {
+            final += `\n\n⚠️ 其中 ${s.missingCoordinateCount} 筆座標查詢失敗，可至「座標更新」頁籤使用補齊座標功能重新處理`;
+            if (s.missingCoordinates && s.missingCoordinates.length > 0) {
+              s.missingCoordinates.forEach(m => { final += `\n  編號 ${m.caseNumber}：${m.rawLocation}`; });
+            }
+          }
           bulkResultEl.textContent = final;
         }
       } catch (err) {
@@ -746,6 +753,80 @@
       bulkResultEl.textContent = `❌ 發生錯誤：${err.message}`;
       bulkSubmitBtn.disabled = false;
     }
+  });
+
+  // ── Geocode missing coordinates ─────────────────────────────────
+  const MISSING_COORD_URL = '/api/admin/cases/missing-coordinates';
+  const GEOCODE_MISSING_URL = '/api/admin/cases/geocode-missing';
+  const missingCountEl = document.getElementById('missing-coord-count');
+  const btnGeocodeMissing = document.getElementById('btn-geocode-missing');
+  const geocodeMissingStatus = document.getElementById('geocode-missing-status');
+  const geocodeMissingSummary = document.getElementById('geocode-missing-summary');
+  const geocodeMissingTableWrap = document.getElementById('geocode-missing-table-wrap');
+  const geocodeMissingTbody = document.getElementById('geocode-missing-tbody');
+
+  async function loadMissingCount() {
+    const credentials = getStoredCredentials();
+    if (!credentials) return;
+    try {
+      const resp = await fetch(MISSING_COORD_URL, { headers: { Authorization: `Basic ${credentials}` } });
+      if (!resp.ok) { missingCountEl.textContent = '查詢失敗'; return; }
+      const data = await resp.json();
+      missingCountEl.textContent = `${data.totalCount} 筆`;
+      missingCountEl.style.color = data.totalCount > 0 ? '#dc2626' : '#16a34a';
+    } catch (e) {
+      missingCountEl.textContent = `錯誤：${e.message}`;
+    }
+  }
+
+  btnGeocodeMissing.addEventListener('click', async () => {
+    const credentials = getStoredCredentials();
+    if (!credentials) { showLogin(); return; }
+
+    btnGeocodeMissing.disabled = true;
+    geocodeMissingStatus.textContent = '處理中，請稍候（每筆需呼叫 Google API，可能需要數秒至數分鐘）...';
+    geocodeMissingSummary.style.display = 'none';
+    geocodeMissingTableWrap.style.display = 'none';
+    geocodeMissingTbody.innerHTML = '';
+
+    try {
+      const resp = await fetch(GEOCODE_MISSING_URL, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${credentials}` },
+      });
+      if (resp.status === 401) { geocodeMissingStatus.textContent = '❌ 認證失敗（401）'; btnGeocodeMissing.disabled = false; return; }
+      if (!resp.ok) { geocodeMissingStatus.textContent = `❌ 失敗（HTTP ${resp.status}）`; btnGeocodeMissing.disabled = false; return; }
+
+      const data = await resp.json();
+      geocodeMissingStatus.textContent = '';
+
+      const icon = data.failedCount > 0 ? '⚠️' : '✅';
+      geocodeMissingSummary.textContent = `${icon} 處理 ${data.totalProcessed} 筆：成功 ${data.successCount} 筆（複用 ${data.reusedCount}），失敗 ${data.failedCount} 筆，剩餘 ${data.remainingCount} 筆`;
+      geocodeMissingSummary.style.display = '';
+
+      if (data.items && data.items.length > 0) {
+        const s = 'padding:4px 6px;border:1px solid #e5e7eb';
+        geocodeMissingTbody.innerHTML = data.items.map(item => {
+          const resultText = item.success ? '✅ 成功' : '❌ 失敗';
+          const detail = item.success
+            ? `${item.latitude.toFixed(6)}, ${item.longitude.toFixed(6)}`
+            : (item.failureReason || '未知原因');
+          return `<tr>
+            <td style="${s}">${item.caseNumber}</td>
+            <td style="${s}">${item.caseType || '—'}</td>
+            <td style="${s}">${item.rawLocation}</td>
+            <td style="${s}">${resultText}</td>
+            <td style="${s}">${detail}</td>
+          </tr>`;
+        }).join('');
+        geocodeMissingTableWrap.style.display = '';
+      }
+
+      loadMissingCount();
+    } catch (e) {
+      geocodeMissingStatus.textContent = `❌ 發生錯誤：${e.message}`;
+    }
+    btnGeocodeMissing.disabled = false;
   });
 
   window.addEventListener('beforeunload', () => { closeWebSocket(); stopOfflineCheck(); });

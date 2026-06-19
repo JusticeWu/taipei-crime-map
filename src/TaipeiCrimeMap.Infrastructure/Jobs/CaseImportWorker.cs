@@ -6,6 +6,7 @@ using StackExchange.Redis;
 using TaipeiCrimeMap.Domain.Aggregates;
 using TaipeiCrimeMap.Domain.Exceptions;
 using TaipeiCrimeMap.Domain.Repositories;
+using TaipeiCrimeMap.Domain.Services;
 using TaipeiCrimeMap.Domain.ValueObjects;
 
 namespace TaipeiCrimeMap.Infrastructure.Jobs;
@@ -17,6 +18,7 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
 
     private readonly ICaseImportJobStore _jobStore;
     private readonly ICrimeRepository _repository;
+    private readonly IGeocodingService _geocodingService;
     private readonly ILogger<CaseImportWorker> _logger;
     private readonly int _batchSize;
     private readonly AdaptiveConcurrencyController _concurrency;
@@ -26,12 +28,14 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
     public CaseImportWorker(
         ICaseImportJobStore jobStore,
         ICrimeRepository repository,
+        IGeocodingService geocodingService,
         AdaptiveConcurrencyController concurrency,
         IConfiguration configuration,
         ILogger<CaseImportWorker> logger)
     {
         _jobStore = jobStore;
         _repository = repository;
+        _geocodingService = geocodingService;
         _concurrency = concurrency;
         _logger = logger;
         _batchSize = configuration.GetValue("CaseImportWorker:BatchSize", 50);
@@ -139,17 +143,38 @@ public sealed class CaseImportWorker : IHostedService, IDisposable
 
             await _repository.AddAsync(theftCase, ct);
 
-            var existingCoord = await _repository.FindCoordinateByRawLocationAsync(
+            var coord = await _repository.FindCoordinateByRawLocationAsync(
                 job.RawLocation ?? string.Empty, ct);
-            if (existingCoord is not null)
-                await _repository.UpdateCoordinateAsync(theftCase.Id, existingCoord, ct);
+
+            if (coord is null)
+            {
+                try
+                {
+                    coord = await _geocodingService.GeocodeAsync(job.RawLocation ?? string.Empty, ct);
+                }
+                catch (Exception geoEx) when (!ct.IsCancellationRequested)
+                {
+                    _logger.LogWarning(geoEx, "Job {JobId} Geocoding 例外：{Address}", job.Id, job.RawLocation);
+                    job.LastError = $"座標查詢失敗：{geoEx.Message}";
+                }
+
+                if (coord is null && job.LastError is null)
+                    job.LastError = "座標查詢失敗：Geocoding 回傳 null（ZERO_RESULTS 或配額已用盡）";
+            }
+
+            if (coord is not null)
+            {
+                await _repository.UpdateCoordinateAsync(theftCase.Id, coord, ct);
+                job.HasCoordinate = true;
+            }
 
             job.Status = CaseImportJobStatus.Success;
             job.UpdatedAt = DateTimeOffset.UtcNow;
             await _jobStore.UpdateJobAsync(job, ct);
 
             var newLimit = _concurrency.OnSuccess();
-            _logger.LogDebug("Job {JobId} 成功，並行上限 → {Limit}", job.Id, newLimit);
+            _logger.LogDebug("Job {JobId} 成功（座標={HasCoord}），並行上限 → {Limit}",
+                job.Id, job.HasCoordinate, newLimit);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

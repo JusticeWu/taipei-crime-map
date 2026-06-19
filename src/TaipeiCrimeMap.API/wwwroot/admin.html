@@ -250,6 +250,29 @@
 
     <!-- Tab: 座標更新 -->
     <div id="tab-maintenance" class="tab-panel" style="display:none">
+      <!-- 補齊座標區塊 -->
+      <div style="margin-bottom:1.5rem;padding:1rem;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:0.75rem">
+          <span style="font-weight:600">缺座標案件數：</span>
+          <span id="missing-coord-count" style="font-weight:700;color:#dc2626">載入中...</span>
+          <button type="button" id="btn-geocode-missing" style="padding:4px 16px;font-size:0.9rem;margin-top:0">補齊座標</button>
+        </div>
+        <div id="geocode-missing-status" class="hint"></div>
+        <div id="geocode-missing-summary" style="margin-top:0.5rem;font-weight:600;display:none"></div>
+        <div id="geocode-missing-table-wrap" style="margin-top:0.75rem;max-height:400px;overflow-y:auto;display:none">
+          <table id="geocode-missing-table" style="width:100%;border-collapse:collapse;font-size:0.82rem">
+            <thead><tr style="background:#f3f4f6;text-align:left">
+              <th style="padding:4px 6px;border:1px solid #e5e7eb">編號</th>
+              <th style="padding:4px 6px;border:1px solid #e5e7eb">案類</th>
+              <th style="padding:4px 6px;border:1px solid #e5e7eb">發生地點</th>
+              <th style="padding:4px 6px;border:1px solid #e5e7eb">結果</th>
+              <th style="padding:4px 6px;border:1px solid #e5e7eb">座標 / 原因</th>
+            </tr></thead>
+            <tbody id="geocode-missing-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <form id="update-form">
         <label for="rawLocation">發生地點</label>
         <textarea id="rawLocation" name="rawLocation" required
