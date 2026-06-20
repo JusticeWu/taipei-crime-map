@@ -154,11 +154,14 @@
     </main>
   </div>
 
-  <!-- Admin link (inconspicuous, fixed bottom-left) -->
-  <a href="/admin.html" target="_blank" rel="noopener"
-     style="position:fixed;bottom:8px;left:8px;font-size:10px;color:rgba(150,150,150,0.4);text-decoration:none;z-index:9999;line-height:1;"
-     onmouseover="this.style.color='rgba(150,150,150,0.8)'"
-     onmouseout="this.style.color='rgba(150,150,150,0.4)'">admin</a>
+  <!-- Author + Admin link (fixed bottom-left) -->
+  <div style="position:fixed;bottom:8px;left:14px;z-index:9999;line-height:1;">
+    <div style="font-size:11px;color:#b8c4d4;margin-bottom:7px;">Built by Cheng-Yi Wu</div>
+    <a href="/admin.html" target="_blank" rel="noopener"
+       style="font-size:10px;color:rgba(150,150,150,0.4);text-decoration:none;"
+       onmouseover="this.style.color='rgba(150,150,150,0.8)'"
+       onmouseout="this.style.color='rgba(150,150,150,0.4)'">admin</a>
+  </div>
 
   <!-- Loading Overlay -->
   <div id="loading-overlay" class="hidden">
