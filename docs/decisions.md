@@ -45,3 +45,18 @@
 實測完整 FQDN 會導致 DNS 解析異常、連線永遠 `ConnectTimeout`（等 16~21 秒才 fallback 到 DB）；
 改用短名稱後 L2-Cache 耗時降到 100~600ms 且無任何連線例外。
 此設定為手動修改、不在 IaC/CI 內，重建 Container App 時務必沿用短名稱格式。
+
+---
+
+### 2026-06-20：Keepalive 從 GitHub Actions cron 改為 Cron-job.org 外部排程
+
+**決策**：刪除 `.github/workflows/keepalive.yml`，改用 Cron-job.org 外部排程服務定時 ping Prod 端點
+
+**原因**：
+- GitHub Actions 的 `schedule` cron 不保證準時執行，實際間隔可能從數十分鐘到數小時不等（官方文件明確說明 scheduled workflows may be delayed）
+- Azure Container Apps 的免費層在無流量時會自動縮放至 0 實例，需要穩定的定時 ping 維持至少 1 個實例運行
+- Cron-job.org 免費方案支援最短 1 分鐘間隔，執行時間穩定，適合 keepalive 場景
+
+**影響**：
+- 刪除 `keepalive.yml`，減少 GitHub Actions 用量
+- Cron-job.org 排程需在外部平台手動管理，不在 repo 內版控
