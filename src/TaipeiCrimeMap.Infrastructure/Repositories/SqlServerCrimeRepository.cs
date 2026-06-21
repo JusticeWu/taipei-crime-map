@@ -328,13 +328,18 @@ public class SqlServerCrimeRepository : ICrimeRepository
             """;
 
         await using var conn = CreateConnection();
-        var rows = (await conn.QueryAsync(sql, new
+        var parameters = new
         {
             CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
             District = filter.District?.Name,
             YearFrom = filter.YearFrom,
             YearTo   = filter.YearTo,
-        })).Select(r => MapTrendRow(dimension, r)).ToList();
+        };
+
+        var rawRows = await conn.QueryAsync(sql, parameters);
+        var rows = new List<(string Label, int Year, int Count)>();
+        foreach (var r in rawRows)
+            rows.Add(MapTrendRow(dimension, r));
 
         var topLabels = rows
             .GroupBy(r => r.Label)
@@ -345,7 +350,6 @@ public class SqlServerCrimeRepository : ICrimeRepository
 
         return rows
             .Where(r => topLabels.Contains(r.Label))
-            .Select(r => ((string Label, int Year, int Count))r)
             .ToList();
     }
 
