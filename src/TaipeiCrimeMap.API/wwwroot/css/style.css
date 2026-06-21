@@ -424,10 +424,6 @@ input[type="number"]::placeholder {
   to { transform: rotate(360deg); }
 }
 
-#btn-scroll-toggle {
-  display: none;
-}
-
 /* ===========================
    Responsive — Mobile (≤ 768px)
    =========================== */
@@ -528,12 +524,12 @@ input[type="number"]::placeholder {
     height: 100%;
   }
 
-  /* 統計圖表區塊 — 直接顯示於地圖下方，背景稍微提亮以利辨識 */
+  /* 統計圖表區塊 — 直接顯示於地圖下方，整頁自然捲動 */
   #chart-container {
     order: 2;
     flex: none;
-    max-height: 560px;
-    overflow-y: auto;
+    height: auto;
+    overflow: visible;
     background-color: #2A3F5F;
   }
 
@@ -562,25 +558,5 @@ input[type="number"]::placeholder {
 
   .stat-item--full .stat-value {
     font-size: 14px;
-  }
-
-  #btn-scroll-toggle {
-    display: block;
-    position: fixed;
-    bottom: 16px;
-    left: 16px;
-    z-index: 9998;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(0, 0, 0, 0.5);
-    color: #fff;
-    font-size: 22px;
-    line-height: 44px;
-    text-align: center;
-    padding: 0;
-    cursor: pointer;
-    backdrop-filter: blur(4px);
   }
 }

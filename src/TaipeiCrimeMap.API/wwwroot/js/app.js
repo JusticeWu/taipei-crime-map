@@ -553,39 +553,6 @@
     if (elBtnFilterClose) elBtnFilterClose.addEventListener('click', closeFilterPanel);
 
     doQuery(); // defaults to point mode → queryProgressive()
-
-    initScrollToggle();
-  }
-
-  function initScrollToggle() {
-    var btn = document.getElementById('btn-scroll-toggle');
-    if (!btn) return;
-
-    var scrollTarget = document.getElementById('app');
-    if (!scrollTarget) scrollTarget = document.documentElement;
-
-    function isNearBottom() {
-      var el = scrollTarget === document.documentElement ? window : scrollTarget;
-      var scrollTop = scrollTarget === document.documentElement ? window.pageYOffset : scrollTarget.scrollTop;
-      var scrollHeight = scrollTarget.scrollHeight;
-      var clientHeight = scrollTarget === document.documentElement ? window.innerHeight : scrollTarget.clientHeight;
-      return scrollTop + clientHeight >= scrollHeight - 50;
-    }
-
-    function updateArrow() {
-      btn.textContent = isNearBottom() ? '↑' : '↓';
-    }
-
-    btn.addEventListener('click', function () {
-      if (isNearBottom()) {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
-      }
-    });
-
-    window.addEventListener('scroll', updateArrow, { passive: true });
-    updateArrow();
   }
 
   if (document.readyState === 'loading') {
