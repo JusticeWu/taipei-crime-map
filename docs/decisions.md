@@ -60,3 +60,27 @@
 **影響**：
 - 刪除 `keepalive.yml`，減少 GitHub Actions 用量
 - Cron-job.org 排程需在外部平台手動管理，不在 repo 內版控
+
+---
+
+### 2026-06-21：Keepalive 端點從 /api/crime/stats 改為 /api/health/db-ping
+
+**決策**：新增 `GET /api/health/db-ping` 專用端點，Cron-job.org 改打此端點
+
+**原因**：
+- `/api/crime/stats` 的快取時間改為 L1(15h)/L2(24h) 後，多數請求直接命中快取，不會觸發資料庫連線
+- Azure SQL Database 免費層超過一定時間無連線會自動暫停，原本的 keepalive 機制因快取而實質失效
+- 需要一個不受快取影響、每次都真正建立 DB 連線的專用端點
+
+**驗證方式**：X-API-Key Header（環境變數 `HealthCheck__ApiKey`）
+
+**Rate Limiting**：health-api policy，預設 2 次/分鐘
+
+**⚠️ 手動設定步驟**：
+1. **GitHub Secrets**：新增 `HEALTHCHECK_API_KEY`，值為自訂的密鑰字串
+2. **Azure Container App（UAT + Prod）**：
+   - 新增 Secret：名稱 `healthcheck-api-key`，值同上
+   - 新增環境變數：`HealthCheck__ApiKey`，來源參照 Secret `healthcheck-api-key`
+3. **Cron-job.org**：
+   - 將呼叫 URL 從 `/api/crime/stats` 改為 `/api/health/db-ping`
+   - 在 HTTP Headers 新增 `X-API-Key: {密鑰值}`
