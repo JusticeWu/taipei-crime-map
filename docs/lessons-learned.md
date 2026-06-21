@@ -538,3 +538,9 @@
 - 根本原因：這不是程式碼邏輯錯誤，是需求範圍遺漏。寫測試的人（或 AI）只會驗證自己想到的場景，沒想到要驗證的場景，測試自然也不會涵蓋，因此「所有測試通過」無法保證「功能範圍完整」。
 - 正確做法：用使用者視角重新檢視功能完整性，而不只依賴測試結果。發現問題後，把「成功」拆分成更精確的狀態（Status=Success 但額外標記 HasCoordinate），讓系統的回報更貼近真實情況，而不是用單一的「成功/失敗」掩蓋資料品質的細節。同時補上業務規則測試（驗證 Geocoding 成功與失敗兩種情況下的欄位狀態），但更重要的長期防護是建立監控機制（例如缺座標筆數的告警），不要只依賴測試。
 - 相關模式：任何「寫入成功」與「資料完整」是兩件獨立事情的場景（例如：訂單建立成功但庫存扣減失敗、使用者註冊成功但驗證信寄送失敗），都要清楚拆分「核心操作的成功」與「附帶處理的成功」，避免用單一布林值的成功/失敗掩蓋更細緻的狀態。
+
+## L041：CROSS APPLY + GROUP BY 衝突、Dapper dynamic 污染 tuple 名稱、Task.WhenAll 缺乏錯誤隔離
+- 問題：新增 3 個組合維度趨勢圖表後，/api/crime/stats 回傳 500，所有 5 個圖表（含原本穩定的時段分布、行政區分布）全部顯示無資料。根因有三個疊加的問題：(1) SQL 用 CROSS APPLY 產生 `ct.chinese_name` 欄位但 GROUP BY 只列了 `case_type`，SQL Server 拒絕執行；(2) 修正 SQL 後，Dapper `conn.QueryAsync(sql)` 回傳 `IEnumerable<dynamic>`，後續 `.Select(r => MapTrendRow(r))` 的回傳型別被 dynamic 污染，tuple 元素名稱（`.Label`）在 runtime 不存在（只有 `Item1`），拋出 `does not contain a definition for 'Label'`；(3) `Task.WhenAll` 並行 4 個查詢，任一失敗就拋 `AggregateException`，讓原本成功的時段/行政區查詢也被一起丟棄。
+- 根本原因：(1) SQL Server 不會自動推斷 CROSS APPLY 欄位與 GROUP BY 欄位的函數依賴關係，即使 `ct.chinese_name` 在邏輯上是 `case_type` 的一對一映射，仍需明確列入 GROUP BY 或改在 C# 端組裝 label。(2) C# tuple 元素名稱是純粹的編譯期語法糖，`dynamic` 會跳過編譯期型別檢查，導致 LINQ chain 中途失去 tuple 名稱。(3) `Task.WhenAll` 的設計是「全成功或全失敗」，不提供部分成功的降級機制。
+- 正確做法：(1) SQL 端只做純欄位 GROUP BY，label 組裝移到 C# 端的 `MapTrendRow`。(2) 使用 `foreach` 迴圈將 dynamic 結果逐筆轉換成強型別 `List<(string, int, int)>`，切斷 dynamic 污染鏈。(3) 多個獨立查詢並行執行時，若部分查詢屬於新增、風險較高的功能，應考慮個別 try-catch 包裹，讓單一查詢失敗時降級回傳空陣列，而不是讓整個 API 因為一個新功能的 bug 而完全打不開。
+- 相關模式：[[L031]] Task.WhenAll 的型別限制；任何在 SQL 中做字串組裝/計算欄位的場景，都要確認 GROUP BY 是否需要包含該欄位；Dapper 的 `QueryAsync` 無型別參數版本回傳 dynamic，後續的 LINQ chain 型別推斷會被感染，應優先使用 `QueryAsync<T>` 或在 chain 起點就轉成強型別。
