@@ -409,6 +409,58 @@ public class SqlServerCrimeRepository : ICrimeRepository
         public int Count { get; init; }
     }
 
+    public async Task<IReadOnlyList<(string Key, int Year, int Count)>> GetYearlyTrendByDimensionAsync(
+        IReadOnlyList<string> districts, IReadOnlyList<int> caseTypes,
+        int? minHour, int? maxHour, string groupBy,
+        CancellationToken cancellationToken = default)
+    {
+        var (selectKey, groupByCol) = groupBy switch
+        {
+            "caseType" => ("case_type", "case_type"),
+            "district" => ("district", "district"),
+            "districtCaseType" => ("district, case_type", "district, case_type"),
+            _ => throw new ArgumentException($"Unknown groupBy: {groupBy}")
+        };
+
+        var timeFilter = minHour.HasValue && maxHour.HasValue
+            ? "AND time_slot_start IS NOT NULL AND time_slot_start >= @MinHour AND time_slot_start < @MaxHour"
+            : "";
+
+        var sql = $"""
+            SELECT {selectKey}, occurred_year + 1911 AS year, COUNT(*) AS count
+            FROM theft_cases WITH (NOLOCK)
+            WHERE occurred_year IS NOT NULL
+              AND district IN @Districts
+              AND case_type IN @CaseTypes
+              {timeFilter}
+            GROUP BY {groupByCol}, occurred_year
+            ORDER BY {groupByCol}, occurred_year
+            """;
+
+        await using var conn = CreateConnection();
+        var rawRows = await conn.QueryAsync(sql, new
+        {
+            Districts = districts,
+            CaseTypes = caseTypes,
+            MinHour = minHour,
+            MaxHour = maxHour,
+        });
+
+        var rows = new List<(string Key, int Year, int Count)>();
+        foreach (var r in rawRows)
+        {
+            string key = groupBy switch
+            {
+                "caseType" => CaseTypeName((int)r.case_type),
+                "district" => (string)r.district,
+                "districtCaseType" => $"{(string)r.district}-{CaseTypeName((int)r.case_type)}",
+                _ => ""
+            };
+            rows.Add((key, (int)r.year, (int)r.count));
+        }
+        return rows;
+    }
+
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
     private const string UpsertSql = """

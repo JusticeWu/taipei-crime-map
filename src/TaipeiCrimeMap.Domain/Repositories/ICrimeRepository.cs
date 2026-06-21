@@ -54,4 +54,9 @@ public interface ICrimeRepository
     Task<IReadOnlyList<(int Year, int Count)>> GetGroupedYearlyTrendAsync(
         IReadOnlyList<string> districts, IReadOnlyList<int> caseTypes, int minHour, int maxHour,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<(string Key, int Year, int Count)>> GetYearlyTrendByDimensionAsync(
+        IReadOnlyList<string> districts, IReadOnlyList<int> caseTypes,
+        int? minHour, int? maxHour, string groupBy,
+        CancellationToken cancellationToken = default);
 }

@@ -31,9 +31,24 @@ public class GetPopupAiAnalysisQueryHandlerTests
         _cache.SetAsync(Arg.Any<string>(), Arg.Any<byte[]>(), Arg.Any<DistributedCacheEntryOptions>(), Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 
+        SetupDefaultTrendMocks();
+
         _handler = new GetPopupAiAnalysisQueryHandler(
             _repository, _llm, _cache, _memoryCache,
             NullLogger<GetPopupAiAnalysisQueryHandler>.Instance);
+    }
+
+    private void SetupDefaultTrendMocks()
+    {
+        _repository.GetYearlyTrendByDimensionAsync(
+            Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
+            Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<(string, int, int)>() as IReadOnlyList<(string, int, int)>);
+
+        _repository.GetGroupedYearlyTrendAsync(
+            Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
+            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<(int, int)>() as IReadOnlyList<(int, int)>);
     }
 
     private static TheftCase CreateCase(Guid id, string district, CaseType caseType, int startHour)
@@ -51,90 +66,159 @@ public class GetPopupAiAnalysisQueryHandlerTests
     public async Task HandleAsync_CaseNotFound_ReturnsNull()
     {
         _repository.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((TheftCase?)null);
-
         var result = await _handler.HandleAsync(new GetPopupAiAnalysisQuery(Guid.NewGuid()));
-
         result.Should().BeNull();
     }
 
     [Fact]
-    public async Task HandleAsync_ValidCase_CallsLlmAndReturnAnalysis()
+    public async Task HandleAsync_ValidCase_CallsLlm()
     {
         var id = Guid.NewGuid();
-        var theftCase = CreateCase(id, "內湖區", CaseType.Motorcycle, 18);
-        _repository.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(theftCase);
-        _repository.GetGroupedYearlyTrendAsync(
+        _repository.GetByIdAsync(id, Arg.Any<CancellationToken>())
+            .Returns(CreateCase(id, "內湖區", CaseType.Motorcycle, 18));
+
+        _repository.GetYearlyTrendByDimensionAsync(
             Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
-            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new List<(int, int)> { (2023, 50), (2024, 60) });
-        _llm.GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns("此區域案件呈上升趨勢。");
+            16, 20, "caseType", Arg.Any<CancellationToken>())
+            .Returns(new List<(string, int, int)> { ("機車竊盜", 2023, 50) });
 
-        var result = await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id));
-
-        result.Should().Be("此區域案件呈上升趨勢。");
-        await _llm.Received(1).GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_SameGroup_SecondCallHitsL1Cache()
-    {
-        var id = Guid.NewGuid();
-        var theftCase = CreateCase(id, "內湖區", CaseType.Motorcycle, 18);
-        _repository.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(theftCase);
-        _repository.GetGroupedYearlyTrendAsync(
+        _repository.GetYearlyTrendByDimensionAsync(
             Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
-            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new List<(int, int)> { (2023, 50) });
+            16, 20, "district", Arg.Any<CancellationToken>())
+            .Returns(new List<(string, int, int)> { ("內湖區", 2023, 30) });
+
+        _repository.GetYearlyTrendByDimensionAsync(
+            Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
+            null, null, "districtCaseType", Arg.Any<CancellationToken>())
+            .Returns(new List<(string, int, int)> { ("內湖區-機車竊盜", 2023, 80) });
+
         _llm.GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns("分析結果");
 
-        await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id));
-        var second = await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id));
-
-        second.Should().Be("分析結果");
-        await _llm.Received(1).GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task HandleAsync_LlmFails_ReturnsFallbackSummary()
-    {
-        var id = Guid.NewGuid();
-        var theftCase = CreateCase(id, "信義區", CaseType.Residential, 14);
-        _repository.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(theftCase);
-        _repository.GetGroupedYearlyTrendAsync(
-            Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
-            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new List<(int, int)> { (2023, 30) });
-        _llm.GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns<string>(_ => throw new HttpRequestException("API Error"));
-
         var result = await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id));
 
-        result.Should().Contain("AI 分析暫時無法使用");
-        result.Should().Contain("2023年30件");
+        result.Should().Be("分析結果");
+        await _llm.Received(1).GenerateAnalysisAsync(
+            Arg.Is<string>(p => p.Contains("案類別") && p.Contains("行政區別") && p.Contains("不分時段")),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task HandleAsync_CacheKey_UsesGroupNotRawValues()
+    public async Task HandleAsync_LlmFails_ReturnsFallback()
     {
-        var id1 = Guid.NewGuid();
-        var id2 = Guid.NewGuid();
-        var case1 = CreateCase(id1, "內湖區", CaseType.Car, 16);
-        var case2 = CreateCase(id2, "南港區", CaseType.Bicycle, 18);
-        _repository.GetByIdAsync(id1, Arg.Any<CancellationToken>()).Returns(case1);
-        _repository.GetByIdAsync(id2, Arg.Any<CancellationToken>()).Returns(case2);
-        _repository.GetGroupedYearlyTrendAsync(
+        var id = Guid.NewGuid();
+        _repository.GetByIdAsync(id, Arg.Any<CancellationToken>())
+            .Returns(CreateCase(id, "信義區", CaseType.Residential, 14));
+
+        _repository.GetYearlyTrendByDimensionAsync(
             Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
-            Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new List<(int, int)> { (2023, 10) });
+            12, 16, "caseType", Arg.Any<CancellationToken>())
+            .Returns(new List<(string, int, int)> { ("住宅竊盜", 2023, 30) });
+
         _llm.GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns("分析");
+            .Returns<string>(_ => throw new HttpRequestException("fail"));
 
-        await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id1));
-        await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id2));
+        var result = await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id));
+        result.Should().Contain("AI 分析暫時無法使用");
+    }
 
-        // 內湖區+Car+16h → G4:C2:T5, 南港區+Bicycle+18h → G4:C2:T5 → same group
+    [Fact]
+    public async Task HandleAsync_SameGroup_SecondCallHitsCache()
+    {
+        var id = Guid.NewGuid();
+        _repository.GetByIdAsync(id, Arg.Any<CancellationToken>())
+            .Returns(CreateCase(id, "內湖區", CaseType.Car, 16));
+
+        _repository.GetYearlyTrendByDimensionAsync(
+            Arg.Any<IReadOnlyList<string>>(), Arg.Any<IReadOnlyList<int>>(),
+            Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new List<(string, int, int)> { ("汽車竊盜", 2023, 10) });
+
+        _llm.GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns("cached");
+
+        await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id));
+        await _handler.HandleAsync(new GetPopupAiAnalysisQuery(id));
+
         await _llm.Received(1).GenerateAnalysisAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // ── BuildPrompt 格式驗證 ──
+
+    [Fact]
+    public void BuildPrompt_TimeSlotLabelOnlyInHeader_NotRepeatedPerLine()
+    {
+        var byCaseType = new List<(string, int, int)>
+        {
+            ("住宅竊盜", 2023, 10), ("住宅竊盜", 2024, 15),
+            ("機車竊盜", 2023, 5), ("機車竊盜", 2024, 8),
+        };
+        var byDistrict = new List<(string, int, int)>
+        {
+            ("大安區", 2023, 8), ("大安區", 2024, 12),
+        };
+        var byDistCaseType = new List<(string, int, int)>
+        {
+            ("大安區-住宅竊盜", 2023, 6), ("大安區-住宅竊盜", 2024, 9),
+        };
+
+        var prompt = GetPopupAiAnalysisQueryHandler.BuildPrompt("12~16 時", byCaseType, byDistrict, byDistCaseType);
+
+        prompt.Should().Contain("案類別．12~16 時段（轄區合計）:");
+        prompt.Should().Contain("住宅竊盜[");
+        prompt.Should().NotContain("12~16 時-住宅竊盜");
+        prompt.Should().NotContain("12~16-住宅竊盜");
+    }
+
+    [Fact]
+    public void BuildPrompt_ThirdBlockMarkedAsNoTimeSlot()
+    {
+        var prompt = GetPopupAiAnalysisQueryHandler.BuildPrompt(
+            "08~12 時",
+            new List<(string, int, int)> { ("住宅竊盜", 2023, 10) },
+            new List<(string, int, int)> { ("大安區", 2023, 10) },
+            new List<(string, int, int)> { ("大安區-住宅竊盜", 2023, 10) });
+
+        prompt.Should().Contain("行政區．案類（不分時段）:");
+    }
+
+    [Fact]
+    public void BuildPrompt_ArrayContainsOnlyNumbers_NoYearLabels()
+    {
+        var prompt = GetPopupAiAnalysisQueryHandler.BuildPrompt(
+            "08~12 時",
+            new List<(string, int, int)> { ("住宅竊盜", 2023, 10), ("住宅竊盜", 2024, 20) },
+            new List<(string, int, int)>(),
+            new List<(string, int, int)>());
+
+        prompt.Should().Contain("住宅竊盜[10,20]");
+        prompt.Should().Contain("年度:2023~2024");
+        prompt.Should().NotContain("2023年");
+    }
+
+    [Fact]
+    public void BuildPrompt_YearRangeAtTop()
+    {
+        var prompt = GetPopupAiAnalysisQueryHandler.BuildPrompt(
+            "04~08 時",
+            new List<(string, int, int)> { ("搶奪", 2015, 5), ("搶奪", 2026, 3) },
+            new List<(string, int, int)>(),
+            new List<(string, int, int)>());
+
+        prompt.Should().Contain("年度:2015~2026");
+    }
+
+    [Fact]
+    public void BuildPrompt_MissingYearsFillWithZero()
+    {
+        var prompt = GetPopupAiAnalysisQueryHandler.BuildPrompt(
+            "08~12 時",
+            new List<(string, int, int)> { ("住宅竊盜", 2020, 10), ("住宅竊盜", 2022, 30) },
+            new List<(string, int, int)> { ("大安區", 2021, 5) },
+            new List<(string, int, int)>());
+
+        // years: 2020,2021,2022
+        prompt.Should().Contain("住宅竊盜[10,0,30]");
+        prompt.Should().Contain("大安區[0,5,0]");
     }
 }

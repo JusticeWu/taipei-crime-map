@@ -281,6 +281,43 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult<IReadOnlyList<(int, int)>>(result);
     }
 
+    public Task<IReadOnlyList<(string Key, int Year, int Count)>> GetYearlyTrendByDimensionAsync(
+        IReadOnlyList<string> districts, IReadOnlyList<int> caseTypes,
+        int? minHour, int? maxHour, string groupBy,
+        CancellationToken cancellationToken = default)
+    {
+        var districtSet = new HashSet<string>(districts);
+        var caseTypeSet = new HashSet<int>(caseTypes);
+
+        var filtered = _cases
+            .Where(c => c.District?.Name is not null && districtSet.Contains(c.District.Name))
+            .Where(c => c.CaseType.HasValue && caseTypeSet.Contains((int)c.CaseType.Value))
+            .Where(c => c.OccurredDate.Year.HasValue);
+
+        if (minHour.HasValue && maxHour.HasValue)
+            filtered = filtered.Where(c => c.TimeSlot?.StartHour is not null
+                && c.TimeSlot.StartHour >= minHour && c.TimeSlot.StartHour < maxHour);
+
+        Func<TheftCase, string?> keyFn = groupBy switch
+        {
+            "caseType" => c => c.CaseType?.ToChineseName(),
+            "district" => c => c.District?.Name,
+            "districtCaseType" => c => c.District?.Name is { } d && c.CaseType is { } ct
+                ? $"{d}-{ct.ToChineseName()}" : null,
+            _ => throw new ArgumentException($"Unknown groupBy: {groupBy}")
+        };
+
+        var result = filtered
+            .Select(c => new { Key = keyFn(c), Year = c.OccurredDate.Year!.Value + 1911 })
+            .Where(x => x.Key is not null)
+            .GroupBy(x => new { x.Key, x.Year })
+            .Select(g => (Key: g.Key.Key!, Year: g.Key.Year, Count: g.Count()))
+            .OrderBy(x => x.Key).ThenBy(x => x.Year)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<(string, int, int)>>(result);
+    }
+
     public Task<(IReadOnlyList<(string District, int Count)> DistrictCounts, IReadOnlyList<(string TimeSlot, int Count)> TimeSlotCounts)> GetStatsByFilterAsync(
         CrimeFilter filter, CancellationToken cancellationToken = default)
     {

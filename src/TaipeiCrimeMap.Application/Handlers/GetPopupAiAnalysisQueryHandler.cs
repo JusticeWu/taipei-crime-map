@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -56,7 +57,7 @@ public class GetPopupAiAnalysisQueryHandler
             var l2Bytes = await _distributedCache.GetAsync(cacheKey, cancellationToken);
             if (l2Bytes is not null)
             {
-                var l2Text = System.Text.Encoding.UTF8.GetString(l2Bytes);
+                var l2Text = Encoding.UTF8.GetString(l2Bytes);
                 try { _memoryCache.Set(cacheKey, l2Text, L1Duration); } catch { }
                 return l2Text;
             }
@@ -66,29 +67,31 @@ public class GetPopupAiAnalysisQueryHandler
             _logger.LogWarning(ex, "AI analysis L2 快取讀取失敗：{Key}", cacheKey);
         }
 
-        // DB + LLM
+        // DB queries (parallel)
         var districts = AnalysisGrouping.GetDistrictsInGroup(dg);
         var caseTypes = AnalysisGrouping.GetCaseTypesInGroup(cg);
         var (minHour, maxHour) = AnalysisGrouping.GetTimeSlotRange(tg);
-
-        var trend = await _repository.GetGroupedYearlyTrendAsync(districts, caseTypes, minHour, maxHour, cancellationToken);
-
-        if (trend.Count == 0)
-            return "此分組無歷年趨勢資料可供分析。";
-
-        var trendText = string.Join("、", trend.Select(t => $"{t.Year}年{t.Count}件"));
-        var districtLabel = AnalysisGrouping.GetDistrictGroupLabel(dg);
-        var caseTypeLabel = AnalysisGrouping.GetCaseTypeGroupLabel(cg);
         var timeSlotLabel = AnalysisGrouping.GetTimeSlotGroupLabel(tg);
 
-        var prompt = $"""
-            你是台北市治安數據分析師。以下是「{districtLabel}」地區，
-            「{caseTypeLabel}」案類，「{timeSlotLabel}」時段的歷年案件數量趨勢：
-            {trendText}。
-            請用14句左右的繁體中文白話文分析這個趨勢，內容可包含趨勢變化描述、
-            可能的成因推測、給使用者的簡單提醒或建議。
-            不要使用項目符號或編號，直接以段落方式呈現。
-            """;
+        var byCaseTypeTask = _repository.GetYearlyTrendByDimensionAsync(
+            districts, caseTypes, minHour, maxHour, "caseType", cancellationToken);
+        var byDistrictTask = _repository.GetYearlyTrendByDimensionAsync(
+            districts, caseTypes, minHour, maxHour, "district", cancellationToken);
+        var byDistCaseTypeTask = _repository.GetYearlyTrendByDimensionAsync(
+            districts, caseTypes, null, null, "districtCaseType", cancellationToken);
+
+        await Task.WhenAll(byCaseTypeTask, byDistrictTask, byDistCaseTypeTask);
+
+        var byCaseType = await byCaseTypeTask;
+        var byDistrict = await byDistrictTask;
+        var byDistCaseType = await byDistCaseTypeTask;
+
+        if (byCaseType.Count == 0 && byDistrict.Count == 0)
+            return "此分組無歷年趨勢資料可供分析。";
+
+        var prompt = BuildPrompt(timeSlotLabel, byCaseType, byDistrict, byDistCaseType);
+
+        _logger.LogInformation("AI analysis prompt length: {Len} chars for {Key}", prompt.Length, cacheKey);
 
         string analysis;
         try
@@ -97,15 +100,15 @@ public class GetPopupAiAnalysisQueryHandler
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "LLM 分析失敗，回傳趨勢摘要：{Key}", cacheKey);
-            analysis = $"【趨勢摘要】{districtLabel}／{caseTypeLabel}／{timeSlotLabel}：{trendText}（AI 分析暫時無法使用）";
+            _logger.LogWarning(ex, "LLM 分析失敗：{Key}", cacheKey);
+            analysis = $"【趨勢摘要】{BuildFallbackSummary(timeSlotLabel, byCaseType)}（AI 分析暫時無法使用）";
         }
 
         // Write cache
         try
         {
             await _distributedCache.SetAsync(cacheKey,
-                System.Text.Encoding.UTF8.GetBytes(analysis),
+                Encoding.UTF8.GetBytes(analysis),
                 new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = L2Duration },
                 cancellationToken);
         }
@@ -114,5 +117,71 @@ public class GetPopupAiAnalysisQueryHandler
         try { _memoryCache.Set(cacheKey, analysis, L1Duration); } catch { }
 
         return analysis;
+    }
+
+    public static string BuildPrompt(
+        string timeSlotLabel,
+        IReadOnlyList<(string Key, int Year, int Count)> byCaseType,
+        IReadOnlyList<(string Key, int Year, int Count)> byDistrict,
+        IReadOnlyList<(string Key, int Year, int Count)> byDistCaseType)
+    {
+        var allYears = byCaseType.Select(r => r.Year)
+            .Concat(byDistrict.Select(r => r.Year))
+            .Concat(byDistCaseType.Select(r => r.Year))
+            .Distinct().OrderBy(y => y).ToList();
+
+        if (allYears.Count == 0) return "無資料";
+
+        var yearRange = $"{allYears.First()}~{allYears.Last()}";
+        var sb = new StringBuilder();
+
+        sb.AppendLine("你是台北市治安數據分析師。以下是分組歷年案件趨勢數據，請用14句左右的繁體中文白話文分析，");
+        sb.AppendLine("內容可包含趨勢變化描述、可能的成因推測、給使用者的簡單提醒或建議。");
+        sb.AppendLine("不要使用項目符號或編號，直接以段落方式呈現。");
+        sb.AppendLine();
+        sb.AppendLine($"年度:{yearRange}");
+
+        // Block 1: 案類別×時段
+        sb.AppendLine($"案類別．{timeSlotLabel}段（轄區合計）:");
+        AppendDimensionBlock(sb, byCaseType, allYears);
+
+        // Block 2: 行政區別×時段
+        sb.AppendLine();
+        sb.AppendLine($"行政區別．{timeSlotLabel}段（案類合計）:");
+        AppendDimensionBlock(sb, byDistrict, allYears);
+
+        // Block 3: 行政區×案類（不分時段）
+        sb.AppendLine();
+        sb.AppendLine("行政區．案類（不分時段）:");
+        AppendDimensionBlock(sb, byDistCaseType, allYears);
+
+        return sb.ToString();
+    }
+
+    private static void AppendDimensionBlock(
+        StringBuilder sb,
+        IReadOnlyList<(string Key, int Year, int Count)> data,
+        IReadOnlyList<int> allYears)
+    {
+        var grouped = data.GroupBy(r => r.Key).OrderByDescending(g => g.Sum(r => r.Count));
+        foreach (var g in grouped)
+        {
+            var yearMap = g.ToDictionary(r => r.Year, r => r.Count);
+            var counts = string.Join(",", allYears.Select(y => yearMap.TryGetValue(y, out var c) ? c.ToString() : "0"));
+            sb.AppendLine($"{g.Key}[{counts}]");
+        }
+    }
+
+    private static string BuildFallbackSummary(
+        string timeSlotLabel,
+        IReadOnlyList<(string Key, int Year, int Count)> byCaseType)
+    {
+        var grouped = byCaseType.GroupBy(r => r.Key);
+        var parts = grouped.Select(g =>
+        {
+            var trend = string.Join("、", g.OrderBy(r => r.Year).Select(r => $"{r.Year}年{r.Count}件"));
+            return $"{g.Key}：{trend}";
+        });
+        return $"{timeSlotLabel}／" + string.Join("；", parts);
     }
 }
