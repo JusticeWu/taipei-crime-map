@@ -85,7 +85,7 @@ public class GetPopupAiAnalysisQueryHandler
             你是台北市治安數據分析師。以下是「{districtLabel}」地區，
             「{caseTypeLabel}」案類，「{timeSlotLabel}」時段的歷年案件數量趨勢：
             {trendText}。
-            請用7句左右的繁體中文白話文分析這個趨勢，內容可包含趨勢變化描述、
+            請用14句左右的繁體中文白話文分析這個趨勢，內容可包含趨勢變化描述、
             可能的成因推測、給使用者的簡單提醒或建議。
             不要使用項目符號或編號，直接以段落方式呈現。
             """;
