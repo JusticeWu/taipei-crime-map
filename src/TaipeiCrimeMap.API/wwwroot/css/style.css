@@ -307,6 +307,10 @@ input[type="number"]::placeholder {
   flex-direction: column;
 }
 
+.chart-wrapper--trend {
+  height: 320px;
+}
+
 .chart-wrapper:last-child {
   border-bottom: none;
 }
@@ -418,6 +422,10 @@ input[type="number"]::placeholder {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+#btn-scroll-toggle {
+  display: none;
 }
 
 /* ===========================
@@ -534,6 +542,10 @@ input[type="number"]::placeholder {
     flex: none;
   }
 
+  #chart-container .chart-wrapper--trend {
+    height: 320px;
+  }
+
   #stats-panel {
     order: 3;
     background-color: var(--bg-secondary);
@@ -550,5 +562,25 @@ input[type="number"]::placeholder {
 
   .stat-item--full .stat-value {
     font-size: 14px;
+  }
+
+  #btn-scroll-toggle {
+    display: block;
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 9998;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    font-size: 22px;
+    line-height: 44px;
+    text-align: center;
+    padding: 0;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
   }
 }

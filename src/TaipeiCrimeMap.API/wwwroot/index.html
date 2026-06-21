@@ -136,15 +136,15 @@
 
       <!-- Chart Container -->
       <section id="chart-container">
-        <div class="chart-wrapper">
+        <div class="chart-wrapper chart-wrapper--trend">
           <h3 class="chart-title">📊 時段．案類趨勢</h3>
           <canvas id="chart-timeslot-casetype-trend"></canvas>
         </div>
-        <div class="chart-wrapper">
+        <div class="chart-wrapper chart-wrapper--trend">
           <h3 class="chart-title">📊 行政區．時段趨勢</h3>
           <canvas id="chart-district-timeslot-trend"></canvas>
         </div>
-        <div class="chart-wrapper">
+        <div class="chart-wrapper chart-wrapper--trend">
           <h3 class="chart-title">📊 行政區．案類趨勢</h3>
           <canvas id="chart-district-casetype-trend"></canvas>
         </div>
@@ -166,6 +166,9 @@
       <div style="position:absolute;bottom:6px;left:14px;z-index:800;font-size:11px;color:#0f3460;line-height:1;pointer-events:none;">Built by Cheng-Yi Wu</div>
     </main>
   </div>
+
+  <!-- Mobile scroll toggle button -->
+  <button id="btn-scroll-toggle" type="button" aria-label="捲動頁面">↓</button>
 
   <!-- Admin link (fixed bottom-left, intentionally inconspicuous) -->
   <a href="/admin.html" target="_blank" rel="noopener"
