@@ -218,6 +218,49 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult<IReadOnlyList<(string District, int Count)>>(counts);
     }
 
+    public Task<IReadOnlyList<(string Label, int Year, int Count)>> GetCombinedTrendAsync(
+        string dimension, CrimeFilter filter, int topN = 5, CancellationToken cancellationToken = default)
+    {
+        var filtered = _cases
+            .Where(c => !filter.CaseType.HasValue || c.CaseType == filter.CaseType)
+            .Where(c => filter.District is null || c.District?.Name == filter.District.Name)
+            .Where(c => !filter.YearFrom.HasValue || c.OccurredDate.Year >= filter.YearFrom)
+            .Where(c => !filter.YearTo.HasValue   || c.OccurredDate.Year <= filter.YearTo)
+            .Where(c => c.OccurredDate.Year.HasValue)
+            .ToList();
+
+        Func<TheftCase, string?> labelFn = dimension switch
+        {
+            "TimeSlotCaseType" => c => c.TimeSlot?.Normalize() is { } ts && c.CaseType is { } ct
+                ? $"{ts} {ct.ToChineseName()}" : null,
+            "DistrictTimeSlot" => c => c.District?.Name is { } d && c.TimeSlot?.Normalize() is { } ts
+                ? $"{d} {ts}" : null,
+            "DistrictCaseType" => c => c.District?.Name is { } d && c.CaseType is { } ct
+                ? $"{d} {ct.ToChineseName()}" : null,
+            _ => throw new ArgumentException($"Unknown dimension: {dimension}")
+        };
+
+        var topLabels = filtered
+            .Select(c => labelFn(c))
+            .Where(l => l is not null)
+            .GroupBy(l => l!)
+            .OrderByDescending(g => g.Count())
+            .Take(topN)
+            .Select(g => g.Key)
+            .ToHashSet();
+
+        var result = filtered
+            .Select(c => new { Label = labelFn(c), Year = c.OccurredDate.Year!.Value + 1911 })
+            .Where(x => x.Label is not null && topLabels.Contains(x.Label))
+            .GroupBy(x => new { x.Label, x.Year })
+            .Select(g => (Label: g.Key.Label!, Year: g.Key.Year, Count: g.Count()))
+            .OrderBy(x => x.Label)
+            .ThenBy(x => x.Year)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<(string, int, int)>>(result);
+    }
+
     public Task<(IReadOnlyList<(string District, int Count)> DistrictCounts, IReadOnlyList<(string TimeSlot, int Count)> TimeSlotCounts)> GetStatsByFilterAsync(
         CrimeFilter filter, CancellationToken cancellationToken = default)
     {

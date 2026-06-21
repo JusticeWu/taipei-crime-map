@@ -294,6 +294,87 @@ public class SqlServerCrimeRepository : ICrimeRepository
             timeSlotRows.Select(r => (r.TimeSlot, r.Count)).ToList());
     }
 
+    public async Task<IReadOnlyList<(string Label, int Year, int Count)>> GetCombinedTrendAsync(
+        string dimension, CrimeFilter filter, int topN = 5, CancellationToken cancellationToken = default)
+    {
+        var (selectCols, groupByCols, whereExtra) = dimension switch
+        {
+            "TimeSlotCaseType" => (
+                "time_slot_start, time_slot_end, case_type",
+                "time_slot_start, time_slot_end, case_type",
+                "AND time_slot_start IS NOT NULL AND time_slot_end IS NOT NULL AND case_type IS NOT NULL"),
+            "DistrictTimeSlot" => (
+                "district, time_slot_start, time_slot_end",
+                "district, time_slot_start, time_slot_end",
+                "AND district IS NOT NULL AND time_slot_start IS NOT NULL AND time_slot_end IS NOT NULL"),
+            "DistrictCaseType" => (
+                "district, case_type",
+                "district, case_type",
+                "AND district IS NOT NULL AND case_type IS NOT NULL"),
+            _ => throw new ArgumentException($"Unknown dimension: {dimension}")
+        };
+
+        var sql = $"""
+            SELECT {selectCols}, occurred_year + 1911 AS year, COUNT(*) AS count
+            FROM theft_cases WITH (NOLOCK)
+            WHERE 1=1
+              {whereExtra}
+              AND occurred_year IS NOT NULL
+              AND (@CaseType IS NULL OR case_type = @CaseType)
+              AND (@District IS NULL OR district  = @District)
+              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
+              AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
+            GROUP BY {groupByCols}, occurred_year
+            """;
+
+        await using var conn = CreateConnection();
+        var parameters = new
+        {
+            CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
+            District = filter.District?.Name,
+            YearFrom = filter.YearFrom,
+            YearTo   = filter.YearTo,
+        };
+
+        var rawRows = await conn.QueryAsync(sql, parameters);
+        var rows = new List<(string Label, int Year, int Count)>();
+        foreach (var r in rawRows)
+            rows.Add(MapTrendRow(dimension, r));
+
+        var topLabels = rows
+            .GroupBy(r => r.Label)
+            .OrderByDescending(g => g.Sum(r => r.Count))
+            .Take(topN)
+            .Select(g => g.Key)
+            .ToHashSet();
+
+        return rows
+            .Where(r => topLabels.Contains(r.Label))
+            .ToList();
+    }
+
+    private static (string Label, int Year, int Count) MapTrendRow(string dimension, dynamic row)
+    {
+        string label = dimension switch
+        {
+            "TimeSlotCaseType" => $"{FormatTimeSlot((int)row.time_slot_start, (int)row.time_slot_end)} {CaseTypeName((int)row.case_type)}",
+            "DistrictTimeSlot" => $"{(string)row.district} {FormatTimeSlot((int)row.time_slot_start, (int)row.time_slot_end)}",
+            "DistrictCaseType" => $"{(string)row.district} {CaseTypeName((int)row.case_type)}",
+            _ => ""
+        };
+        return (label, (int)row.year, (int)row.count);
+    }
+
+    private static string FormatTimeSlot(int start, int end) =>
+        $"{start:D2}~{end:D2}";
+
+    private static string CaseTypeName(int caseType) => caseType switch
+    {
+        1 => "住宅竊盜", 2 => "汽車竊盜", 3 => "機車竊盜",
+        4 => "自行車竊盜", 5 => "搶奪", 6 => "強盜",
+        _ => caseType.ToString()
+    };
+
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
     private const string UpsertSql = """

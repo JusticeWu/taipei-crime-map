@@ -16,8 +16,8 @@ public class GetCrimeStatsQueryHandler
     private readonly IMemoryCache _memoryCache;
     private readonly ILogger<GetCrimeStatsQueryHandler> _logger;
 
-    private static readonly TimeSpan L1Duration = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan L2Duration = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan L1Duration = TimeSpan.FromHours(15);
+    private static readonly TimeSpan L2Duration = TimeSpan.FromHours(24);
 
     public GetCrimeStatsQueryHandler(
         ICrimeRepository repository,
@@ -47,7 +47,7 @@ public class GetCrimeStatsQueryHandler
 
         var cacheKey = $"crimes:stats:{query.CaseType}:{query.DistrictName}:{query.YearFrom}:{query.YearTo}";
 
-        // L1: MemoryCache（1 分鐘）
+        // L1: MemoryCache
         try
         {
             if (_memoryCache.TryGetValue(cacheKey, out CrimeStatsDto? l1Result) && l1Result is not null)
@@ -61,7 +61,7 @@ public class GetCrimeStatsQueryHandler
             _logger.LogWarning(ex, "L1 快取讀取失敗，繼續往下：{CacheKey}", cacheKey);
         }
 
-        // L2: Garnet / DistributedCache（30 分鐘）
+        // L2: Garnet / DistributedCache
         byte[]? cachedBytes = null;
         try
         {
@@ -82,7 +82,14 @@ public class GetCrimeStatsQueryHandler
         }
 
         // DB
-        var (districtCounts, timeSlotCounts) = await _repository.GetStatsByFilterAsync(filter, cancellationToken);
+        var statsTask = _repository.GetStatsByFilterAsync(filter, cancellationToken);
+        var trend1Task = _repository.GetCombinedTrendAsync("TimeSlotCaseType", filter, 5, cancellationToken);
+        var trend2Task = _repository.GetCombinedTrendAsync("DistrictTimeSlot", filter, 5, cancellationToken);
+        var trend3Task = _repository.GetCombinedTrendAsync("DistrictCaseType", filter, 5, cancellationToken);
+
+        await Task.WhenAll(statsTask, trend1Task, trend2Task, trend3Task);
+
+        var (districtCounts, timeSlotCounts) = await statsTask;
 
         var result = new CrimeStatsDto(
             DistrictDistribution: districtCounts
@@ -92,7 +99,10 @@ public class GetCrimeStatsQueryHandler
             TimeSlotDistribution: timeSlotCounts
                 .OrderBy(c => c.TimeSlot, StringComparer.Ordinal)
                 .Select(c => new TimeSlotDistributionDto(c.TimeSlot, c.Count))
-                .ToList());
+                .ToList(),
+            TimeSlotCaseTypeTrend: BuildTrendSeries(await trend1Task),
+            DistrictTimeSlotTrend: BuildTrendSeries(await trend2Task),
+            DistrictCaseTypeTrend: BuildTrendSeries(await trend3Task));
 
         // 寫入 L2
         try
@@ -113,5 +123,19 @@ public class GetCrimeStatsQueryHandler
         catch (Exception ex) { _logger.LogWarning(ex, "L1 快取寫入失敗：{CacheKey}", cacheKey); }
 
         return result;
+    }
+
+    private static IReadOnlyList<TrendSeriesDto> BuildTrendSeries(
+        IReadOnlyList<(string Label, int Year, int Count)> rows)
+    {
+        return rows
+            .GroupBy(r => r.Label)
+            .OrderByDescending(g => g.Sum(r => r.Count))
+            .Select(g => new TrendSeriesDto(
+                g.Key,
+                g.OrderBy(r => r.Year)
+                 .Select(r => new TrendPointDto(r.Year, r.Count))
+                 .ToList()))
+            .ToList();
     }
 }
