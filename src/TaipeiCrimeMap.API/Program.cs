@@ -56,6 +56,20 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             });
     });
+
+    options.AddPolicy("health-api", context =>
+    {
+        var limit = context.RequestServices.GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:HealthApi", 2);
+        return RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = limit,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            });
+    });
 });
 
 // Secondary Redis（選配，用於跨環境訂閱其他 Server 的指標）

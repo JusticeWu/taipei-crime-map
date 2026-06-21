@@ -11,6 +11,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     public const string AdminUsername = "test-admin";
     public const string AdminPassword = "test-password";
+    public const string HealthApiKey = "test-health-key";
 
     private static readonly SemaphoreSlim _migrationLock = new(1, 1);
     private static bool _migrated = false;
@@ -26,6 +27,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["AdminAuth:Password"] = AdminPassword,
                 ["RateLimiting:PublicApi"] = "10000",
                 ["RateLimiting:AdminApi"] = "10000",
+                ["RateLimiting:HealthApi"] = "10000",
+                ["HealthCheck:ApiKey"] = HealthApiKey,
             });
         });
     }
