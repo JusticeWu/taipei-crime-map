@@ -512,8 +512,7 @@ input[type="number"]::placeholder {
     order: 1;
     flex: none;
     width: 100%;
-    /* 多扣 120px，讓下方統計圖露出更多，提示使用者可往下滑動 */
-    height: calc(100vh - 48px - 120px);
+    height: calc(100vh - 48px - 148px);
     min-height: 300px;
   }
 
@@ -525,8 +524,12 @@ input[type="number"]::placeholder {
   #chart-container {
     order: 2;
     flex: none;
-    height: 480px;
+    height: auto;
     background-color: #2A3F5F;
+  }
+
+  #chart-container .chart-wrapper {
+    height: 280px;
   }
 
   #stats-panel {

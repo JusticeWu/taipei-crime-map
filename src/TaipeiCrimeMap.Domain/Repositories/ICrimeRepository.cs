@@ -47,4 +47,7 @@ public interface ICrimeRepository
     Task<int> CountMissingCoordinatesAsync(CancellationToken cancellationToken = default);
 
     Task<int> UpdateCaseFieldsAsync(int caseNumber, int caseType, string? occurrenceDateRaw, string? timeSlotRaw, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<(string Label, int Year, int Count)>> GetCombinedTrendAsync(
+        string dimension, CrimeFilter filter, int topN = 5, CancellationToken cancellationToken = default);
 }
