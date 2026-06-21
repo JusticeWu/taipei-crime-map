@@ -297,133 +297,79 @@ public class SqlServerCrimeRepository : ICrimeRepository
     public async Task<IReadOnlyList<(string Label, int Year, int Count)>> GetCombinedTrendAsync(
         string dimension, CrimeFilter filter, int topN = 5, CancellationToken cancellationToken = default)
     {
-        var (labelExpr, groupByExpr, whereExtra) = dimension switch
+        var (selectCols, groupByCols, whereExtra) = dimension switch
         {
             "TimeSlotCaseType" => (
-                "RIGHT('0'+CAST(time_slot_start AS VARCHAR(2)),2)+'~'+RIGHT('0'+CAST(time_slot_end AS VARCHAR(2)),2)+' '+ct.chinese_name",
+                "time_slot_start, time_slot_end, case_type",
                 "time_slot_start, time_slot_end, case_type",
                 "AND time_slot_start IS NOT NULL AND time_slot_end IS NOT NULL AND case_type IS NOT NULL"),
             "DistrictTimeSlot" => (
-                "district+' '+RIGHT('0'+CAST(time_slot_start AS VARCHAR(2)),2)+'~'+RIGHT('0'+CAST(time_slot_end AS VARCHAR(2)),2)",
+                "district, time_slot_start, time_slot_end",
                 "district, time_slot_start, time_slot_end",
                 "AND district IS NOT NULL AND time_slot_start IS NOT NULL AND time_slot_end IS NOT NULL"),
             "DistrictCaseType" => (
-                "district+' '+ct.chinese_name",
+                "district, case_type",
                 "district, case_type",
                 "AND district IS NOT NULL AND case_type IS NOT NULL"),
             _ => throw new ArgumentException($"Unknown dimension: {dimension}")
         };
 
-        var needsCaseTypeName = dimension is "TimeSlotCaseType" or "DistrictCaseType";
-        var cteJoin = needsCaseTypeName
-            ? """
-              CROSS APPLY (SELECT CASE case_type
-                  WHEN 1 THEN N'住宅竊盜' WHEN 2 THEN N'汽車竊盜'
-                  WHEN 3 THEN N'機車竊盜' WHEN 4 THEN N'自行車竊盜'
-                  WHEN 5 THEN N'搶奪'     WHEN 6 THEN N'強盜'
-                  END AS chinese_name) ct
-              """
-            : "";
-
         var sql = $"""
-            WITH ranked AS (
-                SELECT {labelExpr} AS label,
-                       SUM(1) AS total
-                FROM theft_cases WITH (NOLOCK)
-                {cteJoin}
-                WHERE 1=1
-                  {whereExtra}
-                  AND (@CaseType IS NULL OR case_type = @CaseType)
-                  AND (@District IS NULL OR district  = @District)
-                  AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
-                  AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
-                GROUP BY {groupByExpr}
-                ORDER BY total DESC
-                OFFSET 0 ROWS FETCH NEXT @TopN ROWS ONLY
-            )
-            SELECT {labelExpr} AS label,
-                   occurred_year + 1911 AS year,
-                   COUNT(*) AS count
+            SELECT {selectCols}, occurred_year + 1911 AS year, COUNT(*) AS count
             FROM theft_cases WITH (NOLOCK)
-            {cteJoin}
             WHERE 1=1
               {whereExtra}
-              AND ({groupByExpr}) IN (SELECT {groupByExpr.Replace("time_slot_start, time_slot_end, case_type", "r.time_slot_start, r.time_slot_end, r.case_type").Replace("district, time_slot_start, time_slot_end", "r.district, r.time_slot_start, r.time_slot_end").Replace("district, case_type", "r.district, r.case_type")} FROM ranked r)
-              AND (@CaseType IS NULL OR case_type = @CaseType)
-              AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
-              AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
               AND occurred_year IS NOT NULL
-            GROUP BY {groupByExpr}, occurred_year
-            ORDER BY label, year
-            """;
-
-        // The IN subquery with composite keys doesn't work cleanly in T-SQL.
-        // Use a simpler two-step approach instead.
-        var topSql = $"""
-            SELECT TOP (@TopN) {labelExpr} AS label
-            FROM theft_cases WITH (NOLOCK)
-            {cteJoin}
-            WHERE 1=1
-              {whereExtra}
               AND (@CaseType IS NULL OR case_type = @CaseType)
               AND (@District IS NULL OR district  = @District)
               AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
               AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
-            GROUP BY {groupByExpr}
-            ORDER BY COUNT(*) DESC
+            GROUP BY {groupByCols}, occurred_year
             """;
 
         await using var conn = CreateConnection();
-        var topLabels = (await conn.QueryAsync<string>(topSql, new
-        {
-            TopN = topN,
-            CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
-            District = filter.District?.Name,
-            YearFrom = filter.YearFrom,
-            YearTo   = filter.YearTo,
-        })).ToHashSet();
-
-        if (topLabels.Count == 0)
-            return Array.Empty<(string, int, int)>();
-
-        var detailSql = $"""
-            SELECT {labelExpr} AS label,
-                   occurred_year + 1911 AS year,
-                   COUNT(*) AS count
-            FROM theft_cases WITH (NOLOCK)
-            {cteJoin}
-            WHERE 1=1
-              {whereExtra}
-              AND (@CaseType IS NULL OR case_type = @CaseType)
-              AND (@District IS NULL OR district  = @District)
-              AND (@YearFrom IS NULL OR occurred_year >= @YearFrom - 1911)
-              AND (@YearTo   IS NULL OR occurred_year <= @YearTo   - 1911)
-              AND occurred_year IS NOT NULL
-            GROUP BY {groupByExpr}, occurred_year
-            ORDER BY label, occurred_year
-            """;
-
-        var rows = await conn.QueryAsync<CombinedTrendRow>(detailSql, new
+        var rows = (await conn.QueryAsync(sql, new
         {
             CaseType = filter.CaseType.HasValue ? (int?)filter.CaseType.Value : null,
             District = filter.District?.Name,
             YearFrom = filter.YearFrom,
             YearTo   = filter.YearTo,
-        });
+        })).Select(r => MapTrendRow(dimension, r)).ToList();
+
+        var topLabels = rows
+            .GroupBy(r => r.Label)
+            .OrderByDescending(g => g.Sum(r => r.Count))
+            .Take(topN)
+            .Select(g => g.Key)
+            .ToHashSet();
 
         return rows
             .Where(r => topLabels.Contains(r.Label))
-            .Select(r => (r.Label, r.Year, r.Count))
+            .Select(r => ((string Label, int Year, int Count))r)
             .ToList();
     }
 
-    private sealed record CombinedTrendRow
+    private static (string Label, int Year, int Count) MapTrendRow(string dimension, dynamic row)
     {
-        public string Label { get; init; } = string.Empty;
-        public int Year { get; init; }
-        public int Count { get; init; }
+        string label = dimension switch
+        {
+            "TimeSlotCaseType" => $"{FormatTimeSlot((int)row.time_slot_start, (int)row.time_slot_end)} {CaseTypeName((int)row.case_type)}",
+            "DistrictTimeSlot" => $"{(string)row.district} {FormatTimeSlot((int)row.time_slot_start, (int)row.time_slot_end)}",
+            "DistrictCaseType" => $"{(string)row.district} {CaseTypeName((int)row.case_type)}",
+            _ => ""
+        };
+        return (label, (int)row.year, (int)row.count);
     }
+
+    private static string FormatTimeSlot(int start, int end) =>
+        $"{start:D2}~{end:D2}";
+
+    private static string CaseTypeName(int caseType) => caseType switch
+    {
+        1 => "住宅竊盜", 2 => "汽車竊盜", 3 => "機車竊盜",
+        4 => "自行車竊盜", 5 => "搶奪", 6 => "強盜",
+        _ => caseType.ToString()
+    };
 
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
