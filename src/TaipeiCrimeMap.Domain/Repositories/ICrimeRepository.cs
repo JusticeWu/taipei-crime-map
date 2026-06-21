@@ -50,4 +50,8 @@ public interface ICrimeRepository
 
     Task<IReadOnlyList<(string Label, int Year, int Count)>> GetCombinedTrendAsync(
         string dimension, CrimeFilter filter, int topN = 5, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<(int Year, int Count)>> GetGroupedYearlyTrendAsync(
+        IReadOnlyList<string> districts, IReadOnlyList<int> caseTypes, int minHour, int maxHour,
+        CancellationToken cancellationToken = default);
 }

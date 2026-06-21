@@ -119,6 +119,7 @@ builder.Services.AddScoped<GetCrimeStatsQueryHandler>();
 builder.Services.AddScoped<GetCrimeByIdQueryHandler>();
 builder.Services.AddScoped<UpdateCoordinateByLocationCommandHandler>();
 builder.Services.AddScoped<GeocodeMissingCommandHandler>();
+builder.Services.AddScoped<GetPopupAiAnalysisQueryHandler>();
 
 // OpenTelemetry + Application Insights
 // 連線字串不存在時不啟用（graceful degradation），避免本機/測試環境噴錯

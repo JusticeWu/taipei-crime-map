@@ -261,6 +261,26 @@ public class InMemoryCrimeRepository : ICrimeRepository
         return Task.FromResult<IReadOnlyList<(string, int, int)>>(result);
     }
 
+    public Task<IReadOnlyList<(int Year, int Count)>> GetGroupedYearlyTrendAsync(
+        IReadOnlyList<string> districts, IReadOnlyList<int> caseTypes, int minHour, int maxHour,
+        CancellationToken cancellationToken = default)
+    {
+        var districtSet = new HashSet<string>(districts);
+        var caseTypeSet = new HashSet<int>(caseTypes);
+
+        var result = _cases
+            .Where(c => c.District?.Name is not null && districtSet.Contains(c.District.Name))
+            .Where(c => c.CaseType.HasValue && caseTypeSet.Contains((int)c.CaseType.Value))
+            .Where(c => c.TimeSlot?.StartHour is not null && c.TimeSlot.StartHour >= minHour && c.TimeSlot.StartHour < maxHour)
+            .Where(c => c.OccurredDate.Year.HasValue)
+            .GroupBy(c => c.OccurredDate.Year!.Value + 1911)
+            .Select(g => (Year: g.Key, Count: g.Count()))
+            .OrderBy(x => x.Year)
+            .ToList();
+
+        return Task.FromResult<IReadOnlyList<(int, int)>>(result);
+    }
+
     public Task<(IReadOnlyList<(string District, int Count)> DistrictCounts, IReadOnlyList<(string TimeSlot, int Count)> TimeSlotCounts)> GetStatsByFilterAsync(
         CrimeFilter filter, CancellationToken cancellationToken = default)
     {

@@ -6,6 +6,7 @@ using TaipeiCrimeMap.Domain.Repositories;
 using TaipeiCrimeMap.Domain.Services;
 using TaipeiCrimeMap.Infrastructure.Csv;
 using TaipeiCrimeMap.Infrastructure.Geocoding;
+using TaipeiCrimeMap.Infrastructure.LlmServices;
 using TaipeiCrimeMap.Infrastructure.Persistence;
 using TaipeiCrimeMap.Infrastructure.Repositories;
 
@@ -34,6 +35,10 @@ public static class InfrastructureServiceExtensions
 
         // CSV
         services.AddSingleton<ICsvParser, CsvParser>();
+
+        // LLM Analysis (Gemini)
+        services.Configure<GeminiOptions>(configuration.GetSection(GeminiOptions.SectionName));
+        services.AddHttpClient<ILlmAnalysisService, GeminiAnalysisService>();
 
         // 分散式快取（Garnet / Redis）
         // ConnectTimeout/SyncTimeout 設為 2000ms：Garnet 失敗時快速 fallback 到 DB，

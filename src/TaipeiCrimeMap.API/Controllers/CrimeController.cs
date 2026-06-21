@@ -20,6 +20,7 @@ public class CrimeController : ControllerBase
     private readonly GetCrimeStatsQueryHandler _statsHandler;
     private readonly GetCrimeByIdQueryHandler _byIdHandler;
     private readonly UpdateCoordinateByLocationCommandHandler _updateCoordinateHandler;
+    private readonly GetPopupAiAnalysisQueryHandler _aiAnalysisHandler;
 
     public CrimeController(
         ImportCsvCommandHandler importHandler,
@@ -28,7 +29,8 @@ public class CrimeController : ControllerBase
         GeocodeBatchCommandHandler geocodeHandler,
         GetCrimeStatsQueryHandler statsHandler,
         GetCrimeByIdQueryHandler byIdHandler,
-        UpdateCoordinateByLocationCommandHandler updateCoordinateHandler)
+        UpdateCoordinateByLocationCommandHandler updateCoordinateHandler,
+        GetPopupAiAnalysisQueryHandler aiAnalysisHandler)
     {
         _importHandler = importHandler;
         _queryHandler = queryHandler;
@@ -37,6 +39,7 @@ public class CrimeController : ControllerBase
         _statsHandler = statsHandler;
         _byIdHandler = byIdHandler;
         _updateCoordinateHandler = updateCoordinateHandler;
+        _aiAnalysisHandler = aiAnalysisHandler;
     }
 
     /// <summary>
@@ -126,6 +129,15 @@ public class CrimeController : ControllerBase
     {
         var detail = await _byIdHandler.HandleAsync(new GetCrimeByIdQuery(id), cancellationToken);
         return detail is null ? NotFound() : Ok(detail);
+    }
+
+    [HttpGet("points/{id:guid}/ai-analysis")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAiAnalysis(Guid id, CancellationToken cancellationToken = default)
+    {
+        var result = await _aiAnalysisHandler.HandleAsync(new GetPopupAiAnalysisQuery(id), cancellationToken);
+        return result is null ? NotFound() : Ok(new { analysis = result });
     }
 
     /// <summary>

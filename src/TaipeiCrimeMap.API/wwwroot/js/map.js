@@ -149,6 +149,9 @@
 
   function buildPopupHtml(item, loading) {
     const placeholder = loading ? '載入中…' : '—';
+    var btnHtml = item.id
+      ? `<button class="btn-ai-analysis" data-case-id="${item.id}" style="margin-top:8px;padding:4px 10px;font-size:11px;border:1px solid #555;border-radius:4px;background:#1a1a2e;color:#e0e0e0;cursor:pointer">🤖 AI 趨勢分析</button><div class="ai-analysis-result" style="margin-top:6px;font-size:11px;color:#ccc;line-height:1.5"></div>`
+      : '';
     return [
       '<div class="crime-popup">',
       `  <strong>${escapeHtml(item.caseType || '未知')}</strong>`,
@@ -158,6 +161,7 @@
       `    <tr><th>時段</th><td>${escapeHtml(item.timeSlot || placeholder)}</td></tr>`,
       `    <tr><th>地點</th><td>${escapeHtml(item.rawLocation || placeholder)}</td></tr>`,
       '  </table>',
+      btnHtml,
       '</div>',
     ].join('\n');
   }
@@ -184,6 +188,33 @@
         }
       }
       marker.setPopupContent(buildPopupHtml(Object.assign({}, item, detail)));
+      attachAiButton(marker);
+    });
+  }
+
+  function attachAiButton(marker) {
+    var popup = marker.getPopup();
+    if (!popup) return;
+    var container = popup.getElement();
+    if (!container) return;
+    var btn = container.querySelector('.btn-ai-analysis');
+    if (!btn || btn._aiAttached) return;
+    btn._aiAttached = true;
+    btn.addEventListener('click', async function () {
+      var caseId = btn.dataset.caseId;
+      var resultEl = container.querySelector('.ai-analysis-result');
+      btn.disabled = true;
+      btn.textContent = '分析中...';
+      try {
+        var resp = await fetch('/api/crime/points/' + caseId + '/ai-analysis');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        var data = await resp.json();
+        if (resultEl) resultEl.textContent = data.analysis || '無分析結果';
+      } catch (err) {
+        if (resultEl) resultEl.textContent = '分析失敗：' + err.message;
+        btn.disabled = false;
+        btn.textContent = '🤖 AI 趨勢分析';
+      }
     });
   }
 

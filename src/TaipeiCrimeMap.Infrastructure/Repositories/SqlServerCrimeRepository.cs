@@ -375,6 +375,40 @@ public class SqlServerCrimeRepository : ICrimeRepository
         _ => caseType.ToString()
     };
 
+    public async Task<IReadOnlyList<(int Year, int Count)>> GetGroupedYearlyTrendAsync(
+        IReadOnlyList<string> districts, IReadOnlyList<int> caseTypes, int minHour, int maxHour,
+        CancellationToken cancellationToken = default)
+    {
+        var sql = """
+            SELECT occurred_year + 1911 AS Year, COUNT(*) AS Count
+            FROM theft_cases WITH (NOLOCK)
+            WHERE occurred_year IS NOT NULL
+              AND district IN @Districts
+              AND case_type IN @CaseTypes
+              AND time_slot_start IS NOT NULL
+              AND time_slot_start >= @MinHour AND time_slot_start < @MaxHour
+            GROUP BY occurred_year
+            ORDER BY occurred_year
+            """;
+
+        await using var conn = CreateConnection();
+        var rows = await conn.QueryAsync<YearCountRow>(sql, new
+        {
+            Districts = districts,
+            CaseTypes = caseTypes,
+            MinHour = minHour,
+            MaxHour = maxHour,
+        });
+
+        return rows.Select(r => (r.Year, r.Count)).ToList();
+    }
+
+    private sealed record YearCountRow
+    {
+        public int Year { get; init; }
+        public int Count { get; init; }
+    }
+
     // ── INSERT SQL ──────────────────────────────────────────────────────
 
     private const string UpsertSql = """
